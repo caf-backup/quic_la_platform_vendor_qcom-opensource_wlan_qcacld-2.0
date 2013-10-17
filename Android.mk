@@ -63,7 +63,8 @@ $(shell mkdir -p $(TARGET_OUT)/lib/modules; \
 	       $(TARGET_OUT)/lib/modules/wlan.ko)
 
 # Copy config ini files to target
-ifeq ($(WLAN_PROPRIETARY),1)
+# Removed by default to make sure three firmware configuration images to be included in system.img
+# ifeq ($(WLAN_PROPRIETARY),0)
 $(shell mkdir -p $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_CHIPSET))
 $(shell rm -f $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_SHIPSET)/WCNSS_qcom_cfg.ini)
 $(shell rm -f $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_SHIPSET)/WCNSS_cfg.dat)
@@ -71,7 +72,7 @@ $(shell rm -f $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_SHIPSET)/WCNSS_qcom_wlan_nv
 $(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_qcom_cfg.ini $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_CHIPSET))
 $(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_cfg.dat $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_CHIPSET))
 $(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_qcom_wlan_nv.bin $(TARGET_OUT)/etc/firmware/wlan/$(WLAN_CHIPSET))
-endif
+# endif
 
 endif # DLKM check
 
