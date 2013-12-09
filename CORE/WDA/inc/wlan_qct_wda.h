@@ -468,6 +468,7 @@ VOS_STATUS WDA_open(v_PVOID_t pVosContext, v_PVOID_t pOSContext,
 
 #ifdef QCA_WIFI_2_0
 #define WDA_start wma_start
+#define WDA_MapChannel wma_map_channel
 
 #ifdef QCA_WIFI_ISOC
 #define WDA_NVDownload_Start wma_nv_download_start
@@ -559,6 +560,8 @@ VOS_STATUS WDA_PostMsgApi(tpAniSirGlobal pMac, tSirMsgQ *pMsg) ;
  * ---------------------------------------------------------
  */
 tBssSystemRole wdaGetGlobalSystemRole(tpAniSirGlobal pMac);
+
+tANI_U8 WDA_MapChannel(tANI_U8);
 
 /* maximum wait time for WDA complete event (correct value has to be derived)
  * for now giving the value 1000 ms */
@@ -1193,6 +1196,8 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 
 #ifdef WLAN_FEATURE_11AC
 #define WDA_UPDATE_OP_MODE         SIR_HAL_UPDATE_OP_MODE
+#define WDA_UPDATE_MEMBERSHIP      SIR_HAL_UPDATE_MEMBERSHIP
+#define WDA_UPDATE_USERPOS         SIR_HAL_UPDATE_USERPOS
 #endif
 
 #define WDA_GET_ROAM_RSSI_REQ      SIR_HAL_GET_ROAM_RSSI_REQ

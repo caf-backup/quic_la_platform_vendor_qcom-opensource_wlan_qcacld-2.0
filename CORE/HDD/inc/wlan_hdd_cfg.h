@@ -1302,7 +1302,31 @@ typedef enum
 #define CFG_VHT_ENABLE_MU_BFORMEE_CAP_FEATURE_MAX     ( 1 )
 #define CFG_VHT_ENABLE_MU_BFORMEE_CAP_FEATURE_DEFAULT ( 0 )
 
+#define CFG_VHT_ENABLE_PAID_FEATURE             "gEnablePAID"
+#define CFG_VHT_ENABLE_PAID_FEATURE_MIN         ( 0 )
+#define CFG_VHT_ENABLE_PAID_FEATURE_MAX         ( 1 )
+#define CFG_VHT_ENABLE_PAID_FEATURE_DEFAULT     ( 0 )
+
+#define CFG_VHT_ENABLE_GID_FEATURE              "gEnableGID"
+#define CFG_VHT_ENABLE_GID_FEATURE_MIN          ( 0 )
+#define CFG_VHT_ENABLE_GID_FEATURE_MAX          ( 1 )
+#define CFG_VHT_ENABLE_GID_FEATURE_DEFAULT      ( 0 )
 #endif
+
+#define CFG_ENABLE_AMPDUPS_FEATURE              "gEnableAMPDUPS"
+#define CFG_ENABLE_AMPDUPS_FEATURE_MIN          ( 0 )
+#define CFG_ENABLE_AMPDUPS_FEATURE_MAX          ( 1 )
+#define CFG_ENABLE_AMPDUPS_FEATURE_DEFAULT      ( 0 )
+
+#define CFG_HT_ENABLE_SMPS_CAP_FEATURE          "gEnableHtSMPS"
+#define CFG_HT_ENABLE_SMPS_CAP_FEATURE_MIN      ( 0 )
+#define CFG_HT_ENABLE_SMPS_CAP_FEATURE_MAX      ( 1 )
+#define CFG_HT_ENABLE_SMPS_CAP_FEATURE_DEFAULT  ( 0 )
+
+#define CFG_HT_SMPS_CAP_FEATURE                 "gHtSMPS"
+#define CFG_HT_SMPS_CAP_FEATURE_MIN             ( 0 )
+#define CFG_HT_SMPS_CAP_FEATURE_MAX             ( 3 )
+#define CFG_HT_SMPS_CAP_FEATURE_DEFAULT         ( 3 )
 
 #define CFG_REPORT_MAX_LINK_SPEED                  "gReportMaxLinkSpeed"
 #define CFG_REPORT_MAX_LINK_SPEED_MIN              ( eHDD_LINK_SPEED_REPORT_ACTUAL )
@@ -1814,6 +1838,28 @@ typedef enum
 #define CFG_VHT_MPDU_LEN_DEFAULT                       ( 0 )
 #endif
 
+#define CFG_MAX_WOW_FILTERS_NAME                       "gMaxWoWFilters"
+#define CFG_MAX_WOW_FILTERS_MIN                        ( 0 )
+#define CFG_MAX_WOW_FILTERS_MAX                        ( 22 )
+#define CFG_MAX_WOW_FILTERS_DEFAULT                    ( 22 )
+
+/*
+ * WOW Enable/Disable.
+ * 0 - Disable both magic pattern match and pattern byte match.
+ * 1 - Enable magic pattern match on all interfaces.
+ * 2 - Enable pattern byte match on all interfaces.
+ * 3 - Enable both magic patter and pattern byte match on all interfaces.
+ */
+#define CFG_WOW_STATUS_NAME                           "gEnableWoW"
+#define CFG_WOW_ENABLE_MIN                            ( 0 )
+#define CFG_WOW_ENABLE_MAX                            ( 3 )
+#define CFG_WOW_STATUS_DEFAULT                        ( 3 )
+
+#define CFG_COALESING_IN_IBSS_NAME                     "gCoalesingInIBSS"
+#define CFG_COALESING_IN_IBSS_MIN                      (0)
+#define CFG_COALESING_IN_IBSS_MAX                      (1)
+#define CFG_COALESING_IN_IBSS_DEFAULT                  (0) //disabled
+
 /*--------------------------------------------------------------------------- 
   Type declarations
   -------------------------------------------------------------------------*/ 
@@ -2150,7 +2196,12 @@ typedef struct
    v_BOOL_t                    enable2x2;
    v_BOOL_t                    enableVhtFor24GHzBand;
    v_BOOL_t                    enableMuBformee;
+   v_BOOL_t                    enableVhtpAid;
+   v_BOOL_t                    enableVhtGid;
 #endif
+   v_U8_t                      enableAmpduPs;
+   v_U8_t                      enableHtSmps;
+   v_U8_t                      htSmps;
    v_U8_t                      enableModulatedDTIM;
    v_U32_t                     fEnableMCAddrList;
    v_BOOL_t                    enableFirstScan2GOnly;
@@ -2204,6 +2255,9 @@ typedef struct
    v_U8_t                      fVhtAmpduLenExponent;
    v_U32_t                     vhtMpduLen;
 #endif
+   v_U8_t                      maxWoWFilters;
+   v_U8_t                      wowEnable;
+   v_U8_t                      isCoalesingInIBSSAllowed;
 } hdd_config_t;
 /*--------------------------------------------------------------------------- 
   Function declarations and documenation

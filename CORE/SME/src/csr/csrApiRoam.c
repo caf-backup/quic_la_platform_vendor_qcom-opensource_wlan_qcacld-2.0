@@ -505,6 +505,12 @@ eHalStatus csrUpdateChannelList(tCsrScanStruct *pScan)
     {
         pChanList->chanParam[i].chanId = pScan->defaultPowerTable[i].chanId;
         pChanList->chanParam[i].pwr = pScan->defaultPowerTable[i].pwr;
+        /*Set DFS flag for DFS channel*/
+        if (vos_nv_getChannelEnabledState(pChanList->chanParam[i].chanId) ==
+            NV_CHANNEL_DFS)
+            pChanList->chanParam[i].dfsSet = VOS_TRUE;
+        else
+            pChanList->chanParam[i].dfsSet = VOS_FALSE;
     }
 
     if(VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA, &msg))
@@ -1702,8 +1708,17 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
         pMac->roam.configParam.enable2x2= pParam->enable2x2;
         pMac->roam.configParam.enableVhtFor24GHz = pParam->enableVhtFor24GHz;
         pMac->roam.configParam.txMuBformee= pParam->enableMuBformee;
+        pMac->roam.configParam.enableVhtpAid = pParam->enableVhtpAid;
+        pMac->roam.configParam.enableVhtGid = pParam->enableVhtGid;
 #endif
+        pMac->roam.configParam.enableAmpduPs = pParam->enableAmpduPs;
+        pMac->roam.configParam.enableHtSmps = pParam->enableHtSmps;
+        pMac->roam.configParam.htSmps= pParam->htSmps;
         pMac->roam.configParam.txLdpcEnable = pParam->enableTxLdpc;
+
+        pMac->roam.configParam.isCoalesingInIBSSAllowed =
+                               pParam->isCoalesingInIBSSAllowed;
+
     }
 
     return status;
@@ -1786,6 +1801,10 @@ eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
         pParam->enableMuBformee = pMac->roam.configParam.txMuBformee;
 #endif
         pParam->enableTxLdpc = pMac->roam.configParam.txLdpcEnable;
+
+        pParam->isCoalesingInIBSSAllowed =
+                                pMac->roam.configParam.isCoalesingInIBSSAllowed;
+
         csrSetChannels(pMac, pParam);
 
         status = eHAL_STATUS_SUCCESS;
@@ -5482,6 +5501,7 @@ static tANI_BOOLEAN csrRoamProcessResults( tpAniSirGlobal pMac, tSmeCmd *pComman
                     roamInfo.pBssDesc = pSirBssDesc;
                 }
                 roamInfo.staId = (tANI_U8)pSmeStartBssRsp->staId;
+                vos_mem_copy (roamInfo.bssid, pSirBssDesc->bssId, sizeof(tCsrBssid));
                  //Remove this code once SLM_Sessionization is supported
                  //BMPS_WORKAROUND_NOT_NEEDED
                 if(!IS_FEATURE_SUPPORTED_BY_FW(SLM_SESSIONIZATION) &&
@@ -12341,7 +12361,27 @@ eHalStatus csrSendJoinReqMsg( tpAniSirGlobal pMac, tANI_U32 sessionId, tSirBssDe
         *pBuf = (tANI_U8)pMac->roam.configParam.txMuBformee;
         pBuf++;
 
+        // enableVhtpAid
+        *pBuf = (tANI_U8)pMac->roam.configParam.enableVhtpAid;
+        pBuf++;
+
+        // enableVhtGid
+        *pBuf = (tANI_U8)pMac->roam.configParam.enableVhtGid;
+        pBuf++;
+
 #endif
+        // enableAmpduPs
+        *pBuf = (tANI_U8)pMac->roam.configParam.enableAmpduPs;
+        pBuf++;
+
+        // enableHtSmps
+        *pBuf = (tANI_U8)pMac->roam.configParam.enableHtSmps;
+        pBuf++;
+
+        // htSmps
+        *pBuf = (tANI_U8)pMac->roam.configParam.htSmps;
+        pBuf++;
+
         //BssDesc
         csrPrepareJoinReassocReqBuffer( pMac, pBssDescription, pBuf,
                 (tANI_U8)pProfile->uapsd_mask);
@@ -13055,6 +13095,11 @@ eHalStatus csrSendMBStartBssReqMsg( tpAniSirGlobal pMac, tANI_U32 sessionId, eCs
         // Set wps_state
         *pBuf = pParam->wps_state;
         pBuf++;
+
+	// set isCoalesingInIBSSAllowed
+        *pBuf = pMac->isCoalesingInIBSSAllowed;
+        pBuf++;
+
         //Persona
         *pBuf = (tANI_U8)pParam->bssPersona;
         pBuf++;
@@ -13766,6 +13811,15 @@ static void csrRoamLinkDown(tpAniSirGlobal pMac, tANI_U32 sessionId)
    if( eCSR_BSS_TYPE_INFRASTRUCTURE != pSession->connectedProfile.BSSType )
    {
       return;
+   }
+   /*
+    * Incase of station mode, immediately stop data transmission whenever
+    * link down is detected.
+    */
+   if (csrRoamIsStaMode(pMac, sessionId)) {
+        smsLog(pMac, LOG1, FL("Inform Link lost for session %d"), sessionId);
+        csrRoamCallCallback(pMac, sessionId, NULL, 0, eCSR_ROAM_LOSTLINK,
+                            eCSR_ROAM_RESULT_LOSTLINK);
    }
    /* deregister the clients requesting stats from PE/TL & also stop the corresponding timers*/
    csrRoamDeregStatisticsReq(pMac);

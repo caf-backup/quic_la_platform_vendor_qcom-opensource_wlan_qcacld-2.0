@@ -328,7 +328,12 @@ typedef struct sPESession           // Added to Support BT-AMP
     tANI_U8    apChanWidth;
     tANI_U8    txBFIniFeatureEnabled;
     tANI_U8    txMuBformee;
+    tANI_U8    enableVhtpAid;
+    tANI_U8    enableVhtGid;
 #endif
+    tANI_U8    enableAmpduPs;
+    tANI_U8    enableHtSmps;
+    tANI_U8    htSmpsvalue;
     tANI_U8            spectrumMgtEnabled;
     /* *********************11H related*****************************/
     //tANI_U32           gLim11hEnable;
@@ -400,6 +405,9 @@ typedef struct sPESession           // Added to Support BT-AMP
 
     /* Power Save Off load Parameters */
     tPowersaveoffloadInfo pmmOffloadInfo;
+
+    tANI_U8 isCoalesingInIBSSAllowed;
+
 }tPESession, *tpPESession;
 
 #define LIM_MAX_ACTIVE_SESSIONS 4

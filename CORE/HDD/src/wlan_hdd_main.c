@@ -186,6 +186,12 @@ struct completion wlan_start_comp;
 extern void hif_init_adf_ctx(adf_os_device_t adf_ctx, v_VOID_t *hif_sc);
 extern int hif_register_driver(void);
 extern void hif_unregister_driver(void);
+
+#if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM)
+extern int hdd_ftm_start(hdd_context_t *pHddCtx);
+extern int hdd_ftm_stop(hdd_context_t *pHddCtx);
+#endif
+
 #endif
 
 static int hdd_netdev_notifier_call(struct notifier_block * nb,
@@ -1882,6 +1888,14 @@ static void hdd_update_tgt_ht_cap(hdd_context_t *hdd_ctx,
     if (pconfig->ShortGI40MhzEnable && !cfg->ht_sgi_40)
         pconfig->ShortGI40MhzEnable = cfg->ht_sgi_40;
 
+    if (pconfig->enable2x2 && (cfg->num_rf_chains == 2))
+    {
+        pconfig->enable2x2 = 1;
+    }
+    else
+    {
+        pconfig->enable2x2 = 0;
+    }
     status = ccmCfgSetInt(hdd_ctx->hHal, WNI_CFG_HT_CAP_INFO,
                           *(tANI_U16 *)phtCapInfo, NULL, eANI_BOOLEAN_FALSE);
     if (status != eHAL_STATUS_SUCCESS)
@@ -1895,15 +1909,18 @@ static void hdd_update_tgt_ht_cap(hdd_context_t *hdd_ctx,
         VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
                   "%s: Read MCS rate set", __func__);
 
-        for (value = 0; value < cfg->num_rf_chains; value++)
-            mcs_set[value] = WLAN_HDD_RX_MCS_ALL_NSTREAM_RATES;
+        if (pconfig->enable2x2)
+        {
+            for (value = 0; value < cfg->num_rf_chains; value++)
+                mcs_set[value] = WLAN_HDD_RX_MCS_ALL_NSTREAM_RATES;
 
-        status = ccmCfgSetStr(hdd_ctx->hHal, WNI_CFG_SUPPORTED_MCS_SET,
-                              mcs_set, SIZE_OF_SUPPORTED_MCS_SET, NULL,
-                              eANI_BOOLEAN_FALSE);
-        if (status == eHAL_STATUS_FAILURE)
-            VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
-                      "%s: could not set MCS SET to CCM", __func__);
+            status = ccmCfgSetStr(hdd_ctx->hHal, WNI_CFG_SUPPORTED_MCS_SET,
+                                  mcs_set, SIZE_OF_SUPPORTED_MCS_SET, NULL,
+                                  eANI_BOOLEAN_FALSE);
+            if (status == eHAL_STATUS_FAILURE)
+                VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+                          "%s: could not set MCS SET to CCM", __func__);
+        }
     }
 #undef WLAN_HDD_RX_MCS_ALL_NSTREAM_RATES
 }
@@ -4992,7 +5009,14 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
 
    if (VOS_FTM_MODE == hdd_get_conparam())
    {
+#if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM)
+      if (hdd_ftm_stop(pHddCtx))
+      {
+          hddLog(VOS_TRACE_LEVEL_FATAL,"%s: hdd_ftm_stop Failed",__func__);
+      }
+#endif
       wlan_hdd_ftm_close(pHddCtx);
+      hddLog(VOS_TRACE_LEVEL_FATAL,"%s: FTM driver unloaded",__func__);
       goto free_hdd_ctx;
    }
    //Stop the Interface TX queue.
@@ -5021,13 +5045,12 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: hddDeregisterPmOps failed",__func__);
       VOS_ASSERT(0);
    }
-
+#endif
    vosStatus = hddDevTmUnregisterNotifyCallback(pHddCtx);
    if ( !VOS_IS_STATUS_SUCCESS( vosStatus ) )
    {
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: hddDevTmUnregisterNotifyCallback failed",__func__);
    }
-#endif
 
    // Cancel any outstanding scan requests.  We are about to close all
    // of our adapters, but an adapter structure is what SME passes back
@@ -5042,7 +5065,8 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    // we are about to Request Full Power, and since that is synchronized,
    // the expectation is that by the time Request Full Power has completed,
    // all scans will be cancelled.
-   hdd_abort_mac_scan( pHddCtx, pAdapter->sessionId);
+   if(pAdapter)
+      hdd_abort_mac_scan(pHddCtx, pAdapter->sessionId);
 
    if(!pConfig->enablePowersaveOffload)
    {
@@ -5198,7 +5222,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
     * it should be freed after PCI remove
     */
    adf_ctx = vos_get_context(VOS_MODULE_ID_ADF, pVosContext);
-   kfree(adf_ctx);
+   vos_mem_free(adf_ctx);
 #endif
 
    /* free the power on lock from platform driver */
@@ -5243,7 +5267,7 @@ void __hdd_wlan_exit(void)
 		return;
 
 	/* module exit should never proceed if SSR is not completed */
-	while(isWDresetInProgress()){
+	while(pHddCtx->isLogpInProgress){
 		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
 			  "%s:SSR in Progress; block rmmod for 1 second!!!",
 			  __func__);
@@ -5654,6 +5678,9 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
       goto err_config;
    }
 
+#ifndef QCA_WIFI_2_0
+   pHddCtx->cfg_ini->maxWoWFilters = WOWL_MAX_PTRNS_ALLOWED;
+#endif
    /* INI has been read, initialise the configuredMcastBcastFilter with
     * INI value as this will serve as the default value
     */
@@ -5771,7 +5798,17 @@ register_wiphy:
           hddLog(VOS_TRACE_LEVEL_FATAL,"%s: wlan_hdd_ftm_open Failed",__func__);
           goto err_free_hdd_context;
       }
-      hddLog(VOS_TRACE_LEVEL_FATAL,"%s: FTM driver loaded success fully",__func__);
+
+#if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM)
+      if (hdd_ftm_start(pHddCtx))
+      {
+          wiphy_unregister(wiphy);
+          hddLog(VOS_TRACE_LEVEL_FATAL,"%s: hdd_ftm_start Failed",__func__);
+          goto err_free_hdd_context;
+      }
+#endif
+      hddLog(VOS_TRACE_LEVEL_FATAL,"%s: FTM driver loaded",__func__);
+
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
       complete(&wlan_start_comp);
 #endif
@@ -6135,8 +6172,8 @@ err_free_power_on_lock:
    free_riva_power_on_lock("wlan");
 
 err_unregister_pmops:
-#ifdef QCA_WIFI_ISOC
    hddDevTmUnregisterNotifyCallback(pHddCtx);
+#ifdef QCA_WIFI_ISOC
    hddDeregisterPmOps(pHddCtx);
 #endif
 
@@ -6479,7 +6516,7 @@ static void hdd_driver_exit(void)
     * as it is needed in PCI remove. So free it here.
     */
    adf_ctx = vos_get_context(VOS_MODULE_ID_ADF, pVosContext);
-   kfree(adf_ctx);
+   vos_mem_free(adf_ctx);
 #endif
 
    vos_preClose( &pVosContext );

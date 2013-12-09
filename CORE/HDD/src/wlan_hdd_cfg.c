@@ -2002,7 +2002,42 @@ REG_VARIABLE( CFG_VHT_ENABLE_MU_BFORMEE_CAP_FEATURE, WLAN_PARAM_Integer,
              CFG_VHT_ENABLE_MU_BFORMEE_CAP_FEATURE_DEFAULT,
              CFG_VHT_ENABLE_MU_BFORMEE_CAP_FEATURE_MIN,
              CFG_VHT_ENABLE_MU_BFORMEE_CAP_FEATURE_MAX ),
+
+REG_VARIABLE( CFG_VHT_ENABLE_PAID_FEATURE, WLAN_PARAM_Integer,
+             hdd_config_t, enableVhtpAid,
+             VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+             CFG_VHT_ENABLE_PAID_FEATURE_DEFAULT,
+             CFG_VHT_ENABLE_PAID_FEATURE_MIN,
+             CFG_VHT_ENABLE_PAID_FEATURE_MAX ),
+
+REG_VARIABLE( CFG_VHT_ENABLE_GID_FEATURE, WLAN_PARAM_Integer,
+             hdd_config_t, enableVhtGid,
+             VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+             CFG_VHT_ENABLE_GID_FEATURE_DEFAULT,
+             CFG_VHT_ENABLE_GID_FEATURE_MIN,
+             CFG_VHT_ENABLE_GID_FEATURE_MAX ),
 #endif
+
+REG_VARIABLE( CFG_ENABLE_AMPDUPS_FEATURE, WLAN_PARAM_Integer,
+             hdd_config_t, enableAmpduPs,
+             VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+             CFG_ENABLE_AMPDUPS_FEATURE_DEFAULT,
+             CFG_ENABLE_AMPDUPS_FEATURE_MIN,
+             CFG_ENABLE_AMPDUPS_FEATURE_MAX ),
+
+REG_VARIABLE( CFG_HT_ENABLE_SMPS_CAP_FEATURE, WLAN_PARAM_Integer,
+             hdd_config_t, enableHtSmps,
+             VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+             CFG_HT_ENABLE_SMPS_CAP_FEATURE_DEFAULT,
+             CFG_HT_ENABLE_SMPS_CAP_FEATURE_MIN,
+             CFG_HT_ENABLE_SMPS_CAP_FEATURE_MAX ),
+
+REG_VARIABLE( CFG_HT_SMPS_CAP_FEATURE, WLAN_PARAM_Integer,
+             hdd_config_t, htSmps,
+             VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+             CFG_HT_SMPS_CAP_FEATURE_DEFAULT,
+             CFG_HT_SMPS_CAP_FEATURE_MIN,
+             CFG_HT_SMPS_CAP_FEATURE_MAX ),
 
 REG_VARIABLE( CFG_ENABLE_FIRST_SCAN_2G_ONLY_NAME, WLAN_PARAM_Integer,
               hdd_config_t, enableFirstScan2GOnly,
@@ -2326,6 +2361,26 @@ REG_VARIABLE( CFG_VHT_MPDU_LEN_NAME, WLAN_PARAM_Integer,
                CFG_VHT_MPDU_LEN_MAX),
 #endif
 
+REG_VARIABLE( CFG_MAX_WOW_FILTERS_NAME, WLAN_PARAM_Integer,
+               hdd_config_t, maxWoWFilters,
+               VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK ,
+               CFG_MAX_WOW_FILTERS_DEFAULT,
+               CFG_MAX_WOW_FILTERS_MIN,
+               CFG_MAX_WOW_FILTERS_MAX),
+
+REG_VARIABLE( CFG_WOW_STATUS_NAME, WLAN_PARAM_Integer,
+               hdd_config_t, wowEnable,
+               VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+               CFG_WOW_STATUS_DEFAULT,
+               CFG_WOW_ENABLE_MIN,
+               CFG_WOW_ENABLE_MAX),
+
+REG_VARIABLE( CFG_COALESING_IN_IBSS_NAME , WLAN_PARAM_Integer,
+              hdd_config_t, isCoalesingInIBSSAllowed,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_COALESING_IN_IBSS_DEFAULT,
+              CFG_COALESING_IN_IBSS_MIN,
+              CFG_COALESING_IN_IBSS_MAX ),
 };
 
 /*
@@ -2706,6 +2761,7 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [enableRxSTBC] Value = [%u] ",pHddCtx->cfg_ini->enableRxSTBC);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gEnableLpwrImgTransition] Value = [%u] ",pHddCtx->cfg_ini->enableLpwrImgTransition);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gEnableSSR] Value = [%u] ",pHddCtx->cfg_ini->enableSSR);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gCoalesingInIBSS] Value = [%lu] " ,pHddCtx->cfg_ini->isCoalesingInIBSSAllowed);
 
 }
 
@@ -4037,7 +4093,12 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
     smeConfig.csrConfig.enable2x2 = pConfig->enable2x2;
     smeConfig.csrConfig.enableVhtFor24GHz = pConfig->enableVhtFor24GHzBand;
     smeConfig.csrConfig.enableMuBformee = pConfig->enableMuBformee;
+    smeConfig.csrConfig.enableVhtpAid = pConfig->enableVhtpAid;
+    smeConfig.csrConfig.enableVhtGid = pConfig->enableVhtGid;
 #endif
+   smeConfig.csrConfig.enableAmpduPs = pConfig->enableAmpduPs;
+   smeConfig.csrConfig.enableHtSmps = pConfig->enableHtSmps;
+   smeConfig.csrConfig.htSmps = pConfig->htSmps;
    smeConfig.csrConfig.AdHocChannel5G            = pConfig->AdHocChannel5G;
    smeConfig.csrConfig.AdHocChannel24            = pConfig->AdHocChannel24G;
    smeConfig.csrConfig.ProprietaryRatesEnabled   = 0;
@@ -4144,6 +4205,11 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    smeConfig.csrConfig.scanCfgAgingTime = pConfig->scanAgingTimeout;
 
    smeConfig.csrConfig.enableTxLdpc = pConfig->enableTxLdpc;
+
+   smeConfig.csrConfig.isCoalesingInIBSSAllowed =
+                   pHddCtx->cfg_ini->isCoalesingInIBSSAllowed;
+
+
 
    /* update SSR config */
    sme_UpdateEnableSSR((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->enableSSR);

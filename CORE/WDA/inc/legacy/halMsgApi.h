@@ -36,6 +36,7 @@
 /* operMode in ADD BSS message */
 #define BSS_OPERATIONAL_MODE_AP     0
 #define BSS_OPERATIONAL_MODE_STA    1
+#define BSS_OPERATIONAL_MODE_IBSS   2
 
 /* STA entry type in add sta message */
 #define STA_ENTRY_SELF              0
@@ -286,7 +287,12 @@ typedef struct
     tANI_U8    vhtTxChannelWidthSet;
     tANI_U8    vhtTxBFCapable;
     tANI_U8    vhtTxMUBformeeCapable;
+    tANI_U8    enableVhtpAid;
+    tANI_U8    enableVhtGid;
 #endif
+    tANI_U8    enableAmpduPs;
+    tANI_U8    enableHtSmps;
+    tANI_U8    htSmpsconfig;
 
     tANI_U8    htLdpcCapable;
     tANI_U8    vhtLdpcCapable;
@@ -296,6 +302,7 @@ typedef struct
     tANI_U16   ht_caps;
     tANI_U32   vht_caps;
     tSirNwType nwType;
+    tPowerdBm  maxTxPower;
 } tAddStaParams, *tpAddStaParams;
 
 
@@ -890,6 +897,23 @@ typedef struct
    tANI_U16  smesessionId;
    tSirMacAddr peer_mac;
 }tUpdateVHTOpMode, *tpUpdateVHTOpMode;
+
+typedef struct
+{
+   tANI_U32  membership;
+   tANI_U16  staId;
+   tANI_U16  smesessionId;
+   tSirMacAddr peer_mac;
+}tUpdateMembership, *tpUpdateMembership;
+
+typedef struct
+{
+   tANI_U32  userPos;
+   tANI_U16  staId;
+   tANI_U16  smesessionId;
+   tSirMacAddr peer_mac;
+}tUpdateUserPos, *tpUpdateUserPos;
+
 #endif
 
 //HAL MSG: SIR_HAL_UPDATE_CF_IND
@@ -1002,6 +1026,8 @@ typedef struct
   tANI_U16 staIdx;
   tANI_U16 tspecIdx; //TSPEC identifier uniquely identifying a TSPEC for a STA in a BSS
   tSirMacAddr bssId; //TO SUPPORT BT-AMP
+  tANI_U8 sessionId;
+  tANI_U8 userPrio; //TSPEC identifier uniquely identifying a TSPEC for a STA in a BSS
 
 } tDelTsParams, *tpDelTsParams;
 
