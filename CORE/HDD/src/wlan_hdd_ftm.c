@@ -80,6 +80,7 @@
 #include "pttMsgApi.h"
 #include "wlan_qct_pal_device.h"
 
+
 #if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM)
 #include "bmi.h"
 #include "ol_fw.h"
@@ -4472,12 +4473,14 @@ static const struct iw_priv_args we_ftm_private_args[] = {
 
 const struct iw_handler_def we_ftm_handler_def = {
    .num_standard     = 0,
+#ifdef CONFIG_WEXT_PRIV
    .num_private      = sizeof(we_ftm_private) / sizeof(we_ftm_private[0]),
    .num_private_args = sizeof(we_ftm_private_args) / sizeof(we_ftm_private_args[0]),
 
    .standard         = (iw_handler *)NULL,
    .private          = (iw_handler *)we_ftm_private,
    .private_args     = we_ftm_private_args,
+#endif
    .get_wireless_stats = NULL,
 };
 
@@ -4488,8 +4491,10 @@ static int wlan_ftm_register_wext(hdd_adapter_t *pAdapter)
 
     // Zero the memory.  This zeros the profile structure.
     //memset(pwextBuf, 0,sizeof(hdd_wext_state_t));
-   
+
+#ifdef CONFIG_WIRELESS_EXT
     pAdapter->dev->wireless_handlers = (struct iw_handler_def *)&we_ftm_handler_def;
+#endif
 
     return 0;
 }
