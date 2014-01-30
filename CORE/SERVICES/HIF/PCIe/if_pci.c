@@ -56,6 +56,9 @@
 #include "pktlog_ac.h"
 #endif
 
+//Temp fix to fix wlan driver load issue on Loki
+#undef CONFIG_CNSS
+
 #define AR9888_DEVICE_ID (0x003c)
 #define AR6320_DEVICE_ID (0x003e)
 
