@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 #if !defined( __SME_API_H )
 #define __SME_API_H
 
@@ -126,6 +129,7 @@ typedef struct _smeConfigParams
     tANI_U8  isAmsduSupportInAMPDU;
     tANI_BOOLEAN  fP2pListenOffload;
     tANI_BOOLEAN  pnoOffload;
+    tANI_U8       fEnableDebugLog;
 } tSmeConfigParams, *tpSmeConfigParams;
 
 typedef enum
@@ -2719,6 +2723,57 @@ eHalStatus sme_UpdateConfigFwRssiMonitoring(tHalHandle hHal,
         v_BOOL_t fEnableFwRssiMonitoring);
 
 #ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
+/* ---------------------------------------------------------------------------
+    \fn     sme_SetRoamRescanRssiDiff
+    \brief  Update Roam Rescan RSSI diff
+            This function is called through dynamic setConfig callback function
+            to configure nRoamRescanRssiDiff
+    \param  hHal - HAL handle for device
+    \param  nRoamRescanRssiDiff - Roam Rescan Rssi Diff
+    \return eHAL_STATUS_SUCCESS - SME update nRoamRescanRssiDiff config
+            successfully.
+            else SME is failed to update nRoamRescanRssiDiff
+    -------------------------------------------------------------------------*/
+
+eHalStatus sme_SetRoamRescanRssiDiff(tHalHandle hHal,
+                                     const v_U8_t nRoamRescanRssiDiff);
+
+/*--------------------------------------------------------------------------
+  \fn    sme_GetRoamRescanRssiDiff
+  \brief gets Roam Rescan RSSI diff
+         This is a synchronous call
+  \param hHal - The handle returned by macOpen
+  \return v_U8_t - nRoamRescanRssiDiff
+  \sa
+  --------------------------------------------------------------------------*/
+v_U8_t sme_GetRoamRescanRssiDiff(tHalHandle hHal);
+
+
+/* ---------------------------------------------------------------------------
+    \fn     sme_SetRoamOpportunisticScanThresholdDiff
+    \brief  Update Opportunistic Scan threshold diff
+            This function is called through dynamic setConfig callback function
+            to configure  nOpportunisticThresholdDiff
+    \param  hHal - HAL handle for device
+    \param  nOpportunisticThresholdDiff - Opportunistic Scan threshold diff
+    \return eHAL_STATUS_SUCCESS - SME update nOpportunisticThresholdDiff config
+            successfully.
+            else SME is failed to update nOpportunisticThresholdDiff.
+    -------------------------------------------------------------------------*/
+
+eHalStatus sme_SetRoamOpportunisticScanThresholdDiff(tHalHandle hHal,
+                            const v_U8_t nOpportunisticThresholdDiff);
+
+/*--------------------------------------------------------------------------
+  \fn    sme_GetRoamOpportunisticScanThresholdDiff()
+  \brief gets Opportunistic Scan threshold diff
+         This is a synchronous call
+  \param hHal - The handle returned by macOpen
+  \return v_U8_t - nOpportunisticThresholdDiff
+  \sa
+  --------------------------------------------------------------------------*/
+v_U8_t sme_GetRoamOpportunisticScanThresholdDiff(tHalHandle hHal);
+
 /*--------------------------------------------------------------------------
   \brief sme_setNeighborLookupRssiThreshold() - update neighbor lookup rssi threshold
   This is a synchronuous call
@@ -3289,8 +3344,6 @@ ePhyChanBondState sme_GetCBPhyStateFromCBIniValue(tANI_U32 cb_ini_value);
 int sme_UpdateHTConfig(tHalHandle hHal, tANI_U8 sessionId, tANI_U16 htCapab,
                          int value);
 tANI_S16 sme_GetHTConfig(tHalHandle hHal, tANI_U8 session_id, tANI_U16 ht_capab);
-eHalStatus sme_getValidChannelList(tHalHandle hHal, tANI_U8 *numChannels,
-                                   tANI_U8 **chanList);
 #ifdef FEATURE_WLAN_SCAN_PNO
 eHalStatus sme_MoveCsrToScanStateForPno (tHalHandle hHal, tANI_U8 sessionId);
 #endif
@@ -3355,4 +3408,5 @@ eHalStatus sme_InitThermalInfo( tHalHandle hHal, tSmeThermalParams thermalParam 
     -------------------------------------------------------------------------*/
 eHalStatus sme_SetThermalLevel( tHalHandle hHal, tANI_U8 level );
 #endif
+eHalStatus sme_UpdateConnectDebug(tHalHandle hHal, tANI_U32 set_value);
 #endif //#if !defined( __SME_API_H )

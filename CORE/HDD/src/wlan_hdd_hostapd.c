@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,11 +24,12 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file  wlan_hdd_hostapd.c
   \brief WLAN Host Device Driver implementation
-               
+
   ========================================================================*/
 /**=========================================================================
                        EDIT HISTORY FOR FILE
@@ -93,7 +94,6 @@ extern int process_wma_set_command(int sessid, int paramid,
 #define    IS_UP_AUTO(_ic) \
     (IS_UP((_ic)->ic_dev) && (_ic)->ic_roaming == IEEE80211_ROAMING_AUTO)
 #define WE_WLAN_VERSION     1
-#define STATS_CONTEXT_MAGIC 0x53544154
 #define WE_GET_STA_INFO_SIZE 30
 /* WEXT limition: MAX allowed buf len for any *
  * IW_PRIV_TYPE_CHAR is 2Kbytes *
@@ -271,6 +271,12 @@ int hdd_hostapd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
         {
             hdd_setP2pOpps(dev, command);
         }
+#ifdef FEATURE_WLAN_BATCH_SCAN
+        else if( strncmp(command, "WLS_BATCHING", 12) == 0 )
+        {
+           ret = hdd_handle_batch_scan_ioctl(pAdapter, &priv_data, command);
+        }
+#endif
 
         /*
            command should be a string having format
@@ -283,6 +289,7 @@ int hdd_hostapd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 
             ret = sapSetPreferredChannel(command);
         }
+
     }
 exit:
    if (command)
@@ -504,8 +511,8 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             }
 #ifdef IPA_OFFLOAD
             if (hdd_ipa_is_enabled(pHddCtx))
-               hdd_ipa_wlan_evt(pHostapdAdapter, WLAN_RX_SAP_SELF_STA_ID,
-                  WLAN_AP_CONNECT, pHostapdAdapter->dev->dev_addr);
+                hdd_ipa_wlan_evt(pHostapdAdapter, pHddApCtx->uBCStaId,
+                        WLAN_AP_CONNECT, pHostapdAdapter->dev->dev_addr);
 #endif
 
             if (0 != (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->nAPAutoShutOff)
@@ -589,8 +596,8 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             pHddApCtx->operatingChannel = 0; //Invalidate the channel info.
 #ifdef IPA_OFFLOAD
             if (hdd_ipa_is_enabled(pHddCtx))
-               hdd_ipa_wlan_evt(pHostapdAdapter, WLAN_RX_SAP_SELF_STA_ID,
-                            WLAN_AP_DISCONNECT, pHostapdAdapter->dev->dev_addr);
+                hdd_ipa_wlan_evt(pHostapdAdapter, pHddApCtx->uBCStaId,
+                        WLAN_AP_DISCONNECT, pHostapdAdapter->dev->dev_addr);
 #endif
             goto stopbss;
         case eSAP_STA_SET_KEY_EVENT:
@@ -715,7 +722,16 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             {
                 hdd_abort_mac_scan(pHddCtx, pHostapdAdapter->sessionId);
             }
-
+#ifdef QCA_WIFI_2_0
+            if (pHostapdAdapter->device_mode == WLAN_HDD_P2P_GO)
+            {
+                /* send peer status indication to oem app */
+                hdd_SendPeerStatusIndToOemApp(
+                  &pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.staMac,
+                  ePeerConnected, 0,
+                  pHostapdAdapter->sessionId, pHddApCtx->operatingChannel);
+            }
+#endif
             break;
         case eSAP_STA_DISASSOC_EVENT:
             memcpy(wrqu.addr.sa_data, &pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac,
@@ -772,6 +788,16 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
 #endif
             //Update the beacon Interval if it is P2P GO
             hdd_change_mcc_go_beacon_interval(pHostapdAdapter);
+#ifdef QCA_WIFI_2_0
+            if (pHostapdAdapter->device_mode == WLAN_HDD_P2P_GO)
+            {
+                /* send peer status indication to oem app */
+                hdd_SendPeerStatusIndToOemApp(
+                  &pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac,
+                  ePeerDisconnected, 0,
+                  pHostapdAdapter->sessionId, pHddApCtx->operatingChannel);
+            }
+#endif
             break;
         case eSAP_WPS_PBC_PROBE_REQ_EVENT:
         {
@@ -1345,6 +1371,19 @@ static iw_softap_setparam(struct net_device *dev,
                                               set_value, VDEV_CMD);
                 break;
             }
+
+         case QCASAP_SET_SHORT_GI:
+             {
+                  hddLog(LOG1, "QCASAP_SET_SHORT_GI val %d", set_value);
+
+                  ret = sme_UpdateHTConfig(hHal, pHostapdAdapter->sessionId,
+                                           WNI_CFG_HT_CAP_INFO_SHORT_GI_20MHZ, /* same as 40MHZ */
+                                           set_value);
+                  if (ret)
+                      hddLog(LOGE, "Failed to set ShortGI value ret(%d)", ret);
+                  break;
+             }
+
          case QCSAP_PARAM_SET_MCC_CHANNEL_LATENCY:
              {
                   tVOS_CONCURRENCY_MODE concurrent_state = 0;
@@ -1587,6 +1626,7 @@ static iw_softap_getparam(struct net_device *dev,
             *value = (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->apAutoChannelSelection;
              break;
         }
+
     case QCSAP_PARAM_GETRTSCTS:
         {
             hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
@@ -1597,6 +1637,15 @@ static iw_softap_getparam(struct net_device *dev,
                                              VDEV_CMD);
             break;
         }
+
+    case QCASAP_GET_SHORT_GI:
+        {
+            *value = (int)sme_GetHTConfig(hHal,
+                                          pHostapdAdapter->sessionId,
+                                          WNI_CFG_HT_CAP_INFO_SHORT_GI_20MHZ);
+            break;
+        }
+
     default:
         hddLog(LOGE, FL("Invalid getparam command %d"), sub_cmd);
         ret = -EINVAL;
@@ -1646,9 +1695,8 @@ int iw_softap_modify_acl(struct net_device *dev, struct iw_request_info *info,
     i++;
     cmd = (int)(*(value+i));
 
-    hddLog(LOG1, "%s: SAP Modify ACL arg0 %02x:%02x:%02x:%02x:%02x:%02x arg1 %d arg2 %d\n",
-            __func__, pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2],
-            pPeerStaMac[3], pPeerStaMac[4], pPeerStaMac[5], listType, cmd);
+    hddLog(LOG1, "%s: SAP Modify ACL arg0 " MAC_ADDRESS_STR " arg1 %d arg2 %d",
+            __func__, MAC_ADDR_ARRAY(pPeerStaMac), listType, cmd);
 
     if (WLANSAP_ModifyACL(pVosContext, pPeerStaMac,(eSapACLType)listType,(eSapACLCmdType)cmd)
             != VOS_STATUS_SUCCESS)
@@ -1907,9 +1955,8 @@ static iw_softap_disassoc_sta(struct net_device *dev,
      */
     peerMacAddr = (v_U8_t *)(extra);
 
-    hddLog(LOG1, "data %02x:%02x:%02x:%02x:%02x:%02x",
-            peerMacAddr[0], peerMacAddr[1], peerMacAddr[2],
-            peerMacAddr[3], peerMacAddr[4], peerMacAddr[5]);
+    hddLog(LOG1, "%s data "  MAC_ADDRESS_STR,
+           __func__, MAC_ADDR_ARRAY(peerMacAddr));
     hdd_softap_sta_disassoc(pHostapdAdapter, peerMacAddr);
     EXIT();
     return 0;
@@ -3236,15 +3283,29 @@ static VOS_STATUS  wlan_hdd_get_classAstats_for_station(hdd_adapter_t *pAdapter,
    {
       lrc = wait_for_completion_interruptible_timeout(&context.completion,
             msecs_to_jiffies(WLAN_WAIT_TIME_STATS));
-      context.magic = 0;
       if (lrc <= 0)
       {
          hddLog(VOS_TRACE_LEVEL_ERROR,
                "%s: SME %s while retrieving link speed",
               __func__, (0 == lrc) ? "timeout" : "interrupt");
-         msleep(50);
       }
    }
+
+   /* either we never sent a request, we sent a request and received a
+      response or we sent a request and timed out.  if we never sent a
+      request or if we sent a request and got a response, we want to
+      clear the magic out of paranoia.  if we timed out there is a
+      race condition such that the callback function could be
+      executing at the same time we are. of primary concern is if the
+      callback function had already verified the "magic" but had not
+      yet set the completion variable when a timeout occurred. we
+      serialize these activities by invalidating the magic while
+      holding a shared spinlock which will cause us to block if the
+      callback is currently executing */
+   spin_lock(&hdd_context_lock);
+   context.magic = 0;
+   spin_unlock(&hdd_context_lock);
+
    return VOS_STATUS_SUCCESS;
 }
 
@@ -3511,6 +3572,15 @@ static const struct iw_priv_args hostapd_private_args[] = {
         IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
         0,
         "set11ACRates" },
+
+    {   QCASAP_SET_SHORT_GI,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "enable_short_gi" },
+
+    {   QCASAP_GET_SHORT_GI, 0,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_short_gi" },
 
 #endif /* QCA_WIFI_2_0 */
 

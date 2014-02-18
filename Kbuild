@@ -1,5 +1,5 @@
-# We can build either as part of a standalone Kernel build or part
-# of an Android build.  Determine which mechanism is being used
+# We can build either as part of a standalone Kernel build or as
+# an external module.  Determine which mechanism is being used
 ifeq ($(MODNAME),)
 	KERNEL_BUILD := 1
 else
@@ -7,10 +7,11 @@ else
 endif
 
 ifeq ($(KERNEL_BUILD),1)
-	# These are provided in Android-based builds
+	# These are provided in external module based builds
 	# Need to explicitly define for Kernel-based builds
 	MODNAME := wlan
-	WLAN_ROOT := drivers/staging/prima
+	WLAN_ROOT := drivers/staging/qcacld-2.0
+	WLAN_OPEN_SOURCE := 1
 endif
 
 ifeq ($(KERNEL_BUILD), 0)
@@ -35,15 +36,14 @@ ifeq ($(KERNEL_BUILD), 0)
 	#Flag to enable Fast Transition (11r) feature
 	CONFIG_QCOM_VOWIFI_11R := y
 
-	#Flag to enable Protected Managment Frames (11w) feature
-	ifneq ($(CONFIG_QCA_CLD_WLAN),)
-		ifeq ($(CONFIG_CNSS),y)
-		CONFIG_WLAN_FEATURE_11W := y
-		endif
-	endif
-
-	#Flag to enable LTE CoEx feature
-	CONFIG_QCOM_LTE_COEX := y
+        ifneq ($(CONFIG_QCA_CLD_WLAN),)
+                ifeq ($(CONFIG_CNSS),y)
+        #Flag to enable Protected Managment Frames (11w) feature
+                CONFIG_WLAN_FEATURE_11W := y
+        #Flag to enable LTE CoEx feature
+                CONFIG_QCOM_LTE_COEX := y
+                endif
+        endif
 
 	#Flag to enable new Linux Regulatory implementation
 	CONFIG_ENABLE_LINUX_REG := y
@@ -128,6 +128,11 @@ CONFIG_CHECKSUM_OFFLOAD := 1
 
 #Enable GTK offload
 CONFIG_GTK_OFFLOAD := 1
+endif
+
+#Enable IPA offload
+ifeq ($(CONFIG_IPA), y)
+CONFIG_IPA_OFFLOAD := 1
 endif
 
 ifeq ($(CONFIG_CFG80211),y)
@@ -247,6 +252,10 @@ HDD_OBJS := 	$(HDD_SRC_DIR)/bap_hdd_main.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wext.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wmm.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wowl.o
+
+ifeq ($(CONFIG_IPA_OFFLOAD), 1)
+HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_ipa.o
+endif
 
 ifeq ($(HAVE_CFG80211),1)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_cfg80211.o \
@@ -824,7 +833,6 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
 		-D__linux__ \
-		-DMSM_PLATFORM \
 		-DHAL_SELF_STA_PER_BSS=1 \
 		-DWLAN_FEATURE_VOWIFI_11R \
 		-DWLAN_FEATURE_NEIGHBOR_ROAMING \
@@ -856,6 +864,10 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DFEATURE_WLAN_PAL_MEM_DISABLE \
                 -DQCA_SUPPORT_TXRX_VDEV_PAUSE_LL \
 		-DQCA_SUPPORT_TX_THROTTLE_LL \
+
+ifeq ($(CONFIG_ARCH_MSM), y)
+CDEFINES += -DMSM_PLATFORM
+endif
 
 ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
 CDEFINES +=	-DWLANTL_DEBUG
@@ -960,11 +972,7 @@ ifeq ($(RE_ENABLE_WIFI_ON_WDI_TIMEOUT),1)
 CDEFINES += -DWDI_RE_ENABLE_WIFI_ON_WDI_TIMEOUT
 endif
 
-ifeq ($(KERNEL_BUILD),1)
-CDEFINES += -DWLAN_OPEN_SOURCE
-endif
-
-ifeq ($(findstring opensource, $(WLAN_ROOT)), opensource)
+ifeq ($(WLAN_OPEN_SOURCE), 1)
 CDEFINES += -DWLAN_OPEN_SOURCE
 endif
 
@@ -1078,10 +1086,20 @@ ifeq ($(CONFIG_CHECKSUM_OFFLOAD), 1)
 CDEFINES += -DCHECKSUM_OFFLOAD
 endif
 
+#Enable Checksum Offload support
+ifeq ($(CONFIG_IPA_OFFLOAD), 1)
+CDEFINES += -DIPA_OFFLOAD -DHDD_IPA_USE_IPA_RM_TIMER
+endif
+
 #Enable GTK Offload
 ifeq ($(CONFIG_GTK_OFFLOAD), 1)
 CDEFINES += -DWLAN_FEATURE_GTK_OFFLOAD
 CDEFINES += -DIGTK_OFFLOAD
+endif
+
+#Mark it as SMP Kernel
+ifeq ($(CONFIG_SMP),y)
+CDEFINES += -DQCA_CONFIG_SMP
 endif
 endif
 

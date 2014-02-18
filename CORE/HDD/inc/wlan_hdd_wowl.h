@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _WLAN_HDD_WOWL_H
 #define _WLAN_HDD_WOWL_H
 
@@ -107,8 +108,8 @@
  * Preprocessor Definitions and Constants
  * -------------------------------------------------------------------------*/
 #ifdef QCA_WIFI_2_0
-#define WOWL_PTRN_MAX_SIZE          148
-#define WOWL_PTRN_MASK_MAX_SIZE      16
+#define WOWL_PTRN_MAX_SIZE          146
+#define WOWL_PTRN_MASK_MAX_SIZE      19
 #define WOWL_MAX_PTRNS_ALLOWED       22
 #else
 #define WOWL_PTRN_MAX_SIZE          128

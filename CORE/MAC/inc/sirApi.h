@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /*
  * This file sirApi.h contains definitions exported by
  * Sirius software.
@@ -3131,9 +3134,13 @@ typedef __ani_attr_pre_packed struct sSirBoardCapabilities
 
 /// WOW related structures
 // SME -> PE <-> HAL
+#ifdef QCA_WIFI_2_0
+#define SIR_WOWL_BCAST_PATTERN_MAX_SIZE 146
+#define SIR_WOWL_BCAST_MAX_NUM_PATTERNS 19
+#else
 #define SIR_WOWL_BCAST_PATTERN_MAX_SIZE 128
 #define SIR_WOWL_BCAST_MAX_NUM_PATTERNS 16
-
+#endif
 // SME -> PE -> HAL - This is to add WOWL BCAST wake-up pattern. 
 // SME/HDD maintains the list of the BCAST wake-up patterns.
 // This is a pass through message for PE
@@ -3802,6 +3809,8 @@ typedef struct sSirRoamOffloadScanReq
   eAniBoolean RoamScanOffloadEnabled;
   eAniBoolean MAWCEnabled;
   tANI_S8     LookupThreshold;
+  tANI_U8     OpportunisticScanThresholdDiff;
+  tANI_U8     RoamRescanRssiDiff;
   tANI_U8     RoamRssiDiff;
   tANI_U8     ChannelCacheType;
   tANI_U8     Command;
@@ -4605,22 +4614,21 @@ typedef struct sSirLPHBInd
 
 typedef struct sSirAddPeriodicTxPtrn
 {
-    /* MAC Address for the adapter */
-    tSirMacAddr macAddress;
-
-    tANI_U8  ucPtrnId;           // Pattern ID
-    tANI_U16 ucPtrnSize;         // Pattern size
-    tANI_U32 usPtrnIntervalMs;   // In msec
-    tANI_U8  ucPattern[PERIODIC_TX_PTRN_MAX_SIZE]; // Pattern buffer
+   /* MAC Address for the adapter */
+   tSirMacAddr macAddress;
+   tANI_U8  ucPtrnId;           // Pattern ID
+   tANI_U16 ucPtrnSize;         // Pattern size
+   tANI_U32 usPtrnIntervalMs;   // In msec
+   tANI_U8  ucPattern[PERIODIC_TX_PTRN_MAX_SIZE]; // Pattern buffer
 } tSirAddPeriodicTxPtrn, *tpSirAddPeriodicTxPtrn;
 
 typedef struct sSirDelPeriodicTxPtrn
 {
-    /* MAC Address for the adapter */
-    tSirMacAddr macAddress;
-
-    /* Bitmap of pattern IDs that need to be deleted */
-    tANI_U32 ucPatternIdBitmap;
+   /* MAC Address for the adapter */
+   tSirMacAddr macAddress;
+   /* Bitmap of pattern IDs that need to be deleted */
+   tANI_U32 ucPatternIdBitmap;
+   tANI_U8  ucPtrnId;           // Pattern ID
 } tSirDelPeriodicTxPtrn, *tpSirDelPeriodicTxPtrn;
 
 #ifdef FEATURE_WLAN_BATCH_SCAN
@@ -4662,7 +4670,7 @@ typedef struct
 typedef PACKED_PRE struct PACKED_POST
 {
     tANI_U8   bssid[6];     /* BSSID */
-    tANI_U8   ssid[32];     /* SSID */
+    tANI_U8   ssid[33];     /* SSID */
     tANI_U8   ch;           /* Channel */
     tANI_U8   rssi;         /* RSSI or Level */
     /*Timestamp when Network was found. Used to calculate age based on timestamp

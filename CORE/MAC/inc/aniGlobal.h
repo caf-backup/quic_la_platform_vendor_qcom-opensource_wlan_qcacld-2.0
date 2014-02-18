@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /*
  * aniGlobal.h: MAC Modules Adapter Definitions.
  * Author:      V. K. Kandarpa
@@ -916,6 +919,8 @@ tLimMlmOemDataRsp       *gpLimMlmOemDataRsp;
     /* Number of channel switch IEs sent so far */
     tANI_U8 gLimDfsChanSwTxCount;
     tANI_U8 gLimDfsTargetChanNum;
+    tANI_U8 fOffloadScanPending; /*Flag to track offload scan */
+    tANI_U8 fOffloadScanP2PSearch; /*Flag to track the p2p search */
 } tAniSirLim, *tpAniSirLim;
 
 typedef struct sLimMgmtFrameRegistration
@@ -1081,7 +1086,7 @@ typedef struct sAniSirGlobal
     void *readyToSuspendContext;
     tANI_U8 lteCoexAntShare;
     tANI_U8 beacon_offload;
-
+    tANI_U32 fEnableDebugLog;
 } tAniSirGlobal;
 
 typedef enum
