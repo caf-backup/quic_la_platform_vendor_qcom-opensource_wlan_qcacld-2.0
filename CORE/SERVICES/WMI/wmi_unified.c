@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) . The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -478,6 +478,8 @@ static u_int8_t* get_wmi_cmd_string(WMI_CMD_ID wmi_command)
 		CASE_RETURN_STRING(WMI_BATCH_SCAN_TRIGGER_RESULT_CMDID);
 		/* OEM related cmd */
 		CASE_RETURN_STRING(WMI_OEM_REQ_CMDID);
+		/* NAN request cmd */
+		CASE_RETURN_STRING(WMI_NAN_CMDID);
 	}
 	return "Invalid WMI cmd";
 }
@@ -538,7 +540,7 @@ int wmi_unified_cmd_send(wmi_unified_t wmi_handle, wmi_buf_t buf, int len,
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(pkt, buf);
 
-	WMA_LOGD("Send WMI command:%s command_id:%d\n",
+	WMA_LOGD("Send WMI command:%s command_id:%d",
 			get_wmi_cmd_string(cmd_id), cmd_id);
 	status = HTCSendPkt(wmi_handle->htc_handle, pkt);
 

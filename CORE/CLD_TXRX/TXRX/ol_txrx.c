@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*=== includes ===*/
 /* header files for OS primitives */
 #include <osdep.h>         /* u_int32_t, etc. */
@@ -343,11 +344,21 @@ ol_txrx_pdev_attach(
         }
         pdev->tx_desc.array[i].tx_desc.htt_tx_desc = htt_tx_desc;
 	pdev->tx_desc.array[i].tx_desc.htt_tx_desc_paddr = paddr_lo;
+#ifdef QCA_SUPPORT_TXDESC_SANITY_CHECKS
+        pdev->tx_desc.array[i].tx_desc.pkt_type = 0xff;
+#ifdef QCA_COMPUTE_TX_DELAY
+        pdev->tx_desc.array[i].tx_desc.entry_timestamp_ticks = 0xffffffff;
+#endif
+#endif
     }
 
     /* link SW tx descs into a freelist */
     pdev->tx_desc.num_free = desc_pool_size;
     pdev->tx_desc.freelist = &pdev->tx_desc.array[0];
+    TXRX_PRINT(TXRX_PRINT_LEVEL_INFO1,
+               "%s first tx_desc:0x%p Last tx desc:0x%p\n", __func__,
+               (u_int32_t *) pdev->tx_desc.freelist,
+               (u_int32_t *) (pdev->tx_desc.freelist + desc_pool_size));
     for (i = 0; i < desc_pool_size-1; i++) {
         pdev->tx_desc.array[i].next = &pdev->tx_desc.array[i+1];
     }
@@ -816,6 +827,7 @@ ol_txrx_vdev_attach(
     }
     #endif /* defined(CONFIG_HL_SUPPORT) */
 
+    adf_os_spinlock_init(&vdev->ll_pause.mutex);
     vdev->ll_pause.is_paused = A_FALSE;
     vdev->ll_pause.txq.head = vdev->ll_pause.txq.tail = NULL;
     vdev->ll_pause.txq.depth = 0;
@@ -922,6 +934,9 @@ ol_txrx_vdev_detach(
     adf_os_timer_free(&vdev->ll_pause.timer);
     while (vdev->ll_pause.txq.head) {
         adf_nbuf_t next = adf_nbuf_next(vdev->ll_pause.txq.head);
+        adf_nbuf_set_next(vdev->ll_pause.txq.head, NULL);
+        adf_nbuf_unmap(pdev->osdev, vdev->ll_pause.txq.head,
+                       ADF_OS_DMA_TO_DEVICE);
         adf_nbuf_tx_free(vdev->ll_pause.txq.head, 1 /* error */);
         vdev->ll_pause.txq.head = next;
     }

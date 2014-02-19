@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) . The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -23,9 +23,6 @@
  * This file was originally distributed by Qualcomm Atheros, Inc.
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
- */
-/*
- * $ATH_LICENSE_TARGET_C$
  */
 
 
@@ -878,10 +875,11 @@ CE_per_engine_service(struct hif_pci_softc *sc, unsigned int CE_id)
 
     adf_os_spin_lock(&sc->target_lock);
 
+    /* Clear force_break flag and re-initialize receive_count to 0 */
+    sc->receive_count = 0;
+    sc->force_break = 0;
 more_completions:
     if (CE_state->recv_cb) {
-        /* Clear force_break flag and re-initialize receive_count to 0 */
-        sc->receive_count = 0;
         
         /* Pop completed recv buffers and call the registered recv callback for each */
         while (CE_completed_recv_next_nolock(CE_state, &CE_context, &transfer_context,

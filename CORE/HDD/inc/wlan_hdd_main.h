@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 #if !defined( WLAN_HDD_MAIN_H )
 #define WLAN_HDD_MAIN_H
 /**===========================================================================
@@ -31,7 +34,7 @@
   \file  WLAN_HDD_MAIN_H.h
 
   \brief Linux HDD Adapter Type
-  
+
   ==========================================================================*/
 
 /*---------------------------------------------------------------------------
@@ -57,6 +60,8 @@
 #ifdef FEATURE_WLAN_TDLS
 #include "wlan_hdd_tdls.h"
 #endif
+#include "wlan_hdd_cfg80211.h"
+
 /*---------------------------------------------------------------------------
   Preprocessor definitions and constants
   -------------------------------------------------------------------------*/
@@ -92,7 +97,7 @@
 #define TDLS_INIT_DONE         (6)
 
 /** Maximum time(ms)to wait for disconnect to complete **/
-#define WLAN_WAIT_TIME_DISCONNECT  500
+#define WLAN_WAIT_TIME_DISCONNECT  2000
 #define WLAN_WAIT_TIME_STATS       800
 #define WLAN_WAIT_TIME_POWER       800
 #define WLAN_WAIT_TIME_COUNTRY     1000
@@ -219,6 +224,37 @@
 #define HDD_SESSION_ID_ANY  50 //This should be same as CSR_SESSION_ID_ANY
 typedef v_U8_t tWlanHddMacAddr[HDD_MAC_ADDR_LEN];
 
+/*
+ * Generic asynchronous request/response support
+ *
+ * Many of the APIs supported by HDD require a call to SME to
+ * perform an action or to retrieve some data.  In most cases SME
+ * performs the operation asynchronously, and will execute a provided
+ * callback function when the request has completed.  In order to
+ * synchronize this the HDD API allocates a context which is then
+ * passed to SME, and which is then, in turn, passed back to the
+ * callback function when the operation completes.  The callback
+ * function then sets a completion variable inside the context which
+ * the HDD API is waiting on.  In an ideal world the HDD API would
+ * wait forever (or at least for a long time) for the response to be
+ * received and for the completion variable to be set.  However in
+ * most cases these HDD APIs are being invoked in the context of a
+ * userspace thread which has invoked either a cfg80211 API or a
+ * wireless extensions ioctl and which has taken the kernel rtnl_lock.
+ * Since this lock is used to synchronize many of the kernel tasks, we
+ * do not want to hold it for a long time.  In addition we do not want
+ * to block userspace threads (such as the wpa supplicant's main
+ * thread) for an extended time.  Therefore we only block for a short
+ * time waiting for the response before we timeout.  This means that
+ * it is possible for the HDD API to timeout, and for the callback to
+ * be invoked afterwards.  In order for the callback function to
+ * determine if the HDD API is still waiting, a magic value is also
+ * stored in the shared context.  Only if the context has a valid
+ * magic will the callback routine do any work.  In order to further
+ * synchronize these activities a spinlock is used so that if any HDD
+ * API timeout coincides with its callback, the operations of the two
+ * threads will be serialized.
+ */
 struct statsContext
 {
    struct completion completion;
@@ -226,7 +262,12 @@ struct statsContext
    unsigned int magic;
 };
 
+extern spinlock_t hdd_context_lock;
+
 #define STATS_CONTEXT_MAGIC 0x53544154   //STAT
+#define RSSI_CONTEXT_MAGIC  0x52535349   //RSSI
+#define POWER_CONTEXT_MAGIC 0x504F5752   //POWR
+#define SNR_CONTEXT_MAGIC   0x534E5200   //SNR
 
 #ifdef FEATURE_WLAN_BATCH_SCAN
 #define HDD_BATCH_SCAN_VERSION (17)
@@ -439,7 +480,7 @@ typedef struct WLAN_WAPI_KEY WLAN_WAPI_KEY;
 typedef struct WLAN_WAPI_KEY *pWLAN_WAPI_KEY;
 
 #define WPA_GET_LE16(a) ((u16) (((a)[1] << 8) | (a)[0]))
-#define WPA_GET_BE24(a) ((u32) ( (a[0] << 16) | (a[1] <<8) | a[2]))
+#define WPA_GET_BE24(a) ((u32) ( (a[0] << 16) | (a[1] << 8) | a[2]))
 #define WLAN_EID_WAPI 68
 #define WAPI_PSK_AKM_SUITE  0x02721400
 #define WAPI_CERT_AKM_SUITE 0x01721400
@@ -599,6 +640,9 @@ struct hdd_station_ctx
 #endif
    /*Increment whenever ibss New peer joins and departs the network */
    int ibss_sta_generation;
+
+   /* Indication of wep/wpa-none keys installation */
+   v_BOOL_t ibss_enc_key_installed;
 
    /*Save the wep/wpa-none keys*/
    tCsrRoamSetKey ibss_enc_key;
@@ -762,7 +806,7 @@ typedef struct
     /*BSSID*/
     tANI_U8  bssid[SIR_MAC_ADDR_LEN];
     /*SSID*/
-    tANI_U8  ssid[SIR_MAX_SSID_SIZE];
+    tANI_U8  ssid[SIR_MAX_SSID_SIZE + 1];
     /*Channel*/
     tANI_U8  ch;
     /*RSSI or Level*/
@@ -981,6 +1025,9 @@ struct hdd_adapter_s
    v_U8_t configuredPsb;
 #ifdef QCA_WIFI_2_0
    v_BOOL_t internalCancelRemainOnChReq;
+#endif
+#ifdef IPA_OFFLOAD
+    void *ipa_context;
 #endif
 };
 
@@ -1225,9 +1272,15 @@ struct hdd_context_s
 
     struct completion ready_to_suspend;
 #ifdef QCA_WIFI_2_0
+    /* defining the solution type */
     v_U32_t target_type;
+
+    /* defining the firmware version */
     v_U32_t target_fw_version;
     v_U32_t dfs_radar_found;
+
+    /* defining the chip/rom version */
+    v_U32_t target_hw_version;
 #endif
     struct regulatory reg;
 #ifdef FEATURE_WLAN_CH_AVOID
@@ -1329,4 +1382,45 @@ void hdd_checkandupdate_phymode( hdd_context_t *pHddCtx);
 #endif
 
 int hdd_wmmps_helper(hdd_adapter_t *pAdapter, tANI_U8 *ptr);
+
+#ifdef FEATURE_WLAN_BATCH_SCAN
+/**---------------------------------------------------------------------------
+
+  \brief hdd_handle_batch_scan_ioctl () - This function handles WLS_BATCHING
+     IOCTLs from user space. Following BATCH SCAN DEV IOCTs are handled:
+     WLS_BATCHING VERSION
+     WLS_BATCHING SET
+     WLS_BATCHING GET
+     WLS_BATCHING STOP
+
+  \param  - pAdapter Pointer to HDD adapter
+  \param  - pPrivdata Pointer to priv_data
+  \param  - command Pointer to command
+
+  \return - 0 for success -EFAULT for failure
+
+  --------------------------------------------------------------------------*/
+
+int hdd_handle_batch_scan_ioctl
+(
+    hdd_adapter_t *pAdapter,
+    hdd_priv_data_t *pPrivdata,
+    tANI_U8 *command
+);
+
+/**---------------------------------------------------------------------------
+
+  \brief hdd_deinit_batch_scan () - This function cleans up batch scan data
+   structures
+
+  \param  - pAdapter Pointer to HDD adapter
+
+  \return - None
+
+  --------------------------------------------------------------------------*/
+
+void hdd_deinit_batch_scan(hdd_adapter_t *pAdapter);
+
+#endif /*End of FEATURE_WLAN_BATCH_SCAN*/
+
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

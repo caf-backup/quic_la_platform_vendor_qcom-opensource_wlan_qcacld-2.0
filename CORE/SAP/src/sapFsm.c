@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -37,7 +37,6 @@
   DEPENDENCIES:
 
   Are listed for each API below.
-
 ===========================================================================*/
 
 /*===========================================================================
@@ -980,6 +979,14 @@ sapFsm
                "ENTERTRED eSAP_DISCONNECTED-->eSAP_DFS_CAC_WAIT\n");
                sapStartDfsCacTimer(sapContext);
             }
+            if (msg == eSAP_CHANNEL_SELECTION_FAILED)
+            {
+                 /* Set SAP device role */
+                sapContext->sapsMachine = eSAP_CH_SELECT;
+
+                /* Perform sme_ScanRequest */
+                vosStatus = sapGotoChannelSel(sapContext, sapEvent);
+            }
             else
             {
                  VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR, "In %s, in state %s, event msg %d",
@@ -1570,14 +1577,15 @@ sapRemoveMacFromACL(v_MACADDR_t *macList, v_U8_t *size, v_U8_t index)
 void sapPrintACL(v_MACADDR_t *macList, v_U8_t size)
 {
     int i;
+    v_BYTE_t *macArray;
     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,"print acl entered");
     if (size==0) return;
     for (i=0; i<size; i++)
     {
+        macArray = (macList+i)->bytes;
         VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
-                "** ACL entry %i - %02x:%02x:%02x:%02x:%02x:%02x", i,
-                (macList+i)->bytes[0], (macList+i)->bytes[1], (macList+i)->bytes[2],
-                (macList+i)->bytes[3], (macList+i)->bytes[4], (macList+i)->bytes[5]);
+                "** ACL entry %i - "MAC_ADDRESS_STR, i,
+                MAC_ADDR_ARRAY(macArray));
     }
     return;
 }
@@ -1593,8 +1601,9 @@ sapIsPeerMacAllowed(ptSapContext sapContext, v_U8_t *peerMac)
 
     if (sapSearchMacList(sapContext->denyMacList, sapContext->nDenyMac, peerMac, NULL))
     {
-        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, Peer %02x:%02x:%02x:%02x:%02x:%02x in deny list",
-                __func__, *peerMac, *(peerMac + 1), *(peerMac + 2), *(peerMac + 3), *(peerMac + 4), *(peerMac + 5));
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                  "In %s, Peer "MAC_ADDRESS_STR" in deny list",
+                  __func__, MAC_ADDR_ARRAY(peerMac));
         return VOS_STATUS_E_FAILURE;
     }
 
@@ -1605,8 +1614,9 @@ sapIsPeerMacAllowed(ptSapContext sapContext, v_U8_t *peerMac)
     // A new station CANNOT associate, unless in accept list. More stringent mode
     if (eSAP_DENY_UNLESS_ACCEPTED == sapContext->eSapMacAddrAclMode)
     {
-        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, Peer %02x:%02x:%02x:%02x:%02x:%02x denied, Mac filter mode is eSAP_DENY_UNLESS_ACCEPTED",
-                __func__,  *peerMac, *(peerMac + 1), *(peerMac + 2), *(peerMac + 3), *(peerMac + 4), *(peerMac + 5));
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                  "In %s, Peer "MAC_ADDRESS_STR" denied, Mac filter mode is eSAP_DENY_UNLESS_ACCEPTED",
+                  __func__,  MAC_ADDR_ARRAY(peerMac));
         return VOS_STATUS_E_FAILURE;
     }
 
@@ -1616,8 +1626,9 @@ sapIsPeerMacAllowed(ptSapContext sapContext, v_U8_t *peerMac)
     if (eSAP_SUPPORT_ACCEPT_AND_DENY == sapContext->eSapMacAddrAclMode)
     {
         sapSignalHDDevent(sapContext, NULL, eSAP_UNKNOWN_STA_JOIN, (v_PVOID_t)peerMac);
-        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, Peer %02x:%02x:%02x:%02x:%02x:%02x denied, Mac filter mode is eSAP_SUPPORT_ACCEPT_AND_DENY",
-                __func__,  *peerMac, *(peerMac + 1), *(peerMac + 2), *(peerMac + 3), *(peerMac + 4), *(peerMac + 5));
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                  "In %s, Peer "MAC_ADDRESS_STR" denied, Mac filter mode is eSAP_SUPPORT_ACCEPT_AND_DENY",
+                  __func__, MAC_ADDR_ARRAY(peerMac));
         return VOS_STATUS_E_FAILURE;
     }
     return VOS_STATUS_SUCCESS;
@@ -1647,45 +1658,92 @@ static VOS_STATUS sapGetChannelList(ptSapContext sapContext,
         return VOS_STATUS_E_FAULT;
     }
 
-    ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_START_CHANNEL, &startChannelNum);
-    ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_END_CHANNEL, &endChannelNum);
-    ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_OPERATING_BAND, &operatingBand);
+    if ( eCSR_BAND_ALL == sapContext->scanBandPreference)
+    {
+        ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_START_CHANNEL, &startChannelNum);
+        ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_END_CHANNEL, &endChannelNum);
+        ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_OPERATING_BAND, &operatingBand);
+
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO,
+                 "%s:sapGetChannelList: startChannel %d,EndChannel %d,Operatingband:%d",
+                 __func__,startChannelNum,endChannelNum,operatingBand);
+
+        switch(operatingBand)
+        {
+            case RF_SUBBAND_2_4_GHZ:
+               bandStartChannel = RF_CHAN_1;
+               bandEndChannel = RF_CHAN_14;
+               break;
+
+            case RF_SUBBAND_5_LOW_GHZ:
+               bandStartChannel = RF_CHAN_36;
+               bandEndChannel = RF_CHAN_64;
+               break;
+
+            case RF_SUBBAND_5_MID_GHZ:
+               bandStartChannel = RF_CHAN_100;
+               bandEndChannel = RF_CHAN_140;
+               break;
+
+            case RF_SUBBAND_5_HIGH_GHZ:
+               bandStartChannel = RF_CHAN_149;
+               bandEndChannel = RF_CHAN_165;
+               break;
+
+            default:
+               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                 "sapGetChannelList:OperatingBand not valid ");
+               /* assume 2.4 GHz */
+               bandStartChannel = RF_CHAN_1;
+               bandEndChannel = RF_CHAN_14;
+               break;
+        }
+    }
+    else
+    {
+        if ( sapContext->allBandScanned == eSAP_FALSE )
+        {
+            //first band scan
+            sapContext->currentPreferredBand = sapContext->scanBandPreference;
+        }
+        else
+        {
+            //scan next band
+            if ( eCSR_BAND_24 == sapContext->scanBandPreference )
+                sapContext->currentPreferredBand = eCSR_BAND_5G;
+            else
+                sapContext->currentPreferredBand = eCSR_BAND_24;
+        }
+        switch(sapContext->currentPreferredBand)
+        {
+            case eCSR_BAND_24:
+               bandStartChannel = RF_CHAN_1;
+               bandEndChannel = RF_CHAN_14;
+               startChannelNum = 1;
+               endChannelNum = 14;
+               break;
+
+            case eCSR_BAND_5G:
+               bandStartChannel = RF_CHAN_36;
+               bandEndChannel = RF_CHAN_165;
+               startChannelNum = 36;
+               endChannelNum = 165;
+               break;
+
+            default:
+               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                 "sapGetChannelList:bandPreference not valid ");
+               /* assume 2.4 GHz */
+               bandStartChannel = RF_CHAN_1;
+               bandEndChannel = RF_CHAN_14;
+               startChannelNum = 1;
+               endChannelNum = 14;
+               break;
+        }
+    }
+
     ccmCfgGetInt(hHal, WNI_CFG_ENABLE_LTE_COEX, &enableLTECoex);
 
-    VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO,
-             "%s:sapGetChannelList: startChannel %d,EndChannel %d,Operatingband:%d",
-             __func__,startChannelNum,endChannelNum,operatingBand);
-
-    switch(operatingBand)
-    {
-        case RF_SUBBAND_2_4_GHZ:
-           bandStartChannel = RF_CHAN_1;
-           bandEndChannel = RF_CHAN_14;
-           break;
-
-        case RF_SUBBAND_5_LOW_GHZ:
-           bandStartChannel = RF_CHAN_36;
-           bandEndChannel = RF_CHAN_64;
-           break;
-
-        case RF_SUBBAND_5_MID_GHZ:
-           bandStartChannel = RF_CHAN_100;
-           bandEndChannel = RF_CHAN_140;
-           break;
-
-        case RF_SUBBAND_5_HIGH_GHZ:
-           bandStartChannel = RF_CHAN_149;
-           bandEndChannel = RF_CHAN_165;
-           break;
-
-        default:
-           VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
-             "sapGetChannelList:OperatingBand not valid ");
-           /* assume 2.4 GHz */
-           bandStartChannel = RF_CHAN_1;
-           bandEndChannel = RF_CHAN_14;
-           break;
-    }
     /*Check if LTE coex is enabled and 2.4GHz is selected*/
     if (enableLTECoex && (bandStartChannel == RF_CHAN_1)
        && (bandEndChannel == RF_CHAN_14))
@@ -1740,6 +1798,13 @@ static VOS_STATUS sapGetChannelList(ptSapContext sapContext,
     {
        *channelList = NULL;
         vos_mem_free(list);
+    }
+
+    for (loopCount = 0; loopCount <channelCount; loopCount ++ )
+    {
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_DEBUG,
+             "%s: channel number: %d",
+             __func__,list[loopCount]);
     }
     return VOS_STATUS_SUCCESS;
 }

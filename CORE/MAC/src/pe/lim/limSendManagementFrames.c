@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,14 +20,18 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2011-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /**
  * \file limSendManagementFrames.c
  *
  * \brief Code for preparing and sending 802.11 Management frames
+ *
  *
  */
 
@@ -623,7 +627,7 @@ limSendProbeRspMgmtFrame(tpAniSirGlobal pMac,
 #ifdef WLAN_FEATURE_11AC
     if(psessionEntry->vhtCapability)
     {
-        limLog( pMac, LOGW, FL("Populate VHT IE in Probe Response"));
+        limLog( pMac, LOG1, FL("Populate VHT IE in Probe Response"));
         PopulateDot11fVHTCaps( pMac, psessionEntry, &pFrm->VHTCaps );
         PopulateDot11fVHTOperation( pMac, &pFrm->VHTOperation );
         // we do not support multi users yet

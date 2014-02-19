@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*===========================================================================
                         L I M _ P 2 P . C
 
@@ -31,7 +32,6 @@
 
   This software unit holds the implementation of the WLAN Protocol Engine for
   P2P.
-
 ===========================================================================*/
 
 /*===========================================================================
@@ -147,15 +147,15 @@ static eHalStatus limSendHalReqRemainOnChanOffload(tpAniSirGlobal pMac,
     pScanOffloadReq->channelList.channelNumber[0] = pRemOnChnReq->chnNum;
 
     limLog(pMac, LOG1,
-            FL("Req-rem-on-channel: duration %lu, session %hu, chan %hu"),
+            FL("Req-rem-on-channel: duration %u, session %hu, chan %hu"),
             pRemOnChnReq->duration, pRemOnChnReq->sessionId,
             pRemOnChnReq->chnNum);
 
     rc = wdaPostCtrlMsg(pMac, &msg);
     if (rc != eSIR_SUCCESS)
     {
-        limLog(pMac, LOGE, FL("wdaPostCtrlMsg() return failure"),
-                pMac);
+        limLog(pMac, LOGE, FL("wdaPostCtrlMsg() return failure %u"),
+                rc);
         vos_mem_free(pScanOffloadReq);
         return eHAL_STATUS_FAILURE;
     }

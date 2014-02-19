@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,12 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2013-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
 #if !defined( HDD_CONNECTION_H__ ) 
 #define HDD_CONNECTION_H__
 #include <wlan_hdd_mib.h>
@@ -123,6 +125,13 @@ typedef struct hdd_station_ctx hdd_station_ctx_t;
 typedef struct hdd_ap_ctx_s  hdd_ap_ctx_t;
 typedef struct hdd_mon_ctx_s  hdd_mon_ctx_t;
 
+#ifdef QCA_WIFI_2_0
+typedef enum
+{
+   ePeerConnected = 1,
+   ePeerDisconnected
+}ePeerStatus;
+#endif /* QCA_WIFI_2_0 */
 
 extern v_BOOL_t hdd_connIsConnected( hdd_station_ctx_t *pHddStaCtx );
 extern eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, v_U32_t roamId, 
@@ -139,4 +148,12 @@ int hdd_set_csr_auth_type( hdd_adapter_t *pAdapter, eCsrAuthType RSNAuthType );
 VOS_STATUS hdd_roamRegisterTDLSSTA( hdd_adapter_t *pAdapter,
                                     tANI_U8 *peerMac, tANI_U16 staId, tANI_U8 ucastSig);
 void hdd_PerformRoamSetKeyComplete(hdd_adapter_t *pAdapter);
+
+#ifdef QCA_WIFI_2_0
+void hdd_SendPeerStatusIndToOemApp(v_MACADDR_t *peerMac,
+                                   tANI_U8 peerStatus,
+                                   tANI_U8 peerTimingMeasCap,
+                                   tANI_U8 sessionId,
+                                   tANI_U8 chanId);
+#endif /* QCA_WIFI_2_0 */
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifdef WLAN_OPEN_SOURCE
 #include <wlan_hdd_includes.h>
 #include <wlan_hdd_wowl.h>
@@ -235,7 +236,6 @@ static ssize_t wcnss_patterngen_write(struct file *file,
 
         return -EINVAL;
     }
-
     pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
 
     if (!sme_IsFeatureSupportedByFW(WLAN_PERIODIC_TX_PTRN))
@@ -243,7 +243,6 @@ static ssize_t wcnss_patterngen_write(struct file *file,
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                    "%s: Periodic Tx Pattern Offload feature is not supported "
                    "in firmware!", __func__);
-
         return -EINVAL;
     }
 
@@ -312,10 +311,10 @@ static ssize_t wcnss_patterngen_write(struct file *file,
             vos_mem_free(cmd);
             return -EFAULT;
         }
-
+        delPeriodicTxPtrnParams->ucPtrnId = pattern_idx;
         delPeriodicTxPtrnParams->ucPatternIdBitmap = 1 << pattern_idx;
         vos_mem_copy(delPeriodicTxPtrnParams->macAddress,
-                     pAdapter->macAddressCurrent.bytes, 6);
+                    pAdapter->macAddressCurrent.bytes, 6);
 
         /* Delete pattern */
         if (eHAL_STATUS_SUCCESS != sme_DelPeriodicTxPtrn(pHddCtx->hHal,
@@ -327,8 +326,6 @@ static ssize_t wcnss_patterngen_write(struct file *file,
             vos_mem_free(delPeriodicTxPtrnParams);
             goto failure;
         }
-
-        vos_mem_free(delPeriodicTxPtrnParams);
         vos_mem_free(cmd);
         return count;
     }
@@ -407,8 +404,6 @@ static ssize_t wcnss_patterngen_write(struct file *file,
         vos_mem_free(addPeriodicTxPtrnParams);
         goto failure;
     }
-
-    vos_mem_free(addPeriodicTxPtrnParams);
     vos_mem_free(cmd);
     return count;
 

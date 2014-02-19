@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -104,9 +104,16 @@ struct cvg_nbuf_cb {
     } extra_frags;
     uint32_t owner_id;
     __adf_nbuf_callback_fn adf_nbuf_callback_fn;
+#ifdef IPA_OFFLOAD
+    unsigned long priv_data;
+#endif
 };
 #define NBUF_OWNER_ID(skb) \
     (((struct cvg_nbuf_cb *)((skb)->cb))->owner_id)
+#ifdef IPA_OFFLOAD
+#define NBUF_OWNER_PRIV_DATA(skb) \
+    (((struct cvg_nbuf_cb *)((skb)->cb))->priv_data)
+#endif
 #define NBUF_CALLBACK_FN(skb) \
     (((struct cvg_nbuf_cb *)((skb)->cb))->adf_nbuf_callback_fn)
 #define NBUF_CALLBACK_FN_EXEC(skb) \
@@ -523,7 +530,7 @@ __adf_nbuf_peek_header(struct sk_buff *skb, uint8_t   **addr,
 
 /* /\* */
 /*  * adf_nbuf_queue_add() - add a skbuf to the end of the skbuf queue */
-/*  * */
+
 /*  * We use the non-locked version because */
 /*  * there's no need to use the irq safe version of spinlock. */
 /*  * However, the caller has to do synchronization by itself. */
@@ -744,6 +751,7 @@ a_status_t      __adf_nbuf_get_vlan_info(adf_net_handle_t hdl,
                                          struct sk_buff *skb, 
                                          adf_net_vlanhdr_t *vlan);
 a_uint8_t __adf_nbuf_get_tid(struct sk_buff *skb);
+void __adf_nbuf_set_tid(struct sk_buff *skb, a_uint8_t tid);
 a_uint8_t __adf_nbuf_get_exemption_type(struct sk_buff *skb);
 /*
  * adf_nbuf_pool_init() implementation - do nothing in Linux

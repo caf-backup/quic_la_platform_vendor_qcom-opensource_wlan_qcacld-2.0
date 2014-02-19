@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*============================================================================
   @file wlan_hdd_wmm.c
 
@@ -44,7 +45,6 @@
   TL.
 
   The remaining functions are utility functions for information hiding.
-
 ============================================================================*/
 
 /*---------------------------------------------------------------------------
@@ -2065,8 +2065,17 @@ VOS_STATUS hdd_wmm_acquire_access( hdd_adapter_t* pAdapter,
                 "%s: Implicit QoS for TL AC %d previously failed",
                 __func__, acType);
 
-      pAdapter->hddWmmStatus.wmmAcStatus[acType].wmmAcAccessAllowed = VOS_FALSE;
-      *pGranted = VOS_FALSE;
+      if (!pAdapter->hddWmmStatus.wmmAcStatus[acType].wmmAcAccessRequired)
+      {
+         pAdapter->hddWmmStatus.wmmAcStatus[acType].wmmAcAccessAllowed = VOS_TRUE;
+         *pGranted = VOS_TRUE;
+      }
+      else
+      {
+         pAdapter->hddWmmStatus.wmmAcStatus[acType].wmmAcAccessAllowed = VOS_FALSE;
+         *pGranted = VOS_FALSE;
+      }
+
       return VOS_STATUS_SUCCESS;
    }
 
