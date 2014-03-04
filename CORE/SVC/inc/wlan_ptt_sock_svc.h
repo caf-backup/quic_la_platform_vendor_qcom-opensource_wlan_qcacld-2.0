@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /******************************************************************************
  * wlan_ptt_sock_svc.c
  *
@@ -65,6 +66,7 @@
 #define ANI_MSG_CHANNEL_INFO_REQ    (ANI_DRIVER_MSG_START + 4)
 #define ANI_MSG_CHANNEL_INFO_RSP    (ANI_DRIVER_MSG_START + 5)
 #define ANI_MSG_OEM_ERROR           (ANI_DRIVER_MSG_START + 6)
+#define ANI_MSG_PEER_STATUS_IND     (ANI_DRIVER_MSG_START + 7)
 
 #define ANI_MAX_RADIOS      3
 #define ANI_NL_MSG_OK       0

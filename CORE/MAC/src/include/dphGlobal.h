@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
 
@@ -604,6 +605,13 @@ typedef struct sDphHashNode
 
     tANI_U8 htLdpcCapable;
     tANI_U8 vhtLdpcCapable;
+
+#ifdef FEATURE_WLAN_TDLS
+    tANI_U16 ht_caps;
+    tANI_U32 vht_caps;
+#endif
+
+    tANI_U8 timingMeasCap;
 
     /* When a station with already an existing dph entry tries to 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 //------------------------------------------------------------------------------
 // <copyright file="htc.h" company="Atheros">
 //    Copyright (c) 2004-2010 Atheros Corporation.  All rights reserved.
@@ -154,7 +155,7 @@ typedef PREPACK struct {
              reserved : 16;
 } POSTPACK HTC_UNKNOWN_MSG;
 
-#define HTC_UNKNOWN_MSG_MESSAGEID_LSB                 0 
+#define HTC_UNKNOWN_MSG_MESSAGEID_LSB                 0
 #define HTC_UNKNOWN_MSG_MESSAGEID_MASK                0x0000ffff
 #define HTC_UNKNOWN_MSG_MESSAGEID_OFFSET              0x00000000
 
@@ -192,7 +193,7 @@ typedef PREPACK struct {
 
 #define HTC_READY_EX_MSG_HTCVERSION_LSB               0
 #define HTC_READY_EX_MSG_HTCVERSION_MASK              0x000000ff
-#define HTC_READY_EX_MSG_HTCVERSION_OFFSET            sizeof(HTC_READY_MSG) 
+#define HTC_READY_EX_MSG_HTCVERSION_OFFSET            sizeof(HTC_READY_MSG)
 #define HTC_READY_EX_MSG_MAXMSGSPERHTCBUNDLE_LSB      8
 #define HTC_READY_EX_MSG_MAXMSGSPERHTCBUNDLE_MASK     0x0000ff00
 #define HTC_READY_EX_MSG_MAXMSGSPERHTCBUNDLE_OFFSET   sizeof(HTC_READY_MSG)
@@ -322,7 +323,7 @@ typedef PREPACK struct {
 #define HTC_SETUP_COMPLETE_FLAGS_ENABLE_BUNDLE_RECV     (1 << 0)    /* enable recv bundling from target */
 #define HTC_SETUP_COMPLETE_FLAGS_DISABLE_TX_CREDIT_FLOW (1 << 1)    /* disable credit based flow control,
                                                                        only supported on some interconnects */
-                                                                       
+
 /* connect response status codes */
 #define HTC_SERVICE_SUCCESS      0  /* success */
 #define HTC_SERVICE_NOT_FOUND    1  /* service could not be found */
@@ -396,7 +397,7 @@ typedef PREPACK struct {
 #define HTC_LOOKAHEAD_REPORT_LOOKAHEAD3_OFFSET    0x00000004
 #define HTC_LOOKAHEAD_REPORT_POSTVALID_LSB        0
 #define HTC_LOOKAHEAD_REPORT_POSTVALID_MASK       0x000000ff
-#define HTC_LOOKAHEAD_REPORT_POSTVALID_OFFSET     0x00000008 
+#define HTC_LOOKAHEAD_REPORT_POSTVALID_OFFSET     0x00000008
 
 typedef PREPACK struct {
     A_UINT32 LookAhead0 : 8,    /* 4 byte lookahead */
@@ -424,4 +425,3 @@ typedef PREPACK struct {
 
 
 #endif /* __HTC_H__ */
-

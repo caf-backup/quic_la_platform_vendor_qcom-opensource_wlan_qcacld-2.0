@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /*
  * This file sirParams.h contains the common parameter definitions, which
  * are not dependent on threadX API. These can be used by all Firmware
@@ -644,6 +647,8 @@ typedef struct sSirMbMsgP2p
 #if defined(FEATURE_WLAN_CCX) && defined(FEATURE_WLAN_CCX_UPLOAD)
 #define SIR_HAL_SET_PLM_REQ                (SIR_HAL_ITC_MSG_TYPES_BEGIN + 250)
 #endif
+
+#define SIR_HAL_SET_TX_POWER_LIMIT         (SIR_HAL_ITC_MSG_TYPES_BEGIN + 251)
 
 #define SIR_HAL_MSG_TYPES_END              (SIR_HAL_MSG_TYPES_BEGIN + 0x1FF)
 

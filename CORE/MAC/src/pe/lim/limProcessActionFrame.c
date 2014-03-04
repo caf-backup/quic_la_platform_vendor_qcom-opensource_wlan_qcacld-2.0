@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /*
  * This file limProcessActionFrame.cc contains the code
  * for processing Action Frame.
@@ -1820,7 +1823,6 @@ static void
 __limProcessSMPowerSaveUpdate(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo ,tpPESession psessionEntry)
 {
 
-#if 0
         tpSirMacMgmtHdr                           pHdr;
         tDot11fSMPowerSave                    frmSMPower;
         tSirMacHTMIMOPowerSaveState  state;
@@ -1829,9 +1831,9 @@ __limProcessSMPowerSaveUpdate(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo ,tpPES
         tANI_U32                                        frameLen, nStatus;
         tANI_U8                                          *pBody;
 
-        pHdr = SIR_MAC_BD_TO_MPDUHEADER( pBd );
-        pBody = SIR_MAC_BD_TO_MPDUDATA( pBd );
-        frameLen = SIR_MAC_BD_TO_PAYLOAD_LEN( pBd );
+        pHdr = WDA_GET_RX_MAC_HEADER( pRxPacketInfo );
+        pBody = WDA_GET_RX_MPDU_DATA( pRxPacketInfo );
+        frameLen = WDA_GET_RX_PAYLOAD_LEN( pRxPacketInfo );
 
         pSta = dphLookupHashEntry(pMac, pHdr->sa, &aid, &psessionEntry->dph.dphHashTable );
         if( pSta == NULL ) {
@@ -1877,10 +1879,8 @@ __limProcessSMPowerSaveUpdate(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo ,tpPES
 
         /** Update in the HAL Station Table for the Update of the Protection Mode */
         pSta->htMIMOPSState = state;
-        limPostSMStateUpdate(pMac,pSta->staIndex, pSta->htMIMOPSState);
-
-#endif
-        
+        limPostSMStateUpdate(pMac,pSta->staIndex, pSta->htMIMOPSState,
+                             pSta->staAddr, psessionEntry->smeSessionId);
 }
 
 #if defined WLAN_FEATURE_VOWIFI
@@ -2263,7 +2263,8 @@ limProcessActionFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession ps
         /** Type of HT Action to be performed*/
         switch(pActionHdr->actionID) {
         case SIR_MAC_SM_POWER_SAVE:
-            __limProcessSMPowerSaveUpdate(pMac, (tANI_U8 *) pRxPacketInfo,psessionEntry);
+            if ((psessionEntry->limSystemRole == eLIM_AP_ROLE) )
+                __limProcessSMPowerSaveUpdate(pMac, (tANI_U8 *) pRxPacketInfo,psessionEntry);
             break;
         default:
             PELOGE(limLog(pMac, LOGE, FL("Action ID %d not handled in HT Action category"), pActionHdr->actionID);)

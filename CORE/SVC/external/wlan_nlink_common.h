@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*===========================================================================
   \file wlan_nlink_common.h
   
@@ -82,7 +83,9 @@
 
 // Special Message Type used by SoftAP, intercepted by send_btc_nlink_msg() and
 // replaced by WLAN_STA_ASSOC_DONE_IND
-#define WLAN_BTC_SOFTAP_BSS_START      0x11
+#define WLAN_BTC_SOFTAP_BSS_START   0x11
+#define WLAN_SVC_FW_CRASHED_IND     0x100
+#define WLAN_SVC_LTE_COEX_IND       0x101
 
 
 // Event data for WLAN_BTC_QUERY_STATE_RSP & WLAN_STA_ASSOC_DONE_IND
@@ -97,9 +100,8 @@ typedef enum eAniNlModuleTypes {
    ANI_NL_MSG_PUMAC = ANI_NL_MSG_BASE + 0x01,// PTT Socket App
    ANI_NL_MSG_PTT   = ANI_NL_MSG_BASE + 0x07,// Quarky GUI
    WLAN_NL_MSG_BTC,
-#ifdef QCA_WIFI_2_0
    WLAN_NL_MSG_OEM,
-#endif
+   WLAN_NL_MSG_SVC,
    ANI_NL_MSG_MAX  
 } tAniNlModTypes, tWlanNlModTypes;
 

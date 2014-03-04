@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,8 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- * */
+
 /**=========================================================================
   
   \file  limSession.c
@@ -348,7 +347,7 @@ void peDeleteSession(tpAniSirGlobal pMac, tpPESession psessionEntry)
     tANI_U16 n;
     TX_TIMER *timer_ptr;
 
-    limLog(pMac, LOGW, FL("Trying to delete a session %d.\n "), psessionEntry->peSessionId);
+    limLog(pMac, LOGW, FL("Trying to delete a session %d"), psessionEntry->peSessionId);
 
     for (n = 0; n < pMac->lim.maxStation; n++)
     {
@@ -477,7 +476,7 @@ void peDeleteSession(tpAniSirGlobal pMac, tpPESession psessionEntry)
            != eHAL_STATUS_SUCCESS)
         {
             limLog(pMac, LOGE,
-                   FL("Failed to close ps offload for pe session %x\n"),
+                   FL("Failed to close ps offload for pe session %x"),
                    psessionEntry->peSessionId);
         }
     }

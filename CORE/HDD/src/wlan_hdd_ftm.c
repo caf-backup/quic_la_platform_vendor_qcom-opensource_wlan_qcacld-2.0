@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file  wlan_hdd_ftm.c
@@ -4399,7 +4400,8 @@ static VOS_STATUS wlan_ftm_priv_set_mac_address(hdd_adapter_t *pAdapter,char *bu
        return VOS_STATUS_E_FAILURE;
     }
 
-    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "MacAddress = %02x:%02x:%02x:%02x:%02x:%02x",MAC_ADDR_ARRAY(macAddr));
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+              "MacAddress = " MAC_ADDRESS_STR, MAC_ADDR_ARRAY(macAddr));
 
 
     pMacAddress = &pMsgBody->SetNvField.fieldData.macAddr.macAddr1[0];
@@ -4408,7 +4410,8 @@ static VOS_STATUS wlan_ftm_priv_set_mac_address(hdd_adapter_t *pAdapter,char *bu
        pMacAddress[ii] = (v_U8_t)macAddr[ii];
 
 
-    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "pMacAddress = %02x:%02x:%02x:%02x:%02x:%02x",MAC_ADDR_ARRAY(pMacAddress));
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+              "pMacAddress = " MAC_ADDRESS_STR, MAC_ADDR_ARRAY(pMacAddress));
     status = wlan_ftm_postmsg((v_U8_t*)pMsgBuf,pMsgBuf->msgBodyLength);
 
     if (status != VOS_STATUS_SUCCESS)
@@ -4823,7 +4826,7 @@ static int iw_ftm_get_char_setnone(struct net_device *dev, struct iw_request_inf
         }
         default:
         {
-            hddLog(LOGE, "Invalid IOCTL command %d  \n",  sub_cmd );
+            hddLog(LOGE, "%s: Invalid IOCTL command %d", __func__, sub_cmd );
             break;
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,12 +20,14 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2011-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
-/*
- * */
+
+
+
 
 #ifndef WLAN_QCT_WLANTL_H
 #define WLAN_QCT_WLANTL_H
@@ -39,7 +41,6 @@
 DESCRIPTION
   This file contains the external API exposed by the wlan transport layer
   module.
-
 ===========================================================================*/
 
 
@@ -306,6 +307,9 @@ typedef struct
 
   /* Ip checksum offload */
   v_BOOL_t   ip_checksum_offload;
+
+  /* Rx processing in thread from TL shim */
+  v_BOOL_t enable_rxthread;
 }WLANTL_ConfigInfoType;
 
 /*---------------------------------------------------------------------------
@@ -1297,6 +1301,39 @@ WLANTL_STAPktPending
 adf_nbuf_t WLANTL_SendSTA_DataFrame(v_PVOID_t pvosGCtx, v_U8_t ucSTAId,
                                     adf_nbuf_t buf);
 #endif
+
+#ifdef IPA_OFFLOAD
+/*===========================================================================
+
+  FUNCTION   WLANTL_SendIPA_DataFrame
+
+  DESCRIPTION
+
+    HDD will call this API when there is a packet to be transmitted from IPA
+
+  DEPENDENCIES
+
+    A station must have been registered before sending packet to txrx layer
+
+
+  PARAMETERS
+
+    vos_ctx:  pointer to the global vos context; a handle to TL's
+                 control block can be extracted from its context
+    vdev:      virtual device
+    buf:         packet given by uppler layer for tx
+
+  RETURN VALUE
+
+    On success it will return NULL. On failure it will be the
+    passed buf pointer so that the caller will be able to free
+    up the buffer.
+
+============================================================================*/
+adf_nbuf_t WLANTL_SendIPA_DataFrame(void *vos_ctx, void *vdev,
+                                    adf_nbuf_t buf);
+#endif
+
 
 /*==========================================================================
 

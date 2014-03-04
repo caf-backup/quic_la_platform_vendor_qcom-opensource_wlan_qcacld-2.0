@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,18 +24,19 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( HDD_CFG80211_H__ )
 #define HDD_CFG80211_H__
 
 
 /**===========================================================================
-  
+
   \file  wlan_hdd_cfg80211.h
-  
+
   \brief cfg80211 functions declarations
-    
+
   ==========================================================================*/
-  
+
 /* $HEADER$ */
 
 
@@ -103,6 +104,32 @@ typedef struct {
    u32 age;
 }__attribute__((packed)) qcom_ie_age ;
 #endif
+
+/* Vendor id to be used in vendor specific command and events
+ * to user space
+ */
+#define QCOM_NL80211_VENDOR_ID                0x001374
+
+/* Vendor speicific sub-command id and their index */
+#ifdef FEATURE_WLAN_CH_AVOID
+#define QCOM_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY         10
+#define QCOM_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_INDEX   0
+#endif /* FEATURE_WLAN_CH_AVOID */
+
+#ifdef FEATURE_WLAN_CH_AVOID
+#define HDD_MAX_AVOID_FREQ_RANGES   4
+typedef struct sHddAvoidFreqRange
+{
+   u32 startFreq;
+   u32 endFreq;
+} tHddAvoidFreqRange;
+
+typedef struct sHddAvoidFreqList
+{
+   u32 avoidFreqRangeCount;
+   tHddAvoidFreqRange avoidFreqRange[HDD_MAX_AVOID_FREQ_RANGES];
+} tHddAvoidFreqList;
+#endif /* FEATURE_WLAN_CH_AVOID */
 
 struct cfg80211_bss* wlan_hdd_cfg80211_update_bss_db( hdd_adapter_t *pAdapter,
                                       tCsrRoamInfo *pRoamInfo
@@ -187,5 +214,8 @@ void hdd_suspend_wlan(void (*callback)(void *callbackContext),
                       void *callbackContext);
 void hdd_resume_wlan(void);
 #endif
+
+int wlan_hdd_send_avoid_freq_event(hdd_context_t *pHddCtx,
+                                   tHddAvoidFreqList *pAvoidFreqList);
 
 #endif

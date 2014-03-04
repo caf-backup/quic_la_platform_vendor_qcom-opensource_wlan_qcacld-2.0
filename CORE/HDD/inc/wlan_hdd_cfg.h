@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( HDD_CONFIG_H__ )
 #define HDD_CONFIG_H__
 
@@ -1215,6 +1216,28 @@ typedef enum
 #define CFG_NEIGHBOR_LOOKUP_RSSI_THRESHOLD_MAX       (120)
 #define CFG_NEIGHBOR_LOOKUP_RSSI_THRESHOLD_DEFAULT   (78)
 
+/*
+ * This parameter is the drop in RSSI value that will trigger a precautionary
+ * scan by firmware.
+ * MAX value is choose so that this type of scan can be disabled by user.
+ */
+#define CFG_ROAM_RESCAN_RSSI_DIFF_NAME                  "gRoamRescanRssiDiff"
+#define CFG_ROAM_RESCAN_RSSI_DIFF_MIN                   (0)
+#define CFG_ROAM_RESCAN_RSSI_DIFF_MAX                   (100)
+#define CFG_ROAM_RESCAN_RSSI_DIFF_DEFAULT               (5)
+
+/*
+ * This parameter is the RSSI diff above neighbor lookup threshold, when
+ * opportunistic scan should be triggered.
+ * MAX value is choose so that this type of scan can be always enabled by user.
+ * MIN value will cause opportunistic scan to be triggered in neighbor lookup
+ * RSSI range.
+ */
+#define CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_NAME            "gOpportunisticThresholdDiff"
+#define CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_MIN             (0)
+#define CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_MAX             (127)
+#define CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_DEFAULT         (0)
+
 #define CFG_NEIGHBOR_SCAN_CHAN_LIST_NAME                      "gNeighborScanChannelList"
 #define CFG_NEIGHBOR_SCAN_CHAN_LIST_DEFAULT                   ""
 
@@ -2170,6 +2193,36 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_SAP_MAX_NO_PEERS_MAX                   (32)
 #define CFG_SAP_MAX_NO_PEERS_DEFAULT               (32)
 
+/*
+ * Connection related log Enable/Disable.
+ * 0x1 - Enable mgmt pkt logs (no probe req/rsp).
+ * 0x2 - Enable EAPOL pkt logs.
+ * 0x4 - Enable DHCP pkt logs.
+ * 0x0 - Disable all the above connection related logs.
+ */
+#define CFG_ENABLE_DEBUG_CONNECT_ISSUE             "gEnableDebugLog"
+#define CFG_ENABLE_DEBUG_CONNECT_ISSUE_MIN         (0)
+#define CFG_ENABLE_DEBUG_CONNECT_ISSUE_MAX         (0xFF)
+#define CFG_ENABLE_DEBUG_CONNECT_ISSUE_DEFAULT     (0)
+
+/* This will be used only for debugging purpose, will be removed after sometime */
+#define CFG_ENABLE_RX_THREAD                       "gEnableRxThread"
+#define CFG_ENABLE_RX_THREAD_MIN                   (0)
+#define CFG_ENABLE_RX_THREAD_MAX                   (1)
+#define CFG_ENABLE_RX_THREAD_DEFAULT               (1)
+
+/* SAR Thermal limit values for 2g and 5g */
+
+#define CFG_SET_TXPOWER_LIMIT2G_NAME               "TxPower2g"
+#define CFG_SET_TXPOWER_LIMIT2G_MIN                ( 0 )
+#define CFG_SET_TXPOWER_LIMIT2G_MAX                ( 30 )
+#define CFG_SET_TXPOWER_LIMIT2G_DEFAULT            ( 15 )
+
+#define CFG_SET_TXPOWER_LIMIT5G_NAME               "TxPower5g"
+#define CFG_SET_TXPOWER_LIMIT5G_MIN                ( 0 )
+#define CFG_SET_TXPOWER_LIMIT5G_MAX                ( 30 )
+#define CFG_SET_TXPOWER_LIMIT5G_DEFAULT            ( 15 )
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -2303,6 +2356,8 @@ typedef struct
    v_U16_t       nNeighborScanPeriod;
    v_U8_t        nNeighborReassocRssiThreshold;
    v_U8_t        nNeighborLookupRssiThreshold;
+   v_U8_t        nOpportunisticThresholdDiff;
+   v_U8_t        nRoamRescanRssiDiff;
    v_U8_t        neighborScanChanList[WNI_CFG_VALID_CHANNEL_LIST_LEN];
    v_U16_t       nNeighborScanMinChanTime;
    v_U16_t       nNeighborScanMaxChanTime;
@@ -2624,12 +2679,17 @@ typedef struct
    v_U16_t                     thermalTempMaxLevel2;
    v_U16_t                     thermalTempMinLevel3;
    v_U16_t                     thermalTempMaxLevel3;
+   v_U32_t                     TxPower2g;
+   v_U32_t                     TxPower5g;
 #endif
+   v_U32_t                     gEnableDebugLog;
+   v_U8_t                      enableRxThread;
 } hdd_config_t;
 /*---------------------------------------------------------------------------
   Function declarations and documenation
   -------------------------------------------------------------------------*/
 VOS_STATUS hdd_parse_config_ini(hdd_context_t *pHddCtx);
+VOS_STATUS hdd_update_mac_config(hdd_context_t *pHddCtx);
 VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx );
 VOS_STATUS hdd_set_sme_chan_list(hdd_context_t *hdd_ctx);
 v_BOOL_t hdd_update_config_dat ( hdd_context_t *pHddCtx );

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _QC_SAP_IOCTL_H_
 #define _QC_SAP_IOCTL_H_
 
@@ -271,8 +272,14 @@ typedef struct
 #define QCASAP_TXRX_FWSTATS_RESET          41
 #define QCSAP_PARAM_SETRTSCTS              42
 #define QCSAP_PARAM_GETRTSCTS              43
-#define QCASAP_SET_11N_RATE                45
-#define QCASAP_SET_VHT_RATE                46
+#define QCASAP_SET_11N_RATE                44
+#define QCASAP_SET_VHT_RATE                45
+#define QCASAP_SET_SHORT_GI                46
+#define QCASAP_GET_SHORT_GI                47
+#define QCSAP_SET_11N_RATE                 48
+#define QCSAP_SET_VHT_RATE                 49
+#define QCSAP_SET_AMPDU                    50
+#define QCSAP_SET_AMSDU                    51
 #endif /* QCA_WIFI_2_0 */
 
 enum { 

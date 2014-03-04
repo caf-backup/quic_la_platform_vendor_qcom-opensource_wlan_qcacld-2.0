@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_htt_api.h
  * @brief Specify the general HTT API functions called by the host data SW.
@@ -187,7 +188,7 @@ htt_h2t_sync_msg(htt_pdev_handle htt_pdev, u_int8_t sync_cnt);
 
 int
 htt_h2t_aggr_cfg_msg(htt_pdev_handle htt_pdev,
-                     int max_subfrms_ampdu, 
+                     int max_subfrms_ampdu,
                      int max_subfrms_amsdu);
 
 /**
@@ -204,7 +205,7 @@ htt_h2t_aggr_cfg_msg(htt_pdev_handle htt_pdev,
  */
 int
 htt_h2t_dbg_stats_get(
-    struct htt_pdev_t *pdev, 
+    struct htt_pdev_t *pdev,
     u_int32_t stats_type_upload_mask,
     u_int32_t stats_type_reset_mask,
     u_int8_t cfg_stats_type,

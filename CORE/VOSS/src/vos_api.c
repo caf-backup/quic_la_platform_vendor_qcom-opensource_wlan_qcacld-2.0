@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**=========================================================================
 
   \file  vos_api.c
@@ -31,7 +32,7 @@
   \brief Stub file for all virtual Operating System Services (vOSS) APIs
 
   ========================================================================*/
- /*=========================================================================== 
+ /*===========================================================================
 
                        EDIT HISTORY FOR FILE 
    
@@ -410,6 +411,8 @@ VOS_STATUS vos_open( v_CONTEXT_t *pVosContext, v_SIZE_t hddContextSize )
        macOpenParms.olIniInfo      = macOpenParms.olIniInfo | 0x2;
 #endif
 
+   macOpenParms.apDisableIntraBssFwd = pHddCtx->cfg_ini->apDisableIntraBssFwd;
+
    vStatus = WDA_open( gpVosContext, gpVosContext->pHDDContext,
 #if defined (QCA_WIFI_2_0) && \
    !defined (QCA_WIFI_ISOC)
@@ -689,7 +692,7 @@ VOS_STATUS vos_preStart( v_CONTEXT_t vosContext )
       if ( vStatus == VOS_STATUS_E_TIMEOUT )
       {
          VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-          "%s: Timeout occurred before WDA complete\n", __func__);
+          "%s: Timeout occurred before WDA complete", __func__);
       }
       else
       {
@@ -1114,6 +1117,15 @@ VOS_STATUS vos_close( v_CONTEXT_t vosContext )
       gpVosContext->htc_ctx = NULL;
   }
 #endif
+
+  vosStatus = wma_wmi_service_close( vosContext );
+  if (!VOS_IS_STATUS_SUCCESS(vosStatus))
+  {
+     VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+         "%s: Failed to close wma_wmi_service", __func__);
+     VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vosStatus ) );
+  }
+
 
 #ifndef QCA_WIFI_2_0
   /* Let DXE return packets in WDA_close and then free them here */
@@ -2136,6 +2148,7 @@ vos_fetch_tl_cfg_parms
   pTLConfig->uDelayedTriggerFrmInt = pConfig->DelayedTriggerFrmInt;
   pTLConfig->uMinFramesProcThres = pConfig->MinFramesProcThres;
   pTLConfig->ip_checksum_offload = pConfig->enableIPChecksumOffload;
+  pTLConfig->enable_rxthread = pConfig->enableRxThread;
 
 }
 
@@ -2239,7 +2252,7 @@ VOS_STATUS vos_shutdown(v_CONTEXT_t vosContext)
     vosStatus = WDA_shutdown(vosContext, VOS_TRUE);
     if (!VOS_IS_STATUS_SUCCESS(vosStatus))
     {
-      VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+      VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
                 "%s: Failed to shutdown WDA!", __func__);
       VOS_ASSERT(VOS_IS_STATUS_SUCCESS(vosStatus));
     }
@@ -2260,6 +2273,14 @@ VOS_STATUS vos_shutdown(v_CONTEXT_t vosContext)
     HTCStop(gpVosContext->htc_ctx);
     HTCDestroy(gpVosContext->htc_ctx);
     gpVosContext->htc_ctx = NULL;
+  }
+
+  vosStatus = wma_wmi_service_close(vosContext);
+  if (!VOS_IS_STATUS_SUCCESS(vosStatus))
+  {
+     VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+               "%s: Failed to close wma_wmi_service!", __func__);
+               VOS_ASSERT(VOS_IS_STATUS_SUCCESS(vosStatus));
   }
 #endif
 
@@ -2453,7 +2474,7 @@ v_VOID_t vos_fwDumpReq(tANI_U32 cmd, tANI_U32 arg1, tANI_U32 arg2,
       if (vStatus == VOS_STATUS_E_TIMEOUT)
       {
          VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-          "%s: Timeout occurred before WDA HAL DUMP complete\n", __func__);
+          "%s: Timeout occurred before WDA HAL DUMP complete", __func__);
       }
       else
       {
@@ -2517,5 +2538,40 @@ v_VOID_t vos_flush_delayed_work(v_VOID_t *dwork)
    cnss_flush_delayed_work(dwork);
 #elif defined (WLAN_OPEN_SOURCE)
    cancel_delayed_work_sync(dwork);
+#endif
+}
+
+/**
+ @brief vos_request_pm_qos()
+
+ This function will vote for QoS latency
+
+ @param
+   qos_val - QoS latency in us
+ @return
+   NONE
+*/
+v_VOID_t vos_request_pm_qos(v_U32_t qos_val)
+{
+#if defined (CONFIG_CNSS)
+    cnss_request_pm_qos(qos_val);
+#endif
+}
+
+/**
+ @brief vos_remove_pm_qos()
+
+ This function will remove QoS latency
+ that requested by vos_request_pm_qos().
+
+ @param
+   NONE
+@return
+   NONE
+*/
+v_VOID_t vos_remove_pm_qos(v_VOID_t)
+{
+#if defined (CONFIG_CNSS)
+    cnss_remove_pm_qos();
 #endif
 }

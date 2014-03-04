@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * limSendMessages.c: Provides functions to send messages or Indications to HAL.
@@ -174,6 +175,7 @@ tSirRetStatus limSendBeaconParams(tpAniSirGlobal pMac,
                     pUpdatedBcnParams->paramChangeBitmap);)
     if(NULL == psessionEntry)
     {
+        vos_mem_free(pBcnParams);
         MTRACE(macTraceMsgTx(pMac, NO_SESSION, msgQ.type));
         return eSIR_FAILURE;
     }

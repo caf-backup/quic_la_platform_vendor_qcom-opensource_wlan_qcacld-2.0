@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file parserApi.h contains the definitions used
  * for parsing received 802.11 frames
@@ -211,6 +212,7 @@ typedef struct sSirAssocReq
     tDot11fIEVHTCaps          VHTCaps;
     tDot11fIEOperatingMode    operMode;
 #endif
+    tDot11fIEExtCap           ExtCap;
 } tSirAssocReq, *tpSirAssocReq;
 
 
@@ -262,6 +264,7 @@ typedef struct sSirAssocRsp
     tDot11fIEVHTCaps          VHTCaps;
     tDot11fIEVHTOperation     VHTOperation;
 #endif
+    tDot11fIEExtCap           ExtCap;
 } tSirAssocRsp, *tpSirAssocRsp;
 
 #if defined(FEATURE_WLAN_CCX_UPLOAD)

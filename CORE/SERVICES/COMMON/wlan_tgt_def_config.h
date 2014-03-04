@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef __WLAN_TGT_DEF_CONFIG_H__
 #define __WLAN_TGT_DEF_CONFIG_H__
 
@@ -60,7 +61,7 @@
  * probably always be appropriate; it is probably not necessary to
  * determine this value dynamically.
  */
-#define CFG_TGT_AST_SKID_LIMIT          16 
+#define CFG_TGT_AST_SKID_LIMIT          16
 
 /*
  * total number of peers per device.
@@ -100,9 +101,9 @@
 /*
  * keys per peer node
  */
-#define CFG_TGT_NUM_PEER_KEYS           2
+#define CFG_TGT_NUM_PEER_KEYS           3
 /*
- * total number of data TX and RX TIDs 
+ * total number of data TX and RX TIDs
  */
 #define CFG_TGT_NUM_TIDS       (2 * (CFG_TGT_NUM_PEERS + CFG_TGT_NUM_VDEV + 2))
 /*

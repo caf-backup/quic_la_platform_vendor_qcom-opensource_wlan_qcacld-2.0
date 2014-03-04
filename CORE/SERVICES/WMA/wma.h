@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file     wma.h
@@ -76,7 +77,7 @@
 /** Private **/
 #define WMA_CFG_NV_DNLD_TIMEOUT            500
 #define WMA_READY_EVENTID_TIMEOUT          2000
-#define WMA_TGT_SUSPEND_COMPLETE_TIMEOUT   2000
+#define WMA_TGT_SUSPEND_COMPLETE_TIMEOUT   1000
 #define MAX_MEM_CHUNKS 32
 /*
    In prima 12 HW stations are supported including BCAST STA(staId 0)
@@ -142,7 +143,7 @@
  * All rssi values are in dB except for WMA_NOISE_FLOOR_DBM_DEFAULT.
  */
 
-#define WMA_ROAM_SCAN_CHANNEL_SWITCH_TIME    (3)
+#define WMA_ROAM_SCAN_CHANNEL_SWITCH_TIME    (2)
 #define WMA_NOISE_FLOOR_DBM_DEFAULT          (-96)
 #define WMA_ROAM_RSSI_DIFF_DEFAULT           (5)
 #define WMA_ROAM_DWELL_TIME_ACTIVE_DEFAULT   (100)
@@ -151,8 +152,6 @@
 #define WMA_ROAM_MAX_REST_TIME_DEFAULT       (500)
 #define WMA_ROAM_LOW_RSSI_TRIGGER_DEFAULT    (20)
 #define WMA_ROAM_LOW_RSSI_TRIGGER_VERYLOW    (10)
-#define WMA_ROAM_RSSI_THRESH_DIFF_DEFAULT    (30)
-#define WMA_ROAM_RSSI_CHANGE_RESCAN_DEFAULT  (5)
 #define WMA_ROAM_BEACON_WEIGHT_DEFAULT       (14)
 #define WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT     (120000)
 #define WMA_ROAM_OPP_SCAN_AGING_PERIOD_DEFAULT (WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT * 5)
@@ -414,6 +413,7 @@ struct wma_txrx_node {
 	WLAN_PHY_MODE           chanmode;
 	tANI_U8                 vht_capable;
 	tANI_U8                 ht_capable;
+	A_UINT32                mhz; /* channel frequency  in KHZ */
 	v_BOOL_t vdev_up;
 	u_int64_t tsfadjust;
 	void     *addBssStaContext;
@@ -430,6 +430,10 @@ struct wma_txrx_node {
 	adf_os_atomic_t bss_status;
 	tANI_U8 rate_flags;
 	tANI_U8 nss;
+	v_BOOL_t is_channel_switch;
+	u_int16_t pause_bitmap;
+	tPowerdBm  tx_power; /* TX power in dBm */
+	tPowerdBm  max_tx_power; /* max Tx power in dBm */
 };
 
 #if defined(QCA_WIFI_FTM) && !defined(QCA_WIFI_ISOC)
@@ -452,6 +456,11 @@ struct utf_event_info {
 	u_int8_t expectedSeq;
 };
 #endif
+
+typedef struct {
+	u_int8_t vdev_id;
+	u_int32_t scan_id;
+}scan_timer_info;
 
 typedef struct {
 	void *wmi_handle;
@@ -515,6 +524,7 @@ typedef struct {
 	u_int32_t peer_count;
 	struct list_head vdev_resp_queue;
 	adf_os_spinlock_t vdev_respq_lock;
+        adf_os_spinlock_t vdev_detach_lock;
 	u_int32_t ht_cap_info;
 #ifdef WLAN_FEATURE_11AC
 	u_int32_t vht_cap_info;
@@ -562,6 +572,11 @@ typedef struct {
 	vos_wake_lock_t pno_wake_lock;
 #endif
 	vos_wake_lock_t wow_wake_lock;
+	vos_wake_lock_t pm_qos_lock;
+	u_int32_t ap_client_cnt;
+
+	vos_timer_t wma_scan_comp_timer;
+	scan_timer_info wma_scan_timer_info;
 
 }t_wma_handle, *tp_wma_handle;
 

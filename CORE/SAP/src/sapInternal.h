@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -37,7 +37,6 @@
 DESCRIPTION
   This file contains the internal API exposed by the wlan SAP PAL layer 
   module.
-
 ===========================================================================*/
 
 
@@ -263,6 +262,9 @@ typedef struct sSapContext {
     //Information Required for SAP DFS Master mode
     tSapDfsInfo         SapDfsInfo;
 
+    tANI_BOOLEAN       allBandScanned;
+    eCsrBand           currentPreferredBand;
+    eCsrBand           scanBandPreference;
 } *ptSapContext;
 
 

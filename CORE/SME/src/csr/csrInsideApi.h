@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /** ------------------------------------------------------------------------- * 
     ------------------------------------------------------------------------- *  
 
@@ -31,8 +32,7 @@
     \file csrInsideApi.h
   
     Define interface only used by CSR.
-  
-   ========================================================================== */
+========================================================================== */
 #ifndef CSR_INSIDE_API_H__
 #define CSR_INSIDE_API_H__
 

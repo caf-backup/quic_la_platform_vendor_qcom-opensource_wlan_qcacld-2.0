@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_txrx_dbg.h
  * @brief Functions provided for visibility and debugging.
@@ -103,8 +104,8 @@ int ol_txrx_fw_stats_get(
     struct ol_txrx_stats_req *req);
 
 
-int ol_txrx_aggr_cfg(ol_txrx_vdev_handle vdev, 
-                     int max_subfrms_ampdu, 
+int ol_txrx_aggr_cfg(ol_txrx_vdev_handle vdev,
+                     int max_subfrms_ampdu,
                      int max_subfrms_amsdu);
 
 enum {

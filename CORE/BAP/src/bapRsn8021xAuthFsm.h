@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,7 +24,9 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
+ * $File: //depot/software/projects/feature_branches/gen5_phase1/os/linux/classic/ap/apps/ssm/auth8021x/ani8021xAuthRsnFsm.h $
  *
  * Contains declarations for the RSN EAPOL-Key FSM on the
  * authenticator side. This is based on 802.11i.
@@ -68,7 +70,7 @@ authRsnFsmInit(tAuthRsnFsmConsts *consts);
  * FUNCTION
  * Allocates and initializes the state of an RSN key FSM instance for
  * the given STA context.
- * 
+ *
  * @parm ctx the STA context whose instance is being created
  * @param pskBased pass in eANI_BOOLEAN_TRUE is this STA is to be
  * authenticated based on a pre-shared key as opposed to EAP.

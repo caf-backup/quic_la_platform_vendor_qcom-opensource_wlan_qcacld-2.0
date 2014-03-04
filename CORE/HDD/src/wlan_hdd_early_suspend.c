@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,12 +24,15 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**=============================================================================
 *     wlan_hdd_early_suspend.c
 *
 *     \brief      power management functions
 *
 *     Description
+
+*
 ==============================================================================**/
 /* $HEADER$ */
 
@@ -39,6 +42,7 @@
 
 #include <linux/pm.h>
 #include <linux/wait.h>
+#include <linux/cpu.h>
 #include <wlan_hdd_includes.h>
 #include <wlan_qct_driver.h>
 #ifdef WLAN_OPEN_SOURCE
@@ -962,9 +966,11 @@ static void hdd_conf_resume_ind(hdd_adapter_t *pAdapter)
     hdd_conf_hostoffload(pAdapter, FALSE);
     pHddCtx->hdd_mcastbcast_filter_set = FALSE;
 
-    pHddCtx->configuredMcastBcastFilter =
-      pHddCtx->sus_res_mcastbcast_filter;
-    pHddCtx->sus_res_mcastbcast_filter_valid = VOS_FALSE;
+    if (VOS_TRUE == pHddCtx->sus_res_mcastbcast_filter_valid) {
+        pHddCtx->configuredMcastBcastFilter =
+            pHddCtx->sus_res_mcastbcast_filter;
+        pHddCtx->sus_res_mcastbcast_filter_valid = VOS_FALSE;
+    }
 
     hddLog(VOS_TRACE_LEVEL_INFO,
            "offload: in hdd_conf_resume_ind, restoring configuredMcastBcastFilter");
@@ -1492,7 +1498,6 @@ VOS_STATUS hdd_wlan_shutdown(void)
    }
 
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
-    vos_set_logp_in_progress(VOS_MODULE_ID_VOSS, TRUE);
     pHddCtx->isLogpInProgress = TRUE;
 #endif
 
@@ -1526,7 +1531,6 @@ VOS_STATUS hdd_wlan_shutdown(void)
       complete(&vosSchedContext->ResumeMcEvent);
       pHddCtx->isMcThreadSuspended= FALSE;
    }
-#ifdef QCA_WIFI_ISOC
    if(TRUE == pHddCtx->isTxThreadSuspended){
       complete(&vosSchedContext->ResumeTxEvent);
       pHddCtx->isTxThreadSuspended= FALSE;
@@ -1535,7 +1539,6 @@ VOS_STATUS hdd_wlan_shutdown(void)
       complete(&vosSchedContext->ResumeRxEvent);
       pHddCtx->isRxThreadSuspended= FALSE;
    }
-#endif
 
    /* Reset the Suspend Variable */
    pHddCtx->isWlanSuspended = FALSE;
@@ -1549,21 +1552,34 @@ VOS_STATUS hdd_wlan_shutdown(void)
    set_bit(MC_SHUTDOWN_EVENT_MASK, &vosSchedContext->mcEventFlag);
    set_bit(MC_POST_EVENT_MASK, &vosSchedContext->mcEventFlag);
    wake_up_interruptible(&vosSchedContext->mcWaitQueue);
-   wait_for_completion_interruptible(&vosSchedContext->McShutdown);
-#ifdef QCA_WIFI_ISOC
+   wait_for_completion(&vosSchedContext->McShutdown);
+
    /* Wait for TX to exit */
    hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Shutting down TX thread",__func__);
    set_bit(TX_SHUTDOWN_EVENT_MASK, &vosSchedContext->txEventFlag);
    set_bit(TX_POST_EVENT_MASK, &vosSchedContext->txEventFlag);
    wake_up_interruptible(&vosSchedContext->txWaitQueue);
-   wait_for_completion_interruptible(&vosSchedContext->TxShutdown);
+   wait_for_completion(&vosSchedContext->TxShutdown);
 
    /* Wait for RX to exit */
    hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Shutting down RX thread",__func__);
    set_bit(RX_SHUTDOWN_EVENT_MASK, &vosSchedContext->rxEventFlag);
    set_bit(RX_POST_EVENT_MASK, &vosSchedContext->rxEventFlag);
    wake_up_interruptible(&vosSchedContext->rxWaitQueue);
-   wait_for_completion_interruptible(&vosSchedContext->RxShutdown);
+   wait_for_completion(&vosSchedContext->RxShutdown);
+
+#ifdef QCA_CONFIG_SMP
+   /* Wait for TLshim RX to exit */
+   hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Shutting down TLshim RX thread",
+          __func__);
+   unregister_hotcpu_notifier(vosSchedContext->cpuHotPlugNotifier);
+   set_bit(RX_SHUTDOWN_EVENT_MASK, &vosSchedContext->tlshimRxEvtFlg);
+   set_bit(RX_POST_EVENT_MASK, &vosSchedContext->tlshimRxEvtFlg);
+   wake_up_interruptible(&vosSchedContext->tlshimRxWaitQueue);
+   wait_for_completion(&vosSchedContext->TlshimRxShutdown);
+   vosSchedContext->TlshimRxThread = NULL;
+   vos_drop_rxpkt_by_staid(vosSchedContext, WLAN_MAX_STA_COUNT);
+   vos_free_tlshim_pkt_freeq(vosSchedContext);
 #endif
 
 #ifdef WLAN_BTAMP_FEATURE
@@ -1576,6 +1592,7 @@ VOS_STATUS hdd_wlan_shutdown(void)
 #endif //WLAN_BTAMP_FEATURE
 
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
+   hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Doing WDA STOP", __func__);
    vosStatus = WDA_stop(pVosContext, HAL_STOP_TYPE_RF_KILL);
 
    if (!VOS_IS_STATUS_SUCCESS(vosStatus))
@@ -1612,18 +1629,17 @@ VOS_STATUS hdd_wlan_shutdown(void)
 #endif
 
    hdd_unregister_mcast_bcast_filter(pHddCtx);
+
    hddLog(VOS_TRACE_LEVEL_INFO, "%s: Flush Queues",__func__);
-   /* Clean up message queues of TX and MC thread */
+   /* Clean up message queues of TX, RX and MC thread */
    vos_sched_flush_mc_mqs(vosSchedContext);
-#ifdef QCA_WIFI_ISOC
    vos_sched_flush_tx_mqs(vosSchedContext);
    vos_sched_flush_rx_mqs(vosSchedContext);
-#endif
 
-   /* Deinit all the TX and MC queues */
+   /* Deinit all the TX, RX and MC queues */
    vos_sched_deinit_mqs(vosSchedContext);
-   hddLog(VOS_TRACE_LEVEL_INFO, "%s: Doing VOS Shutdown",__func__);
 
+   hddLog(VOS_TRACE_LEVEL_INFO, "%s: Doing VOS Shutdown",__func__);
    /* shutdown VOSS */
    vos_shutdown(pVosContext);
 
@@ -1662,6 +1678,7 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
 
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
    adf_os_device_t adf_ctx;
+   hdd_adapter_t *pAdapter;
 #endif
 
 #ifdef QCA_WIFI_ISOC
@@ -1829,9 +1846,24 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: vos_start failed",__func__);
       goto err_vosclose;
    }
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
 
+   /* Get the Adapter context based on hardware address */
+   pAdapter = hdd_get_adapter_by_macaddr(pHddCtx,
+           pHddCtx->cfg_ini->intfMacAddr[0].bytes);
+
+   if ((NULL == pAdapter))
+   {
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+               "invalid adapter ");
+       goto err_vosclose;
+   }
+   /* Get the wlan hw/fw version */
+   hdd_wlan_get_version(pAdapter, NULL, NULL);
+#else
    /* Exchange capability info between Host and FW and also get versioning info from FW */
    hdd_exchange_version_and_caps(pHddCtx);
+#endif
 
    vosStatus = hdd_post_voss_start_config( pHddCtx );
    if ( !VOS_IS_STATUS_SUCCESS( vosStatus ) )
@@ -1895,6 +1927,9 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
       goto err_unregister_pmops;
    }
    vos_set_reinit_in_progress(VOS_MODULE_ID_VOSS, FALSE);
+
+   wlan_hdd_send_svc_nlink_msg(WLAN_SVC_FW_CRASHED_IND);
+
    goto success;
 
 err_unregister_pmops:

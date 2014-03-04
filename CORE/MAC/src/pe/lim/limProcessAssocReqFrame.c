@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file limProcessAssocReqFrame.cc contains the code
  * for processing Re/Association Request Frame.
@@ -412,6 +413,15 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
         goto error;
     }//end if PhyMode == 11N_only
 
+    if((psessionEntry->limSystemRole == eLIM_AP_ROLE) &&
+       (psessionEntry->dot11mode == WNI_CFG_DOT11_MODE_11AC_ONLY) &&
+       (!pAssocReq->VHTCaps.present))
+    {
+        limSendAssocRspMgmtFrame( pMac, eSIR_MAC_CAPABILITIES_NOT_SUPPORTED_STATUS,
+                                  1, pHdr->sa, subType, 0, psessionEntry );
+        limLog(pMac, LOGE, FL("SOFTAP was in 11AC only mode, reject"));
+        goto error;
+    }//end if PhyMode == 11AC_only
 
     /* Spectrum Management (11h) specific checks */
     if (localCapabilities.spectrumMgt)
@@ -1217,6 +1227,19 @@ if (limPopulateMatchingRateSet(pMac,
 #ifdef WLAN_FEATURE_11W
     pStaDs->rmfEnabled = (pmfConnection) ? 1 : 0;
 #endif
+
+    if (pAssocReq->ExtCap.present)
+    {
+        pStaDs->timingMeasCap = pAssocReq->ExtCap.timingMeas;
+        PELOG1(limLog(pMac, LOG1,
+               FL("ExtCap present, timingMeas: %d"),
+               pAssocReq->ExtCap.timingMeas);)
+    }
+    else
+    {
+        pStaDs->timingMeasCap = 0;
+        PELOG1(limLog(pMac, LOG1, FL("ExtCap not present"));)
+    }
 
     // BTAMP: Storing the parsed assoc request in the psessionEntry array
     psessionEntry->parsedAssocReq[pStaDs->assocId] = pAssocReq;

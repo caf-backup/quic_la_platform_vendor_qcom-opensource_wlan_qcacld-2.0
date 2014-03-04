@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /**=========================================================================
 
   \file  smeApi.c
@@ -52,7 +55,6 @@
 /*--------------------------------------------------------------------------
   Include Files
   ------------------------------------------------------------------------*/
-
 
 #include "smsDebug.h"
 #include "sme_Api.h"
@@ -1629,6 +1631,11 @@ eHalStatus sme_UpdateConfig(tHalHandle hHal, tpSmeConfigParams pSmeConfigParams)
    /* update p2p offload status */
    pMac->pnoOffload = pSmeConfigParams->pnoOffload;
 
+   pMac->fEnableDebugLog = pSmeConfigParams->fEnableDebugLog;
+
+   /* update interface configuration */
+   pMac->sme.max_intf_count = pSmeConfigParams->max_intf_count;
+
    return status;
 }
 
@@ -2140,6 +2147,7 @@ eHalStatus sme_SetCcxBeaconRequest(tHalHandle hHal, const tANI_U8 sessionId,
    vos_mem_copy( pSmeBcnReportReq->bssId, pSession->connectedProfile.bssid, sizeof(tSirMacAddr) );
    pSmeBcnReportReq->channelInfo.channelNum = 255;
    pSmeBcnReportReq->channelList.numChannels = pCcxBcnReq->numBcnReqIe;
+   pSmeBcnReportReq->msgSource = eRRM_MSG_SOURCE_CCX_UPLOAD;
 
    for (counter = 0; counter < pCcxBcnReq->numBcnReqIe; counter++)
    {
@@ -3941,6 +3949,7 @@ eHalStatus sme_GetConfigParam(tHalHandle hHal, tSmeConfigParams *pParam)
 #endif
       pParam->fScanOffload = pMac->fScanOffload;
       pParam->fP2pListenOffload = pMac->fP2pListenOffload;
+      pParam->max_intf_count = pMac->sme.max_intf_count;
       sme_ReleaseGlobalLock( &pMac->sme );
    }
 
@@ -6593,10 +6602,8 @@ eHalStatus smeIssueFastRoamNeighborAPEvent (tHalHandle hHal,
             pNeighborRoamInfo->cfgRoamEn = eSME_ROAM_TRIGGER_SCAN;
             vos_mem_copy((void *)(&pNeighborRoamInfo->cfgRoambssId),
                        (void *)bssid, sizeof(tSirMacAddr));
-            smsLog(pMac, LOG1, "Calling Roam Look Up down Event BSSID %x %x %x %x %x %x",
-                   pNeighborRoamInfo->cfgRoambssId[0], pNeighborRoamInfo->cfgRoambssId[1],
-                   pNeighborRoamInfo->cfgRoambssId[2], pNeighborRoamInfo->cfgRoambssId[3],
-                   pNeighborRoamInfo->cfgRoambssId[4], pNeighborRoamInfo->cfgRoambssId[5]);
+            smsLog(pMac, LOG1, "Calling Roam Look Up down Event BSSID "
+                   MAC_ADDRESS_STR, MAC_ADDR_ARRAY(pNeighborRoamInfo->cfgRoambssId));
 
             vosStatus = csrNeighborRoamTransitToCFGChanScan(pMac);
             if (VOS_STATUS_SUCCESS != vosStatus)
@@ -6611,10 +6618,8 @@ eHalStatus smeIssueFastRoamNeighborAPEvent (tHalHandle hHal,
              vos_mem_copy((void *)(&pNeighborRoamInfo->cfgRoambssId),
                        (void *)bssid, sizeof(tSirMacAddr));
              pNeighborRoamInfo->cfgRoamEn = eSME_ROAM_TRIGGER_FAST_ROAM;
-             smsLog(pMac, LOG1, "Roam to BSSID %x-%x-%x-%x-%x-%x",
-                 pNeighborRoamInfo->cfgRoambssId[0], pNeighborRoamInfo->cfgRoambssId[1],
-                 pNeighborRoamInfo->cfgRoambssId[2], pNeighborRoamInfo->cfgRoambssId[3],
-                 pNeighborRoamInfo->cfgRoambssId[4], pNeighborRoamInfo->cfgRoambssId[5]);
+             smsLog(pMac, LOG1, "Roam to BSSID "MAC_ADDRESS_STR,
+                    MAC_ADDR_ARRAY(pNeighborRoamInfo->cfgRoambssId));
 
              vosStatus = csrNeighborRoamReassocIndCallback(pMac->roam.gVosContext,
                                                            0,
@@ -8404,20 +8409,66 @@ eHalStatus sme_SetMaxTxPower(tHalHandle hHal, tSirMacAddr pBssid,
     return eHAL_STATUS_SUCCESS;
 }
 
-/* ---------------------------------------------------------------------------
+/* ----------------------------------------------------------------------------
+   \fn sme_SetTxPower
+   \brief Set Transmit Power dynamically.
+   \param  hHal
+   \param sessionId  Target Session ID
+   \pBSSId BSSID
+   \dev_mode dev_mode such as station, P2PGO, SAP
+   \param dBm  power to set
+   \- return eHalStatus
+  ---------------------------------------------------------------------------*/
+#if defined (QCA_WIFI_2_0) && !defined (QCA_WIFI_ISOC)
+eHalStatus sme_SetTxPower(tHalHandle hHal, v_U8_t sessionId,
+                          tSirMacAddr pBSSId,
+                          tVOS_CON_MODE dev_mode, int dBm)
+{
+   vos_msg_t msg;
+   tpMaxTxPowerParams pTxParams = NULL;
+   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
+   v_S7_t power = (v_S7_t)dBm;
 
-    \fn sme_SetTxPower
+   MTRACE(macTraceNew(pMac, VOS_MODULE_ID_SME,
+                     TRACE_CODE_SME_RX_HDD_SET_TXPOW, sessionId, 0));
 
-    \brief Set Transmit Power dynamically. Note: this setting will
-    not persist over reboots.
+   /* make sure there is no overflow */
+   if ((int)power != dBm) {
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                "%s: error, invalid power = %d", __func__, dBm);
+      return eHAL_STATUS_FAILURE;
+   }
 
-    \param  hHal
-    \param sessionId  Target Session ID
-    \param mW  power to set in mW
-    \- return eHalStatus
+   pTxParams = vos_mem_malloc(sizeof(tMaxTxPowerParams));
+   if (NULL == pTxParams)
+   {
+       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+              "%s: Not able to allocate memory for pTxParams", __func__);
+       return eHAL_STATUS_FAILURE;
+   }
 
-  -------------------------------------------------------------------------------*/
-eHalStatus sme_SetTxPower(tHalHandle hHal, v_U8_t sessionId, v_U8_t mW)
+   vos_mem_copy(pTxParams->bssId, pBSSId, SIR_MAC_ADDR_LENGTH);
+   pTxParams->power = power; /* unit is dBm */
+   pTxParams->dev_mode = dev_mode;
+   msg.type = WDA_SET_TX_POWER_REQ;
+   msg.reserved = 0;
+   msg.bodyptr = pTxParams;
+
+   if (VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA, &msg))
+   {
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                "%s: failed to post WDA_SET_TX_POWER_REQ to WDA",
+                __func__);
+      vos_mem_free(pTxParams);
+      return eHAL_STATUS_FAILURE;
+   }
+
+   return eHAL_STATUS_SUCCESS;
+}
+#else
+eHalStatus sme_SetTxPower(tHalHandle hHal, v_U8_t sessionId,
+                          tSirMacAddr pBSSId,
+                          tVOS_CON_MODE dev_mode, int mW)
 {
 
    eHalStatus status = eHAL_STATUS_FAILURE;
@@ -8426,14 +8477,22 @@ eHalStatus sme_SetTxPower(tHalHandle hHal, v_U8_t sessionId, v_U8_t mW)
    MTRACE(macTraceNew(pMac, VOS_MODULE_ID_SME,
                  TRACE_CODE_SME_RX_HDD_SET_TXPOW, NO_SESSION, 0));
    smsLog(pMac, LOG1, FL("set tx power %dmW"), mW);
+
+   if (mW < 0 || mW > 0xff) {
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                "%s: error, invalid mW = %d", __func__, mW);
+     return eHAL_STATUS_FAILURE;
+   }
+
    status = sme_AcquireGlobalLock(&pMac->sme);
    if (HAL_STATUS_SUCCESS(status))
    {
-      status = csrSetTxPower(pMac, sessionId, mW);
+      status = csrSetTxPower(pMac, sessionId, (v_U8_t)mW);
       sme_ReleaseGlobalLock(&pMac->sme);
    }
    return status;
 }
+#endif
 
 /* ---------------------------------------------------------------------------
 
@@ -9182,6 +9241,111 @@ eHalStatus sme_UpdateConfigFwRssiMonitoring(tHalHandle hHal,
 }
 
 #ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
+/* ---------------------------------------------------------------------------
+    \fn     sme_SetRoamOpportunisticScanThresholdDiff
+    \brief  Update Opportunistic Scan threshold diff
+            This function is called through dynamic setConfig callback function
+            to configure  nOpportunisticThresholdDiff
+    \param  hHal - HAL handle for device
+    \param  nOpportunisticThresholdDiff - Opportunistic Scan threshold diff
+    \return eHAL_STATUS_SUCCESS - SME update nOpportunisticThresholdDiff config
+            successfully.
+            else SME is failed to update nOpportunisticThresholdDiff.
+    -------------------------------------------------------------------------*/
+eHalStatus sme_SetRoamOpportunisticScanThresholdDiff(tHalHandle hHal,
+                            const v_U8_t nOpportunisticThresholdDiff)
+{
+    tpAniSirGlobal pMac    = PMAC_STRUCT( hHal );
+    eHalStatus     status  = eHAL_STATUS_SUCCESS;
+
+    status = sme_AcquireGlobalLock( &pMac->sme );
+    if ( HAL_STATUS_SUCCESS( status ) )
+    {
+        status = csrNeighborRoamSetOpportunisticScanThresholdDiff(pMac,
+                                         nOpportunisticThresholdDiff);
+        if (HAL_STATUS_SUCCESS(status))
+        {
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
+                "LFR runtime successfully set "
+                "opportunistic threshold diff to %d"
+                " - old value is %d - roam state is %d",
+                nOpportunisticThresholdDiff,
+                pMac->roam.configParam.neighborRoamConfig.nOpportunisticThresholdDiff,
+                pMac->roam.neighborRoamInfo.neighborRoamState);
+            pMac->roam.configParam.neighborRoamConfig.nOpportunisticThresholdDiff = nOpportunisticThresholdDiff;
+        }
+        sme_ReleaseGlobalLock( &pMac->sme );
+    }
+    return status;
+}
+
+/*--------------------------------------------------------------------------
+  \fn    sme_GetRoamOpportunisticScanThresholdDiff()
+  \brief gets Opportunistic Scan threshold diff
+         This is a synchronous call
+  \param hHal - The handle returned by macOpen
+  \return v_U8_t - nOpportunisticThresholdDiff
+  \sa
+  --------------------------------------------------------------------------*/
+v_U8_t sme_GetRoamOpportunisticScanThresholdDiff(tHalHandle hHal)
+{
+    tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
+    return pMac->roam.configParam.neighborRoamConfig.nOpportunisticThresholdDiff;
+}
+
+/* ---------------------------------------------------------------------------
+    \fn     sme_SetRoamRescanRssiDiff
+    \brief  Update roam rescan rssi diff
+            This function is called through dynamic setConfig callback function
+            to configure  nRoamRescanRssiDiff
+    \param  hHal - HAL handle for device
+    \param  nRoamRescanRssiDiff - roam rescan rssi diff
+    \return eHAL_STATUS_SUCCESS - SME update nRoamRescanRssiDiff config
+            successfully.
+            else SME is failed to update nRoamRescanRssiDiff.
+    -------------------------------------------------------------------------*/
+eHalStatus sme_SetRoamRescanRssiDiff(tHalHandle hHal,
+                                     const v_U8_t nRoamRescanRssiDiff)
+{
+    tpAniSirGlobal pMac    = PMAC_STRUCT( hHal );
+    eHalStatus     status  = eHAL_STATUS_SUCCESS;
+
+    status = sme_AcquireGlobalLock( &pMac->sme );
+    if ( HAL_STATUS_SUCCESS( status ) )
+    {
+        status = csrNeighborRoamSetRoamRescanRssiDiff(pMac,
+        nRoamRescanRssiDiff);
+        if (HAL_STATUS_SUCCESS(status))
+        {
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
+                "LFR runtime successfully set "
+                "opportunistic threshold diff to %d"
+                " - old value is %d - roam state is %d",
+                nRoamRescanRssiDiff,
+                pMac->roam.configParam.neighborRoamConfig.nRoamRescanRssiDiff,
+                pMac->roam.neighborRoamInfo.neighborRoamState);
+            pMac->roam.configParam.neighborRoamConfig.nRoamRescanRssiDiff =
+                nRoamRescanRssiDiff;
+        }
+        sme_ReleaseGlobalLock(&pMac->sme);
+    }
+    return status;
+}
+
+/*--------------------------------------------------------------------------
+  \fn    sme_GetRoamRescanRssiDiff
+  \brief gets roam rescan rssi diff
+         This is a synchronous call
+  \param hHal - The handle returned by macOpen
+  \return v_S7_t - nRoamRescanRssiDiff
+  \sa
+  --------------------------------------------------------------------------*/
+v_U8_t sme_GetRoamRescanRssiDiff(tHalHandle hHal)
+{
+    tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
+    return pMac->roam.configParam.neighborRoamConfig.nRoamRescanRssiDiff;
+}
+
 /*--------------------------------------------------------------------------
   \brief sme_setNeighborLookupRssiThreshold() - update neighbor lookup rssi threshold
   This is a synchronous call
@@ -10911,11 +11075,21 @@ eHalStatus sme_MoveCsrToScanStateForPno (tHalHandle hHal, tANI_U8 sessionId)
     \param  rateUpdateParams - Pointer to rate update params
     \return eHalStatus
   ---------------------------------------------------------------------------*/
-eHalStatus sme_SendRateUpdateInd(tHalHandle hHal, tSirRateUpdateInd *rateUpdateParams)
+eHalStatus sme_SendRateUpdateInd(tHalHandle hHal,
+                                 tSirRateUpdateInd *rateUpdateParams)
 {
     tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
     eHalStatus status;
     vos_msg_t msg;
+
+#ifdef QCA_WIFI_ISOC
+    /* For discrete solution, i.e., Rome the bit 28, 29 and 30 are used to
+     * optionally carry NSS info: 100 for 1x1, 101 for 2x2, 111 for 3x3.
+     * For Pronto we need to zero out bits 28 - 30 */
+    rateUpdateParams->mcastDataRate24GHz &= ~0x70000000;
+    rateUpdateParams->reliableMcastDataRate &= ~0x70000000;
+    rateUpdateParams->mcastDataRate5GHz &= ~0x70000000;
+#endif
 
     if (eHAL_STATUS_SUCCESS == (status = sme_AcquireGlobalLock(&pMac->sme)))
     {
@@ -10936,25 +11110,6 @@ eHalStatus sme_SendRateUpdateInd(tHalHandle hHal, tSirRateUpdateInd *rateUpdateP
         return eHAL_STATUS_SUCCESS;
     }
 
-    return status;
-}
-
-eHalStatus sme_getValidChannelList(tHalHandle hHal, tANI_U8 *numChannels,
-                                   tANI_U8 **chanList)
-{
-    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-    eHalStatus status;
-
-    status = sme_AcquireGlobalLock(&pMac->sme);
-    if (HAL_STATUS_SUCCESS(status))
-    {
-        *numChannels =
-            pMac->roam.neighborRoamInfo.cfgParams.channelInfo.numOfChannels;
-        vos_mem_copy(*chanList,
-            &pMac->roam.neighborRoamInfo.cfgParams.channelInfo.ChannelList,
-            *numChannels);
-        sme_ReleaseGlobalLock(&pMac->sme);
-    }
     return status;
 }
 
@@ -11287,4 +11442,45 @@ eHalStatus sme_SetThermalLevel( tHalHandle hHal, tANI_U8 level )
     vos_mem_free(pLevel);
     return eHAL_STATUS_FAILURE;
 }
+/* ---------------------------------------------------------------------------
+   \fn sme_TxpowerLimit
+   \brief SME API to set txpower limits
+   \param hHal
+   \param psmetx : power limits for 2g/5g
+   \- return eHalStatus
+ -------------------------------------------------------------------------*/
+eHalStatus sme_TxpowerLimit(tHalHandle hHal, tSirTxPowerLimit *psmetx)
+{
+     eHalStatus status = eHAL_STATUS_SUCCESS;
+     VOS_STATUS vosStatus = VOS_STATUS_SUCCESS;
+     vos_msg_t vosMessage;
+     tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+
+     if (eHAL_STATUS_SUCCESS == (status = sme_AcquireGlobalLock(&pMac->sme)))
+     {
+          vosMessage.type = WDA_TX_POWER_LIMIT;
+          vosMessage.reserved = 0;
+          vosMessage.bodyptr = psmetx;
+
+          vosStatus = vos_mq_post_message(VOS_MQ_ID_WDA, &vosMessage);
+          if (!VOS_IS_STATUS_SUCCESS(vosStatus))
+          {
+             VOS_TRACE( VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                        "%s: not able to post WDA_TX_POWER_LIMIT",
+                        __func__);
+             status = eHAL_STATUS_FAILURE;
+             vos_mem_free(psmetx);
+          }
+          sme_ReleaseGlobalLock(&pMac->sme);
+     }
+     return(status);
+}
 #endif /* #ifndef QCA_WIFI_ISOC */
+
+eHalStatus sme_UpdateConnectDebug(tHalHandle hHal, tANI_U32 set_value)
+{
+    eHalStatus status = eHAL_STATUS_SUCCESS;
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+    pMac->fEnableDebugLog = set_value;
+    return (status);
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file limProcessMlmRspMessages.cc contains the code
  * for processing response messages from MLM state machine.
@@ -1204,7 +1205,8 @@ limProcessMlmAssocInd(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
         return;
     }
     pSirSmeAssocInd->staId = pStaDs->staIndex;
-   pSirSmeAssocInd->reassocReq = pStaDs->mlmStaContext.subType;
+    pSirSmeAssocInd->reassocReq = pStaDs->mlmStaContext.subType;
+    pSirSmeAssocInd->timingMeasCap = pStaDs->timingMeasCap;
     MTRACE(macTraceMsgTx(pMac, psessionEntry->peSessionId, msgQ.type));
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM //FEATURE_WLAN_DIAG_SUPPORT
     limDiagEventReport(pMac, WLAN_PE_DIAG_ASSOC_IND_EVENT, psessionEntry, 0, 0);
@@ -2958,7 +2960,11 @@ limProcessStaMlmAddBssRsp( tpAniSirGlobal pMac, tpSirMsgQ limMsgQ,tpPESession ps
         limProcessStaMlmAddBssRspPreAssoc(pMac, limMsgQ, psessionEntry);
         goto end;
     }
-    if( eLIM_MLM_WT_ADD_BSS_RSP_REASSOC_STATE == psessionEntry->limMlmState )
+    if (eLIM_MLM_WT_ADD_BSS_RSP_REASSOC_STATE == psessionEntry->limMlmState
+#if defined(WLAN_FEATURE_VOWIFI_11R) || defined(FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+     || (eLIM_MLM_WT_ADD_BSS_RSP_FT_REASSOC_STATE == psessionEntry->limMlmState)
+#endif
+    )
     {
         mesgType = LIM_MLM_REASSOC_CNF;
         subType = LIM_REASSOC;
@@ -3610,7 +3616,8 @@ static void limProcessSwitchChannelJoinReq(tpAniSirGlobal pMac, tpPESession pses
         goto error;
     }
 
-    if ( (NULL == psessionEntry ) || (NULL == psessionEntry->pLimMlmJoinReq) )
+    if ( (NULL == psessionEntry ) || (NULL == psessionEntry->pLimMlmJoinReq) ||
+         (NULL == psessionEntry->pLimJoinReq) )
     {
         PELOGE(limLog(pMac, LOGE, FL("invalid pointer!!"));)
         goto error;
@@ -3673,8 +3680,16 @@ static void limProcessSwitchChannelJoinReq(tpAniSirGlobal pMac, tpPESession pses
 error:  
     if(NULL != psessionEntry)
     {
-        vos_mem_free(psessionEntry->pLimMlmJoinReq);
-        psessionEntry->pLimMlmJoinReq = NULL;
+        if (psessionEntry->pLimMlmJoinReq)
+        {
+            vos_mem_free(psessionEntry->pLimMlmJoinReq);
+            psessionEntry->pLimMlmJoinReq = NULL;
+        }
+        if (psessionEntry->pLimJoinReq)
+        {
+            vos_mem_free(psessionEntry->pLimJoinReq);
+            psessionEntry->pLimJoinReq = NULL;
+        }
         mlmJoinCnf.sessionId = psessionEntry->peSessionId;
     }
     else
@@ -4876,6 +4891,8 @@ void limProcessRxScanEvent(tpAniSirGlobal pMac, void *buf)
             break;
         case SCAN_EVENT_START_FAILED:
         case SCAN_EVENT_COMPLETED:
+            pMac->lim.fOffloadScanPending = 0;
+            pMac->lim.fOffloadScanP2PSearch = 0;
             if (P2P_SCAN_TYPE_LISTEN == pScanEvent->p2pScanType)
             {
                 limSendSmeRsp(pMac, eWNI_SME_REMAIN_ON_CHN_RSP,

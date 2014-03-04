@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file limAssocUtils.cc contains the utility functions
  * LIM uses while processing (Re) Association messages.
@@ -1581,6 +1582,7 @@ tSirRetStatus limPopulateVhtMcsSet(tpAniSirGlobal pMac,
         if( pPeerVHTCaps != NULL)
         {
             tANI_U16 mcsMapMask = MCSMAPMASK1x1;
+            tANI_U16 mcsMapMask2x2 = 0;
             pRates->vhtTxHighestDataRate = SIR_MIN(pRates->vhtTxHighestDataRate, pPeerVHTCaps->txSupDataRate);
             pRates->vhtRxHighestDataRate = SIR_MIN(pRates->vhtRxHighestDataRate, pPeerVHTCaps->rxHighSupDataRate);
 
@@ -1592,16 +1594,19 @@ tSirRetStatus limPopulateVhtMcsSet(tpAniSirGlobal pMac,
                           (IS_24G_CH(psessionEntry->currentOperChannel)))
                     {
                         if(IS_2X2_CHAIN(psessionEntry->chainMask))
-                                mcsMapMask = MCSMAPMASK2x2;
+                            mcsMapMask2x2 = MCSMAPMASK2x2;
+                        else
+                            PELOGE(limLog(pMac, LOGE, FL("2x2 not enabled %d"),
+                                       psessionEntry->chainMask);)
                     }
                     else
                     {
-                        mcsMapMask = MCSMAPMASK2x2;
+                        mcsMapMask2x2 = MCSMAPMASK2x2;
                     }
                }
                else
                {
-                    mcsMapMask = MCSMAPMASK2x2;
+                    mcsMapMask2x2 = MCSMAPMASK2x2;
                }
             }
 
@@ -1613,6 +1618,32 @@ tSirRetStatus limPopulateVhtMcsSet(tpAniSirGlobal pMac,
                 pRates->vhtTxMCSMap &= ~(mcsMapMask);
                 pRates->vhtTxMCSMap |= (pPeerVHTCaps->txMCSMap & mcsMapMask);
             }
+
+            if (mcsMapMask2x2) {
+
+                tANI_U16 peerMcsMap, selfMcsMap;
+
+                peerMcsMap = pPeerVHTCaps->rxMCSMap & mcsMapMask2x2;
+                selfMcsMap = pRates->vhtRxMCSMap & mcsMapMask2x2;
+
+                if ((selfMcsMap != mcsMapMask2x2) &&
+                        ((peerMcsMap == mcsMapMask2x2) ||
+                            (peerMcsMap < selfMcsMap))) {
+                    pRates->vhtRxMCSMap &= ~mcsMapMask2x2;
+                    pRates->vhtRxMCSMap |= peerMcsMap;
+                }
+
+                peerMcsMap = (pPeerVHTCaps->txMCSMap & mcsMapMask2x2);
+                selfMcsMap = (pRates->vhtTxMCSMap & mcsMapMask2x2);
+
+                if ((selfMcsMap != mcsMapMask2x2) &&
+                        ((peerMcsMap == mcsMapMask2x2) ||
+                            (peerMcsMap < selfMcsMap))) {
+                    pRates->vhtTxMCSMap &= ~mcsMapMask2x2;
+                    pRates->vhtTxMCSMap |= peerMcsMap;
+                }
+            }
+
             limLog( pMac, LOG1, FL("enable2x2 - %d vhtRxMCSMap - %x vhtTxMCSMap - %x\n"), pMac->roam.configParam.enable2x2, pRates->vhtRxMCSMap, pRates->vhtTxMCSMap);
 
         }
@@ -2570,6 +2601,18 @@ limAddSta(
              (vht_caps.reserved1 << SIR_MAC_VHT_CAP_RESERVED2));
     }
 
+#ifdef FEATURE_WLAN_TDLS
+    if (STA_ENTRY_TDLS_PEER == pStaDs->staType)
+    {
+        pAddStaParams->ht_caps = pStaDs->ht_caps;
+        pAddStaParams->vht_caps = pStaDs->vht_caps;
+
+        VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,
+                  "%s: Sta type is TDLS_PEER, ht_caps: 0x%x, vht_caps: 0x%x",
+                  __func__, pAddStaParams->ht_caps, pAddStaParams->vht_caps);
+    }
+#endif
+
     //Disable BA. It will be set as part of ADDBA negotiation.
     for( i = 0; i < STACFG_MAX_TC; i++ )
     {
@@ -3204,7 +3247,7 @@ limDeleteDphHashEntry(tpAniSirGlobal pMac, tSirMacAddr staAddr, tANI_U16 staId,t
     pStaDs = dphLookupHashEntry(pMac, staAddr, &aid, &psessionEntry->dph.dphHashTable);
     if (pStaDs != NULL)
     {
-         PELOGW(limLog(pMac, LOGW, FL("Deleting DPH Hash entry for STAID: %X\n "), staId);)
+         PELOGW(limLog(pMac, LOGW, FL("Deleting DPH Hash entry for STAID: %X"), staId);)
         // update the station count and perform associated actions
         // do this before deleting the dph hash entry
         limUtilCountStaDel(pMac, pStaDs, psessionEntry);
@@ -3705,15 +3748,9 @@ tSirRetStatus limStaSendAddBss( tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
                 &pAddBssParams->staContext.assocId, &psessionEntry->dph.dphHashTable);
         if (pStaDs == NULL)
         {
-            PELOGE(limLog(pMac, LOGE, FL("Couldn't get assoc id for"
-                       "MAC ADDR: %02x:%02x:%02x:%02x:%02x:%02x"),
-                       pAddBssParams->staContext.staMac[0],
-                       pAddBssParams->staContext.staMac[1],
-                       pAddBssParams->staContext.staMac[2],
-                       pAddBssParams->staContext.staMac[3],
-                       pAddBssParams->staContext.staMac[4],
-                       pAddBssParams->staContext.staMac[5]
-                       );)
+            PELOGE(limLog(pMac, LOGE, FL("Couldn't get assoc id for "
+                       "MAC ADDR: " MAC_ADDRESS_STR),
+                       MAC_ADDR_ARRAY(pAddBssParams->staContext.staMac));)
         }
 
         if(!pMac->psOffloadEnabled)
