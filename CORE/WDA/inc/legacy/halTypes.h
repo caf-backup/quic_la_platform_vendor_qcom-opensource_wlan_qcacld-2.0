@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /** ------------------------------------------------------------------------- *
     ------------------------------------------------------------------------- *
 
@@ -33,9 +34,7 @@
     \brief This header captures types that must be shared in common with individual
             module headers before inclusion into halCommonApi.h.
 
-    $Id$
-
-   ========================================================================== */
+    $Id$========================================================================== */
 
 #ifndef HALTYPES_H
 #define HALTYPES_H
@@ -346,9 +345,9 @@ typedef enum
 #define HAL_MAX_TXPOWER_INVALID       127
 
 #define MIN_STA_PWR_CAP_DBM         13
-#define MAX_STA_PWR_CAP_DBM         19 
+#define MAX_STA_PWR_CAP_DBM         19
 
-/* Moving the miscellaneous defination required by UMAC are moved here from 
+/* Moving the miscellaneous defination required by UMAC are moved here from
  * volansdefs.h */
 /* --------------------------------------------------------------------
  * Support definitions for taurus
@@ -396,7 +395,7 @@ typedef enum
 #define IS_VSTA_IDX(__x) \
                    (((__x) >= QWLAN_VSTA_MIN_IDX) && ((__x) < HAL_NUM_STA))
 
-                 
+
 // is the STA a General Purpose STA?
 #define IS_GPSTA_IDX(__x) \
     (((__x) >= (HAL_NUM_HW_STA-HAL_NUM_GPSTA)) && \
@@ -436,4 +435,3 @@ typedef enum
 
 
 #endif
-

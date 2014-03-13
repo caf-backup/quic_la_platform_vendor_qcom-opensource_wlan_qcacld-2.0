@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * This file limIbssPeerMgmt.h contains prototypes for
@@ -45,6 +46,7 @@ void limIbssDelete(tpAniSirGlobal,tpPESession psessionEntry);
 tSirRetStatus limIbssCoalesce(tpAniSirGlobal, tpSirMacMgmtHdr, tpSchBeaconStruct, tANI_U8*,tANI_U32, tANI_U16,tpPESession);
 tSirRetStatus limIbssStaAdd(tpAniSirGlobal, void *,tpPESession);
 tSirRetStatus limIbssAddStaRsp( tpAniSirGlobal, void *,tpPESession);
+tLimIbssPeerNode* limIbssPeerFind(tpAniSirGlobal pMac, tSirMacAddr macAddr);
 void limIbssDelBssRsp( tpAniSirGlobal, void *,tpPESession);
 void limIbssDelBssRspWhenCoalescing(tpAniSirGlobal,  void *,tpPESession);
 void limIbssAddBssRspWhenCoalescing(tpAniSirGlobal  pMac, void * msg, tpPESession pSessionEntry);

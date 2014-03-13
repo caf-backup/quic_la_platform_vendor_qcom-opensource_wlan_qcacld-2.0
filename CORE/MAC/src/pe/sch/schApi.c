@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * This file schApi.cc contains functions related to the API exposed
@@ -355,7 +356,7 @@ tSirRetStatus schSendBeaconReq( tpAniSirGlobal pMac, tANI_U8 *beaconPayload, tAN
     schLog( pMac, LOG2,
         FL("Successfully posted WDA_SEND_BEACON_REQ to HAL"));
 
-    if( (psessionEntry->limSystemRole == eLIM_AP_ROLE ) 
+    if( (psessionEntry->limSystemRole == eLIM_AP_ROLE )
         && (psessionEntry->proxyProbeRspEn)
         && (pMac->sch.schObject.fBeaconChanged))
     {
@@ -539,4 +540,3 @@ tANI_U32 limSendProbeRspTemplateToHal(tpAniSirGlobal pMac,tpPESession psessionEn
 
     return retCode;
 }
-

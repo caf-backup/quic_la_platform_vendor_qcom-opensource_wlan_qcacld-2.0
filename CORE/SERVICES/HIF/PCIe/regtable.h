@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -124,6 +124,8 @@ typedef struct targetdef_s {
     u_int32_t d_RX_MPDU_START_2_PN_47_32_MASK;
     u_int32_t d_RX_MSDU_END_1_EXT_WAPI_PN_63_48_MASK;
     u_int32_t d_RX_MSDU_END_1_EXT_WAPI_PN_63_48_LSB;
+    u_int32_t d_RX_MSDU_END_1_KEY_ID_OCT_MASK;
+    u_int32_t d_RX_MSDU_END_1_KEY_ID_OCT_LSB;
     u_int32_t d_RX_MSDU_END_4_LAST_MSDU_MASK;
     u_int32_t d_RX_MSDU_END_4_LAST_MSDU_LSB;
     u_int32_t d_RX_ATTENTION_0_MCAST_BCAST_MASK;
@@ -187,7 +189,35 @@ typedef struct targetdef_s {
     u_int32_t d_CE_CTRL1_DST_RING_BYTE_SWAP_EN_MASK;
     u_int32_t d_CE_CTRL1_SRC_RING_BYTE_SWAP_EN_LSB;
     u_int32_t d_CE_CTRL1_DST_RING_BYTE_SWAP_EN_LSB;
+    u_int32_t d_WLAN_DEBUG_INPUT_SEL_OFFSET;
+    u_int32_t d_WLAN_DEBUG_INPUT_SEL_SRC_MSB;
+    u_int32_t d_WLAN_DEBUG_INPUT_SEL_SRC_LSB;
+    u_int32_t d_WLAN_DEBUG_INPUT_SEL_SRC_MASK;
+    u_int32_t d_WLAN_DEBUG_CONTROL_OFFSET;
+    u_int32_t d_WLAN_DEBUG_CONTROL_ENABLE_MSB;
+    u_int32_t d_WLAN_DEBUG_CONTROL_ENABLE_LSB;
+    u_int32_t d_WLAN_DEBUG_CONTROL_ENABLE_MASK;
+    u_int32_t d_WLAN_DEBUG_OUT_OFFSET;
+    u_int32_t d_WLAN_DEBUG_OUT_DATA_MSB;
+    u_int32_t d_WLAN_DEBUG_OUT_DATA_LSB;
+    u_int32_t d_WLAN_DEBUG_OUT_DATA_MASK;
+    u_int32_t d_AMBA_DEBUG_BUS_OFFSET;
+    u_int32_t d_AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MSB;
+    u_int32_t d_AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_LSB;
+    u_int32_t d_AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MASK;
+    u_int32_t d_AMBA_DEBUG_BUS_SEL_MSB;
+    u_int32_t d_AMBA_DEBUG_BUS_SEL_LSB;
+    u_int32_t d_AMBA_DEBUG_BUS_SEL_MASK;
+    u_int32_t d_CE_WRAPPER_DEBUG_OFFSET;
+    u_int32_t d_CE_WRAPPER_DEBUG_SEL_MSB;
+    u_int32_t d_CE_WRAPPER_DEBUG_SEL_LSB;
+    u_int32_t d_CE_WRAPPER_DEBUG_SEL_MASK;
+    u_int32_t d_CE_DEBUG_OFFSET;
+    u_int32_t d_CE_DEBUG_SEL_MSB;
+    u_int32_t d_CE_DEBUG_SEL_LSB;
+    u_int32_t d_CE_DEBUG_SEL_MASK;
     /* end */
+    u_int32_t d_SOC_POWER_REG_OFFSET;
     u_int32_t d_PCIE_INTR_CAUSE_ADDRESS;
     u_int32_t d_SOC_RESET_CONTROL_ADDRESS;
     u_int32_t d_SOC_RESET_CONTROL_PCIE_RST_SHORT_OVRD_MASK;
@@ -309,6 +339,7 @@ typedef struct targetdef_s {
 /* misc */
 #define SR_WR_INDEX_ADDRESS                      (sc->targetdef->d_SR_WR_INDEX_ADDRESS)
 #define DST_WATERMARK_ADDRESS                    (sc->targetdef->d_DST_WATERMARK_ADDRESS)
+#define SOC_POWER_REG_OFFSET                     (sc->targetdef->d_SOC_POWER_REG_OFFSET)
 /* end */
 
 /* htt_rx.c */
@@ -318,6 +349,8 @@ typedef struct targetdef_s {
 #define RX_MPDU_START_0_SEQ_NUM_LSB              (pdev->targetdef->d_RX_MPDU_START_0_SEQ_NUM_LSB)
 #define RX_MPDU_START_2_PN_47_32_LSB             (pdev->targetdef->d_RX_MPDU_START_2_PN_47_32_LSB)
 #define RX_MPDU_START_2_PN_47_32_MASK            (pdev->targetdef->d_RX_MPDU_START_2_PN_47_32_MASK)
+#define RX_MSDU_END_1_KEY_ID_OCT_MASK            (pdev->targetdef->d_RX_MSDU_END_1_KEY_ID_OCT_MASK)
+#define RX_MSDU_END_1_KEY_ID_OCT_LSB             (pdev->targetdef->d_RX_MSDU_END_1_KEY_ID_OCT_LSB)
 #define RX_MSDU_END_1_EXT_WAPI_PN_63_48_MASK     (pdev->targetdef->d_RX_MSDU_END_1_EXT_WAPI_PN_63_48_MASK)
 #define RX_MSDU_END_1_EXT_WAPI_PN_63_48_LSB      (pdev->targetdef->d_RX_MSDU_END_1_EXT_WAPI_PN_63_48_LSB)
 #define RX_MSDU_END_4_LAST_MSDU_MASK             (pdev->targetdef->d_RX_MSDU_END_4_LAST_MSDU_MASK)
@@ -384,6 +417,33 @@ typedef struct targetdef_s {
 #define CE_CTRL1_DST_RING_BYTE_SWAP_EN_MASK      (sc->targetdef->d_CE_CTRL1_DST_RING_BYTE_SWAP_EN_MASK)
 #define CE_CTRL1_SRC_RING_BYTE_SWAP_EN_LSB       (sc->targetdef->d_CE_CTRL1_SRC_RING_BYTE_SWAP_EN_LSB)
 #define CE_CTRL1_DST_RING_BYTE_SWAP_EN_LSB       (sc->targetdef->d_CE_CTRL1_DST_RING_BYTE_SWAP_EN_LSB)
+#define WLAN_DEBUG_INPUT_SEL_OFFSET              (sc->targetdef->d_WLAN_DEBUG_INPUT_SEL_OFFSET)
+#define WLAN_DEBUG_INPUT_SEL_SRC_MSB             (sc->targetdef->d_WLAN_DEBUG_INPUT_SEL_SRC_MSB)
+#define WLAN_DEBUG_INPUT_SEL_SRC_LSB             (sc->targetdef->d_WLAN_DEBUG_INPUT_SEL_SRC_LSB)
+#define WLAN_DEBUG_INPUT_SEL_SRC_MASK            (sc->targetdef->d_WLAN_DEBUG_INPUT_SEL_SRC_MASK)
+#define WLAN_DEBUG_CONTROL_OFFSET                (sc->targetdef->d_WLAN_DEBUG_CONTROL_OFFSET)
+#define WLAN_DEBUG_CONTROL_ENABLE_MSB            (sc->targetdef->d_WLAN_DEBUG_CONTROL_ENABLE_MSB)
+#define WLAN_DEBUG_CONTROL_ENABLE_LSB            (sc->targetdef->d_WLAN_DEBUG_CONTROL_ENABLE_LSB)
+#define WLAN_DEBUG_CONTROL_ENABLE_MASK           (sc->targetdef->d_WLAN_DEBUG_CONTROL_ENABLE_MASK)
+#define WLAN_DEBUG_OUT_OFFSET                    (sc->targetdef->d_WLAN_DEBUG_OUT_OFFSET)
+#define WLAN_DEBUG_OUT_DATA_MSB                  (sc->targetdef->d_WLAN_DEBUG_OUT_DATA_MSB)
+#define WLAN_DEBUG_OUT_DATA_LSB                  (sc->targetdef->d_WLAN_DEBUG_OUT_DATA_LSB)
+#define WLAN_DEBUG_OUT_DATA_MASK                 (sc->targetdef->d_WLAN_DEBUG_OUT_DATA_MASK)
+#define AMBA_DEBUG_BUS_OFFSET                    (sc->targetdef->d_AMBA_DEBUG_BUS_OFFSET)
+#define AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MSB        (sc->targetdef->d_AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MSB)
+#define AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_LSB        (sc->targetdef->d_AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_LSB)
+#define AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MASK       (sc->targetdef->d_AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MASK)
+#define AMBA_DEBUG_BUS_SEL_MSB                   (sc->targetdef->d_AMBA_DEBUG_BUS_SEL_MSB)
+#define AMBA_DEBUG_BUS_SEL_LSB                   (sc->targetdef->d_AMBA_DEBUG_BUS_SEL_LSB)
+#define AMBA_DEBUG_BUS_SEL_MASK                  (sc->targetdef->d_AMBA_DEBUG_BUS_SEL_MASK)
+#define CE_WRAPPER_DEBUG_OFFSET                  (sc->targetdef->d_CE_WRAPPER_DEBUG_OFFSET)
+#define CE_WRAPPER_DEBUG_SEL_MSB                 (sc->targetdef->d_CE_WRAPPER_DEBUG_SEL_MSB)
+#define CE_WRAPPER_DEBUG_SEL_LSB                 (sc->targetdef->d_CE_WRAPPER_DEBUG_SEL_LSB)
+#define CE_WRAPPER_DEBUG_SEL_MASK                (sc->targetdef->d_CE_WRAPPER_DEBUG_SEL_MASK)
+#define CE_DEBUG_OFFSET                          (sc->targetdef->d_CE_DEBUG_OFFSET)
+#define CE_DEBUG_SEL_MSB                         (sc->targetdef->d_CE_DEBUG_SEL_MSB)
+#define CE_DEBUG_SEL_LSB                         (sc->targetdef->d_CE_DEBUG_SEL_LSB)
+#define CE_DEBUG_SEL_MASK                        (sc->targetdef->d_CE_DEBUG_SEL_MASK)
 /* end */
 
 /* SET macros */
@@ -409,6 +469,20 @@ typedef struct targetdef_s {
 #define CE_CTRL1_DMAX_LENGTH_SET(x)              (((x) << CE_CTRL1_DMAX_LENGTH_LSB) & CE_CTRL1_DMAX_LENGTH_MASK)
 #define CE_CTRL1_SRC_RING_BYTE_SWAP_EN_SET(x)    (((x) << CE_CTRL1_SRC_RING_BYTE_SWAP_EN_LSB) & CE_CTRL1_SRC_RING_BYTE_SWAP_EN_MASK)
 #define CE_CTRL1_DST_RING_BYTE_SWAP_EN_SET(x)    (((x) << CE_CTRL1_DST_RING_BYTE_SWAP_EN_LSB) & CE_CTRL1_DST_RING_BYTE_SWAP_EN_MASK)
+#define WLAN_DEBUG_INPUT_SEL_SRC_GET(x)          (((x) & WLAN_DEBUG_INPUT_SEL_SRC_MASK) >> WLAN_DEBUG_INPUT_SEL_SRC_LSB)
+#define WLAN_DEBUG_INPUT_SEL_SRC_SET(x)          (((x) << WLAN_DEBUG_INPUT_SEL_SRC_LSB) & WLAN_DEBUG_INPUT_SEL_SRC_MASK)
+#define WLAN_DEBUG_CONTROL_ENABLE_GET(x)         (((x) & WLAN_DEBUG_CONTROL_ENABLE_MASK) >> WLAN_DEBUG_CONTROL_ENABLE_LSB)
+#define WLAN_DEBUG_CONTROL_ENABLE_SET(x)         (((x) << WLAN_DEBUG_CONTROL_ENABLE_LSB) & WLAN_DEBUG_CONTROL_ENABLE_MASK)
+#define WLAN_DEBUG_OUT_DATA_GET(x)               (((x) & WLAN_DEBUG_OUT_DATA_MASK) >> WLAN_DEBUG_OUT_DATA_LSB)
+#define WLAN_DEBUG_OUT_DATA_SET(x)               (((x) << WLAN_DEBUG_OUT_DATA_LSB) & WLAN_DEBUG_OUT_DATA_MASK)
+#define AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_GET(x)     (((x) & AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MASK) >> AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_LSB)
+#define AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_SET(x)     (((x) << AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_LSB) & AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MASK)
+#define AMBA_DEBUG_BUS_SEL_GET(x)                (((x) & AMBA_DEBUG_BUS_SEL_MASK) >> AMBA_DEBUG_BUS_SEL_LSB)
+#define AMBA_DEBUG_BUS_SEL_SET(x)                (((x) << AMBA_DEBUG_BUS_SEL_LSB) & AMBA_DEBUG_BUS_SEL_MASK)
+#define CE_WRAPPER_DEBUG_SEL_GET(x)              (((x) & CE_WRAPPER_DEBUG_SEL_MASK) >> CE_WRAPPER_DEBUG_SEL_LSB)
+#define CE_WRAPPER_DEBUG_SEL_SET(x)              (((x) << CE_WRAPPER_DEBUG_SEL_LSB) & CE_WRAPPER_DEBUG_SEL_MASK)
+#define CE_DEBUG_SEL_GET(x)                      (((x) & CE_DEBUG_SEL_MASK) >> CE_DEBUG_SEL_LSB)
+#define CE_DEBUG_SEL_SET(x)                      (((x) << CE_DEBUG_SEL_LSB) & CE_DEBUG_SEL_MASK)
 /* end */
 
 typedef struct hostdef_s {
@@ -560,6 +634,18 @@ typedef struct hostdef_s {
 #if defined(SDIO_3_0)
 #define HOST_INT_STATUS_MBOX_DATA_GET(x)        (((x) & HOST_INT_STATUS_MBOX_DATA_MASK) >> HOST_INT_STATUS_MBOX_DATA_LSB)
 #endif
+
+#define INVALID_REG_LOC_DUMMY_DATA 0xAA
+
+typedef struct TGT_REG_SECTION {
+	u_int32_t start_addr;
+	u_int32_t end_addr;
+} tgt_reg_section;
+
+typedef struct TGT_REG_TABLE {
+	tgt_reg_section *section;
+	u_int32_t section_size;
+} tgt_reg_table;
 
 void target_register_tbl_attach(struct hif_pci_softc *sc, u32 target_type);
 void hif_register_tbl_attach(struct hif_pci_softc *sc, u32 hif_type);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * Implementation of the Host-side Host InterFace (HIF) API
  * for a Host/Target interconnect using Copy Engines over PCIe.
@@ -52,7 +53,7 @@
 #define ATH_MODULE_NAME hif
 #include <a_debug.h>
 #include "hif_pci.h"
-#include "vos_lock.h"
+#include "vos_trace.h"
 
 /* use credit flow control over HTC */
 unsigned int htc_credit_flow = 1;
@@ -207,7 +208,7 @@ HIFDetachHTC(HIF_DEVICE *hif_device)
 
 /* Send the first nbytes bytes of the buffer */
 A_STATUS
-HIFSend_head(HIF_DEVICE *hif_device, 
+HIFSend_head(HIF_DEVICE *hif_device,
              a_uint8_t pipe, unsigned int transfer_id, unsigned int nbytes, adf_nbuf_t nbuf)
 {
     struct HIF_CE_state *hif_state = (struct HIF_CE_state *)hif_device;
@@ -216,7 +217,7 @@ HIFSend_head(HIF_DEVICE *hif_device,
     int bytes = nbytes, nfrags = 0;
     struct CE_sendlist sendlist;
     int status;
-    
+
 
     AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("+%s\n",__FUNCTION__));
     A_ASSERT(nbytes <= adf_nbuf_len(nbuf));
@@ -237,7 +238,7 @@ HIFSend_head(HIF_DEVICE *hif_device,
         frag_paddr = adf_nbuf_get_frag_paddr_lo(nbuf, nfrags);
         frag_bytes = adf_nbuf_get_frag_len(nbuf, nfrags);
         CE_sendlist_buf_add(
-            &sendlist, frag_paddr, 
+            &sendlist, frag_paddr,
             frag_bytes > bytes ? bytes : frag_bytes,
             adf_nbuf_get_frag_is_wordstream(nbuf, nfrags) ?
                 0 : CE_SEND_FLAG_SWAP_DISABLE);
@@ -292,11 +293,11 @@ HIFSendCompleteCheck(HIF_DEVICE *hif_device, a_uint8_t pipe, int force)
             return;
         }
     }
-#ifdef  ATH_11AC_TXCOMPACT    
+#ifdef  ATH_11AC_TXCOMPACT
     CE_per_engine_servicereap(hif_state->sc, pipe);
 #else
-    CE_per_engine_service(hif_state->sc, pipe);    
-#endif    
+    CE_per_engine_service(hif_state->sc, pipe);
+#endif
 }
 
 a_uint16_t
@@ -317,17 +318,19 @@ HIFGetFreeQueueNumber(HIF_DEVICE *hif_device, a_uint8_t pipe)
 /* Called by lower (CE) layer when a send to Target completes. */
 void
 HIF_PCI_CE_send_done(struct CE_handle *copyeng, void *ce_context, void *transfer_context,
-    CE_addr_t CE_data, unsigned int nbytes, unsigned int transfer_id)
+    CE_addr_t CE_data, unsigned int nbytes, unsigned int transfer_id,
+    unsigned int sw_index, unsigned int hw_index)
 {
     struct HIF_CE_pipe_info *pipe_info = (struct HIF_CE_pipe_info *)ce_context;
     struct HIF_CE_state *hif_state = pipe_info->HIF_CE_state;
     struct HIF_CE_completion_state *compl_state;
     struct HIF_CE_completion_state *compl_queue_head, *compl_queue_tail; /* local queue */
+    unsigned int sw_idx = sw_index, hw_idx = hw_index;
 
     compl_queue_head = compl_queue_tail = NULL;
     do {
         /*
-         * For the send completion of an item in sendlist, just increment 
+         * For the send completion of an item in sendlist, just increment
          * num_sends_allowed. The upper layer callback will be triggered
          * when last fragment is done with send.
          */
@@ -340,7 +343,16 @@ HIF_PCI_CE_send_done(struct CE_handle *copyeng, void *ce_context, void *transfer
 
         adf_os_spin_lock(&pipe_info->completion_freeq_lock);
         compl_state = pipe_info->completion_freeq_head;
-        ASSERT(compl_state != NULL);
+        if (!compl_state) {
+            adf_os_spin_unlock(&pipe_info->completion_freeq_lock);
+            AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
+                            ("Out of free buf in hif send completion list, potential hw_index corruption"
+                             "pipe_num:%d num_send_allowed:%d pipe_info:0x%p sw_index:%d hw_index:%d nbytes:%d\n",
+                            pipe_info->pipe_num, pipe_info->num_sends_allowed,
+                            pipe_info, sw_idx, hw_idx, nbytes));
+            ASSERT(0);
+            break;
+        }
         pipe_info->completion_freeq_head = compl_state->next;
         adf_os_spin_unlock(&pipe_info->completion_freeq_lock);
 
@@ -362,7 +374,8 @@ HIF_PCI_CE_send_done(struct CE_handle *copyeng, void *ce_context, void *transfer
         }
         compl_queue_tail = compl_state;
     } while (CE_completed_send_next(copyeng, &ce_context, &transfer_context,
-                                         &CE_data, &nbytes, &transfer_id) == EOK);
+                                         &CE_data, &nbytes, &transfer_id,
+                                         &sw_idx, &hw_idx) == EOK);
 
     if (compl_queue_head == NULL) {
         /*
@@ -370,7 +383,7 @@ HIF_PCI_CE_send_done(struct CE_handle *copyeng, void *ce_context, void *transfer
          * don't invoke completion processing until the entire sendlist
          * has been sent.
          */
-        return; 
+        return;
     }
 
     adf_os_spin_lock(&hif_state->completion_pendingq_lock);
@@ -430,14 +443,14 @@ HIF_PCI_CE_recv_data(struct CE_handle *copyeng, void *ce_context, void *transfer
         compl_queue_tail = compl_state;
 
         adf_nbuf_unmap_single(scn->adf_dev, (adf_nbuf_t)transfer_context, ADF_OS_DMA_FROM_DEVICE);
-        
+
         /*
-         * EV #112693 - [Peregrine][ES1][WB342][Win8x86][Performance] BSoD_0x133 occurred in VHT80 UDP_DL      
+         * EV #112693 - [Peregrine][ES1][WB342][Win8x86][Performance] BSoD_0x133 occurred in VHT80 UDP_DL
          * Break out DPC by force if number of loops in HIF_PCI_CE_recv_data reaches MAX_NUM_OF_RECEIVES to avoid spending too long time in DPC for each interrupt handling.
          * Schedule another DPC to avoid data loss if we had taken force-break action before
          * Apply to Windows OS only currently, Linux/MAC os can expand to their platform if necessary
          */
-        
+
         /* Set up force_break flag if num of receices reaches MAX_NUM_OF_RECEIVES */
         sc->receive_count++;
         if (adf_os_unlikely(hif_max_num_receives_reached(sc->receive_count)))
@@ -507,6 +520,8 @@ hif_completion_thread_startup(struct HIF_CE_state *hif_state)
         attr = host_CE_config[pipe_num];
         completions_needed = 0;
         if (attr.src_nentries) { /* pipe used to send to target */
+            AR_DEBUG_PRINTF(ATH_DEBUG_INFO, ("pipe_num:%d pipe_info:0x%p\n",
+                            pipe_num, pipe_info));
             CE_send_cb_register(pipe_info->ce_hdl, HIF_PCI_CE_send_done, pipe_info, attr.flags & CE_ATTR_DISABLE_INTR);
             completions_needed += attr.src_nentries;
             pipe_info->num_sends_allowed = attr.src_nentries-1;
@@ -524,7 +539,10 @@ hif_completion_thread_startup(struct HIF_CE_state *hif_state)
             /* Allocate structures to track pending send/recv completions */
             compl_state = (struct HIF_CE_completion_state *)
                     A_MALLOC(completions_needed * sizeof(struct HIF_CE_completion_state));
-            ASSERT(compl_state != NULL); /* TBDXXX */
+            if (!compl_state) {
+                AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("ath ERROR: compl_state has no mem\n"));
+                return;
+            }
             pipe_info->completion_space = compl_state;
 
             adf_os_spinlock_init(&pipe_info->completion_freeq_lock);
@@ -661,12 +679,19 @@ hif_completion_thread(struct HIF_CE_state *hif_state)
                 netbuf = (adf_nbuf_t)compl_state->transfer_context;
                 nbytes = compl_state->nbytes;
 				/*
-				To see the following debug output, enable the HIF_PCI_DEBUG flag in 
+				To see the following debug output, enable the HIF_PCI_DEBUG flag in
 				the debug module declaration in this source file
 				*/
 				AR_DEBUG_PRINTF(HIF_PCI_DEBUG,("HIF_PCI_CE_recv_data netbuf=%p  nbytes=%d\n", netbuf, nbytes));
-                adf_nbuf_set_pktlen(netbuf, nbytes);
-                msg_callbacks->rxCompletionHandler(msg_callbacks->Context, netbuf, pipe_info->pipe_num);
+                if (nbytes <= pipe_info->buf_sz) {
+                    adf_nbuf_set_pktlen(netbuf, nbytes);
+                    msg_callbacks->rxCompletionHandler(msg_callbacks->Context,
+                                                       netbuf, pipe_info->pipe_num);
+                } else {
+                    AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("Invalid Rx message netbuf:%p nbytes:%d\n",
+                                                    netbuf, nbytes));
+                    adf_nbuf_free(netbuf);
+                }
             }
 
             /* Recycle completion state back to the pipe it came from. */
@@ -679,7 +704,7 @@ hif_completion_thread(struct HIF_CE_state *hif_state)
                 pipe_info->completion_freeq_head = compl_state;
             }
             pipe_info->completion_freeq_tail = compl_state;
-            pipe_info->num_sends_allowed += send_done; 
+            pipe_info->num_sends_allowed += send_done;
             adf_os_spin_unlock(&pipe_info->completion_freeq_lock);
         }
 
@@ -885,14 +910,14 @@ HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbyt
 
     /* This code cannot handle reads to non-memory space. Redirect to the
      * register read fn but preserve the multi word read capability of this fn
-     */ 
+     */
     if (address <  DRAM_BASE_ADDRESS) {
 
         if ((address & 0x3) || ((uintptr_t)data & 0x3)) {
             return (-EIO);
         }
 
-        while ((nbytes >= 4) && 
+        while ((nbytes >= 4) &&
                 (A_OK == (status = HIFDiagReadAccess(hif_device, address,
                                                      (A_UINT32*)data)))) {
 
@@ -901,7 +926,7 @@ HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbyt
             data   += sizeof(A_UINT32);
 
         }
-    
+
         return status;
     }
 
@@ -939,7 +964,7 @@ HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbyt
                 goto done;
             }
         }
-    
+
         { /* Request CE to send from Target(!) address to Host buffer */
             /*
              * The address supplied by the caller is in the
@@ -954,15 +979,17 @@ HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbyt
             A_TARGET_ACCESS_BEGIN(targid);
             address = TARG_CPU_SPACE_TO_CE_SPACE(sc->mem, address);
             A_TARGET_ACCESS_END(targid);
-    
+
             status = CE_send(ce_diag, NULL, (CE_addr_t)address, nbytes, 0, 0);
             if (status != EOK) {
                 goto done;
             }
         }
-    
+
         i=0;
-        while (CE_completed_send_next(ce_diag, NULL, NULL, &buf, &completed_nbytes, &id) != A_OK) {
+        while (CE_completed_send_next(ce_diag, NULL, NULL, &buf,
+                                      &completed_nbytes, &id,
+                                      NULL, NULL) != A_OK) {
             A_MDELAY(1);
             if (i++ > DIAG_ACCESS_CE_TIMEOUT_MS) {
                 status = A_EBUSY;
@@ -977,7 +1004,7 @@ HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbyt
             status = A_ERROR;
             goto done;
         }
-    
+
         i=0;
         while (CE_completed_recv_next(ce_diag, NULL, NULL, &buf, &completed_nbytes, &id, &flags) != A_OK) {
             A_MDELAY(1);
@@ -994,7 +1021,7 @@ HIFDiagReadMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nbyt
             status = A_ERROR;
             goto done;
         }
-    
+
         remaining_bytes -= nbytes;
         address += nbytes;
         CE_data += nbytes;
@@ -1117,7 +1144,7 @@ HIFDiagWriteMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nby
                 goto done;
             }
         }
-    
+
         {
             /*
              * Request CE to send caller-supplied data that
@@ -1128,26 +1155,28 @@ HIFDiagWriteMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nby
                 goto done;
             }
         }
-    
+
         i=0;
-        while (CE_completed_send_next(ce_diag, NULL, NULL, &buf, &completed_nbytes, &id) != A_OK) {
+        while (CE_completed_send_next(ce_diag, NULL, NULL, &buf,
+                                      &completed_nbytes, &id,
+                                      NULL, NULL) != A_OK) {
             A_MDELAY(1);
             if (i++ > DIAG_ACCESS_CE_TIMEOUT_MS) {
                 status = A_EBUSY;
                 goto done;
             }
         }
-    
+
         if (nbytes != completed_nbytes) {
             status = A_ERROR;
             goto done;
         }
-    
+
         if (buf != CE_data) {
             status = A_ERROR;
             goto done;
         }
-    
+
         i=0;
         while (CE_completed_recv_next(ce_diag, NULL, NULL, &buf, &completed_nbytes, &id, &flags) != A_OK) {
             A_MDELAY(1);
@@ -1156,17 +1185,17 @@ HIFDiagWriteMem(HIF_DEVICE *hif_device, A_UINT32 address, A_UINT8 *data, int nby
                 goto done;
             }
         }
-    
+
         if (nbytes != completed_nbytes) {
             status = A_ERROR;
             goto done;
         }
-    
+
         if (buf != address) {
             status = A_ERROR;
             goto done;
         }
-    
+
         remaining_bytes -= nbytes;
         address += nbytes;
         CE_data += nbytes;
@@ -1365,7 +1394,7 @@ HIFGrowBuffers(hif_handle_t hif_hdl)
     struct HIF_CE_pipe_info *pipe_info;
     struct CE_attr *attr;
     int pipe_num;
-    
+
     for (pipe_num = 0; pipe_num < sc->ce_count; pipe_num++) {
         pipe_info = &hif_state->pipe_info[pipe_num];
         attr = &host_CE_config[pipe_num];
@@ -1444,7 +1473,7 @@ hif_send_buffer_cleanup_on_pipe(struct HIF_CE_pipe_info *pipe_info)
     {
         if (netbuf != CE_SENDLIST_ITEM_CTXT)
         {
-            /* Indicate the completion to higer layer to free the buffer */  
+            /* Indicate the completion to higer layer to free the buffer */
             hif_state->msg_callbacks_current.txCompletionHandler(
                 hif_state->msg_callbacks_current.Context, netbuf, id);
         }
@@ -1490,12 +1519,17 @@ HIFStop(HIF_DEVICE *hif_device)
 
     AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("+%s\n",__FUNCTION__));
 
-    if (!hif_state->started) {
+    if (!hif_state->started && !sc->hif_init_done) {
         return; /* already stopped or stopping */
     }
-    /* sync shutdown */
-    hif_completion_thread_shutdown(hif_state);
-    hif_completion_thread(hif_state);
+
+    sc->hif_init_done = FALSE;
+
+    if (hif_state->started) {
+       /* sync shutdown */
+       hif_completion_thread_shutdown(hif_state);
+       hif_completion_thread(hif_state);
+    }
 
     /*
      * At this point, asynchronous threads are stopped,
@@ -1523,7 +1557,6 @@ HIFStop(HIF_DEVICE *hif_device)
 
     adf_os_timer_cancel(&hif_state->sleep_timer);
     adf_os_timer_free(&hif_state->sleep_timer);
-    vos_wake_lock_destroy(&hif_state->hif_wake_lock);
 
     hif_state->started = FALSE;
     AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-%s\n",__FUNCTION__));
@@ -1550,7 +1583,7 @@ HIFShutDownDevice(HIF_DEVICE *hif_device)
 
         HIFStop(hif_device);
         A_FREE(hif_state);
-    }   
+    }
 
     AR_DEBUG_PRINTF(ATH_DEBUG_TRC,("-%s\n",__FUNCTION__));
 }
@@ -1584,14 +1617,15 @@ struct BMI_transaction {
  */
 static void
 HIF_BMI_send_done(struct CE_handle *copyeng, void *ce_context, void *transfer_context,
-    CE_addr_t data, unsigned int nbytes, unsigned int transfer_id)
+    CE_addr_t data, unsigned int nbytes, unsigned int transfer_id,
+    unsigned int sw_index, unsigned int hw_index)
 {
     struct BMI_transaction *transaction = (struct BMI_transaction *)transfer_context;
     struct hif_pci_softc *sc = transaction->hif_state->sc;
 
 #ifdef BMI_RSP_POLLING
-    /* 
-     * Fix EV118783, Release a semaphore after sending 
+    /*
+     * Fix EV118783, Release a semaphore after sending
      * no matter whether a response is been expecting now.
      */
     adf_os_mutex_release(sc->ol_sc->adf_dev, &transaction->bmi_transaction_sem);
@@ -1649,7 +1683,7 @@ HIFExchangeBMIMsg(HIF_DEVICE *hif_device,
     int status = EOK;
     struct HIF_CE_pipe_info *recv_pipe_info = &(hif_state->pipe_info[BMI_CE_NUM_TO_HOST]);
     struct CE_handle *ce_recv = recv_pipe_info->ce_hdl;
-    
+
 #ifdef BMI_RSP_POLLING
     CE_addr_t buf;
     unsigned int completed_nbytes, id, flags;
@@ -1716,7 +1750,7 @@ HIFExchangeBMIMsg(HIF_DEVICE *hif_device,
 
     if (bmi_response) {
 #ifdef BMI_RSP_POLLING
-        /* Fix EV118783, do not wait a semaphore for the BMI response 
+        /* Fix EV118783, do not wait a semaphore for the BMI response
          * since the relative interruption may be lost.
          * poll the BMI response instead.
          */
@@ -1952,7 +1986,7 @@ HIF_sleep_entry(void *arg)
 	struct hif_pci_softc *sc = hif_state->sc;
 	u_int32_t idle_ms;
 
-	adf_os_spin_lock(&hif_state->keep_awake_lock);
+	adf_os_spin_lock_irqsave(&hif_state->keep_awake_lock);
 	if (hif_state->verified_awake == FALSE) {
 		idle_ms = adf_os_ticks_to_msecs(adf_os_ticks()
 					- hif_state->sleep_ticks);
@@ -1960,7 +1994,6 @@ HIF_sleep_entry(void *arg)
 			A_PCI_WRITE32(pci_addr + PCIE_LOCAL_BASE_ADDRESS +
 				PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
 			hif_state->fake_sleep = FALSE;
-			vos_wake_lock_release(&hif_state->hif_wake_lock);
 		} else {
 			adf_os_timer_start(&hif_state->sleep_timer,
 				HIF_SLEEP_INACTIVITY_TIMER_PERIOD_MS);
@@ -1969,7 +2002,30 @@ HIF_sleep_entry(void *arg)
 		adf_os_timer_start(&hif_state->sleep_timer,
 			HIF_SLEEP_INACTIVITY_TIMER_PERIOD_MS);
 	}
-	adf_os_spin_unlock(&hif_state->keep_awake_lock);
+	adf_os_spin_unlock_irqrestore(&hif_state->keep_awake_lock);
+}
+
+void
+HIFCancelDeferredTargetSleep(HIF_DEVICE *hif_device)
+{
+	struct HIF_CE_state *hif_state = (struct HIF_CE_state *)hif_device;
+	A_target_id_t pci_addr = TARGID_TO_PCI_ADDR(hif_state->targid);
+	struct hif_pci_softc *sc = hif_state->sc;
+
+	adf_os_spin_lock_irqsave(&hif_state->keep_awake_lock);
+	/*
+	 * If the deferred sleep timer is running cancel it
+	 * and put the soc into sleep.
+	 */
+	if (hif_state->fake_sleep == TRUE) {
+		adf_os_timer_cancel(&hif_state->sleep_timer);
+		if (hif_state->verified_awake == FALSE) {
+			A_PCI_WRITE32(pci_addr + PCIE_LOCAL_BASE_ADDRESS +
+				PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
+		}
+		hif_state->fake_sleep = FALSE;
+	}
+	adf_os_spin_unlock_irqrestore(&hif_state->keep_awake_lock);
 }
 
 /*
@@ -2010,7 +2066,6 @@ HIF_PCIDeviceProbed(hif_handle_t hif_hdl)
     hif_state->sleep_ticks = 0;
     adf_os_timer_init(NULL, &hif_state->sleep_timer,
                       HIF_sleep_entry, (void *)hif_state);
-    vos_wake_lock_init(&hif_state->hif_wake_lock, "hif_wake_lock");
 
     hif_state->fw_indicator_address = FW_INDICATOR_ADDRESS;
     hif_state->targid = A_TARGET_ID(sc->hif_device);
@@ -2162,21 +2217,33 @@ HIF_PCIDeviceProbed(hif_handle_t hif_hdl)
 
         /* 1 bank is switched to IRAM, except ROME 1.0 */
         ealloc_value |= ((HI_EARLY_ALLOC_MAGIC << HI_EARLY_ALLOC_MAGIC_SHIFT) & HI_EARLY_ALLOC_MAGIC_MASK);
-	{
+        {
 	     A_UINT8 banks_switched = 1;
 	     A_UINT32 chip_id;
-	     rv = HIFDiagReadAccess(sc->hif_device, CHIP_ID_ADDRESS, &chip_id);
+	     rv = HIFDiagReadAccess(sc->hif_device, CHIP_ID_ADDRESS | RTC_SOC_BASE_ADDRESS, &chip_id);
 	     if (rv != A_OK) {
 	          AR_DEBUG_PRINTF(ATH_DEBUG_INFO, ("ath: HIF_PCIDeviceProbed get chip id val (%d)\n", rv));
 		  goto done;
 	     }
-	     if (CHIP_ID_VERSION_GET(chip_id) == 0xD && (CHIP_ID_REVISION_GET(chip_id) == 0x0 || CHIP_ID_REVISION_GET(chip_id) == 0x1)) {
-		  /* for ROME 1.0, 3 banks are switched to IRAM */
-		  AR_DEBUG_PRINTF(ATH_DEBUG_WARN, ("chip ver=0x%x, chip rev=0x%x\n", CHIP_ID_VERSION_GET(chip_id), CHIP_ID_REVISION_GET(chip_id)));
-		  banks_switched = 3;
-	     }
-	     ealloc_value |= ((banks_switched << HI_EARLY_ALLOC_IRAM_BANKS_SHIFT) & HI_EARLY_ALLOC_IRAM_BANKS_MASK);
-	}
+	     if (CHIP_ID_VERSION_GET(chip_id) == 0xD) {
+             switch(CHIP_ID_REVISION_GET(chip_id)) {
+             case 0x2: /* ROME 1.3 */
+                 /* 2 banks are switched to IRAM */
+                 banks_switched = 2;
+                 break;
+             case 0x0: /* ROME 1.0 */
+             case 0x1: /* ROME 1.1 */
+             case 0x4: /* ROME 2.1 */
+             case 0x5: /* ROME 2.2 */
+             default:
+                     /* 3 banks are switched to IRAM */
+                     banks_switched = 3;
+                     break;
+             }
+
+         }
+         ealloc_value |= ((banks_switched << HI_EARLY_ALLOC_IRAM_BANKS_SHIFT) & HI_EARLY_ALLOC_IRAM_BANKS_MASK);
+        }
         rv = HIFDiagWriteAccess(sc->hif_device, ealloc_targ_addr, ealloc_value);
         if (rv != A_OK) {
             AR_DEBUG_PRINTF(ATH_DEBUG_INFO, ("ath: HIF_PCIDeviceProbed set early alloc val (%d)\n", rv));
@@ -2219,6 +2286,9 @@ done:
             }
         }
 
+        adf_os_timer_cancel(&hif_state->sleep_timer);
+        adf_os_timer_free(&hif_state->sleep_timer);
+
         A_FREE(hif_state);
     }
 
@@ -2250,7 +2320,7 @@ extern void HIFdebug(void);
  *   (or perhaps spin/delay for a short while, then convert to sleep/interrupt)
  *   Careful, though, these functions may be used by interrupt handlers ("atomic")
  *  -Don't use host_reg_table for this code; instead use values directly
- *  -Use a separate timer to track activity and allow Target to sleep only 
+ *  -Use a separate timer to track activity and allow Target to sleep only
  *   if it hasn't done anything for a while; may even want to delay some
  *   processing for a short while in order to "batch" (e.g.) transmit
  *   requests with completion processing into "windows of up time".  Costs
@@ -2280,7 +2350,7 @@ HIFTargetSleepStateAdjust(A_target_id_t targid,
 
 
     if (sleep_ok) {
-        adf_os_spin_lock(&hif_state->keep_awake_lock);
+        adf_os_spin_lock_irqsave(&hif_state->keep_awake_lock);
         hif_state->keep_awake_count--;
         if (hif_state->keep_awake_count == 0) {
             /* Allow sleep */
@@ -2295,11 +2365,10 @@ HIFTargetSleepStateAdjust(A_target_id_t targid,
             adf_os_timer_cancel(&hif_state->sleep_timer);
             adf_os_timer_start(&hif_state->sleep_timer,
                 HIF_SLEEP_INACTIVITY_TIMER_PERIOD_MS);
-            vos_wake_lock_acquire(&hif_state->hif_wake_lock);
         }
-        adf_os_spin_unlock(&hif_state->keep_awake_lock);
+        adf_os_spin_unlock_irqrestore(&hif_state->keep_awake_lock);
     } else {
-        adf_os_spin_lock(&hif_state->keep_awake_lock);
+        adf_os_spin_lock_irqsave(&hif_state->keep_awake_lock);
 
         if (hif_state->fake_sleep) {
             hif_state->verified_awake = TRUE;
@@ -2311,10 +2380,10 @@ HIFTargetSleepStateAdjust(A_target_id_t targid,
             }
         }
         hif_state->keep_awake_count++;
-        adf_os_spin_unlock(&hif_state->keep_awake_lock);
+        adf_os_spin_unlock_irqrestore(&hif_state->keep_awake_lock);
 
         if (wait_for_it && !hif_state->verified_awake) {
-#define PCIE_WAKE_TIMEOUT 5000 /* 5Ms */
+#define PCIE_WAKE_TIMEOUT 8000 /* 8Ms */
             int tot_delay = 0;
             int curr_delay = 5;
 
@@ -2329,10 +2398,35 @@ HIFTargetSleepStateAdjust(A_target_id_t targid,
                 //ASSERT(tot_delay <= PCIE_WAKE_TIMEOUT);
                 if (tot_delay > PCIE_WAKE_TIMEOUT)
                 {
-                    printk("%s: keep_awake_count %d PCIE_SOC_WAKE_ADDRESS = %x\n",__func__,
-                            hif_state->keep_awake_count, 
-                            A_PCI_READ32(pci_addr + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS));
-                    ASSERT(0);
+                    u_int16_t val;
+                    u_int32_t bar;
+
+                    printk("%s: keep_awake_count = %d\n", __func__,
+                           hif_state->keep_awake_count);
+
+                    pci_read_config_word(sc->pdev, PCI_VENDOR_ID, &val);
+                    printk("%s: PCI Vendor ID = 0x%04x\n", __func__, val);
+
+                    pci_read_config_word(sc->pdev, PCI_DEVICE_ID, &val);
+                    printk("%s: PCI Device ID = 0x%04x\n", __func__, val);
+
+                    pci_read_config_word(sc->pdev, PCI_COMMAND, &val);
+                    printk("%s: PCI Command = 0x%04x\n", __func__, val);
+
+                    pci_read_config_word(sc->pdev, PCI_STATUS, &val);
+                    printk("%s: PCI Status = 0x%04x\n", __func__, val);
+
+                    pci_read_config_dword(sc->pdev, PCI_BASE_ADDRESS_0, &bar);
+                    printk("%s: PCI BAR 0 = 0x%08x\n", __func__, bar);
+
+                    printk("%s: PCIE_SOC_WAKE_ADDRESS = 0x%08x,"    \
+                           " RTC_STATE_ADDRESS = 0x%08x\n", __func__,
+                           A_PCI_READ32(pci_addr + PCIE_LOCAL_BASE_ADDRESS
+                                        + PCIE_SOC_WAKE_ADDRESS),
+                           A_PCI_READ32(pci_addr + PCIE_LOCAL_BASE_ADDRESS
+                                        + RTC_STATE_ADDRESS));
+
+                    VOS_BUG(0);
                 }
 
                 OS_DELAY(curr_delay);

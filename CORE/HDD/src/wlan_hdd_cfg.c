@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**=========================================================================
 
                        EDIT HISTORY FOR FILE
@@ -119,22 +120,6 @@ static void cbNotifySetRoamScanNProbes(hdd_context_t *pHddCtx, unsigned long Not
 
 static void cbNotifySetRoamScanHomeAwayTime(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    tANI_U16 scanChannelMaxTime = 0;
-
-    /* Home Away Time should be atleast equal to (MaxDwell time + (2*RFS)),
-     * where RFS is the RF Switching time. It is twice RFS to consider the
-     * time to go off channel and return to the home channel. */
-
-     scanChannelMaxTime = sme_getNeighborScanMaxChanTime((tHalHandle)(pHddCtx->hHal));
-     if (pHddCtx->cfg_ini->nRoamScanHomeAwayTime < (scanChannelMaxTime + (2 * HDD_ROAM_SCAN_CHANNEL_SWITCH_TIME)))
-     {
-         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_WARN,
-                "%s: Invalid config, Home away time(%d) is less than (twice RF switching time + channel max time)(%d)"
-                " Hence enforcing home away time to disable (0)",
-                __func__, pHddCtx->cfg_ini->nRoamScanHomeAwayTime, (scanChannelMaxTime + (2 * HDD_ROAM_SCAN_CHANNEL_SWITCH_TIME)));
-         pHddCtx->cfg_ini->nRoamScanHomeAwayTime = 0;
-     }
-
      sme_UpdateRoamScanHomeAwayTime((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nRoamScanHomeAwayTime, eANI_BOOLEAN_TRUE);
 }
 #endif
@@ -175,6 +160,28 @@ static void cbNotifySetFwRssiMonitoring(hdd_context_t *pHddCtx, unsigned long No
 }
 
 #ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
+static void cbNotifySetOpportunisticScanThresholdDiff(hdd_context_t *pHddCtx,
+                                                      unsigned long NotifyId)
+{
+    /*
+     * at the point this routine is called, the value in the cfg_ini table
+     * has already been updated
+     */
+    sme_SetRoamOpportunisticScanThresholdDiff((tHalHandle)(pHddCtx->hHal),
+                          pHddCtx->cfg_ini->nOpportunisticThresholdDiff );
+}
+
+static void cbNotifySetRoamRescanRssiDiff(hdd_context_t *pHddCtx,
+                                          unsigned long NotifyId)
+{
+    /*
+     * at the point this routine is called, the value in the cfg_ini table
+     * has already been updated
+     */
+    sme_SetRoamRescanRssiDiff((tHalHandle)(pHddCtx->hHal),
+                              pHddCtx->cfg_ini->nRoamRescanRssiDiff);
+}
+
 static void cbNotifySetNeighborLookupRssiThreshold(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
     // at the point this routine is called, the value in the cfg_ini table has already been updated
@@ -207,22 +214,6 @@ static void cbNotifySetNeighborScanMinChanTime(hdd_context_t *pHddCtx, unsigned 
 
 static void cbNotifySetNeighborScanMaxChanTime(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    tANI_U16 homeAwayTime = 0;
-
-    /* Home Away Time should be atleast equal to (MaxDwell time + (2*RFS)),
-    *  where RFS is the RF Switching time. It is twice RFS to consider the
-    *  time to go off channel and return to the home channel. */
-    homeAwayTime = sme_getRoamScanHomeAwayTime((tHalHandle)(pHddCtx->hHal));
-    if (homeAwayTime < (pHddCtx->cfg_ini->nNeighborScanMaxChanTime + (2 * HDD_ROAM_SCAN_CHANNEL_SWITCH_TIME)))
-    {
-        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_WARN,
-               "%s: Invalid config, Home away time(%d) is less than (twice RF switching time + channel max time)(%d)"
-               " Hence enforcing home away time to disable (0)",
-               __func__, homeAwayTime, (pHddCtx->cfg_ini->nNeighborScanMaxChanTime + (2 * HDD_ROAM_SCAN_CHANNEL_SWITCH_TIME)));
-        homeAwayTime = 0;
-        pHddCtx->cfg_ini->nRoamScanHomeAwayTime = homeAwayTime;
-        sme_UpdateRoamScanHomeAwayTime((tHalHandle)(pHddCtx->hHal), homeAwayTime, eANI_BOOLEAN_FALSE);
-    }
     sme_setNeighborScanMaxChanTime((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nNeighborScanMaxChanTime);
 }
 #endif
@@ -1891,6 +1882,22 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_NEIGHBOR_LOOKUP_RSSI_THRESHOLD_MAX,
                  cbNotifySetNeighborLookupRssiThreshold, 0 ),
 
+   REG_DYNAMIC_VARIABLE( CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, nOpportunisticThresholdDiff,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_DEFAULT,
+                 CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_MIN,
+                 CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_MAX,
+                 cbNotifySetOpportunisticScanThresholdDiff, 0 ),
+
+   REG_DYNAMIC_VARIABLE( CFG_ROAM_RESCAN_RSSI_DIFF_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, nRoamRescanRssiDiff,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_ROAM_RESCAN_RSSI_DIFF_DEFAULT,
+                 CFG_ROAM_RESCAN_RSSI_DIFF_MIN,
+                 CFG_ROAM_RESCAN_RSSI_DIFF_MAX,
+                 cbNotifySetRoamRescanRssiDiff, 0 ),
+
    REG_VARIABLE_STRING( CFG_NEIGHBOR_SCAN_CHAN_LIST_NAME, WLAN_PARAM_String,
                         hdd_config_t, neighborScanChanList,
                         VAR_FLAGS_OPTIONAL,
@@ -2350,6 +2357,15 @@ REG_TABLE_ENTRY g_registry_table[] =
               CFG_THERMAL_MIGRATION_ENABLE_MIN,
               CFG_THERMAL_MIGRATION_ENABLE_MAX ),
 
+#ifndef QCA_WIFI_ISOC
+   REG_VARIABLE( CFG_THROTTLE_PERIOD_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, throttlePeriod,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THROTTLE_PERIOD_DEFAULT,
+              CFG_THROTTLE_PERIOD_MIN,
+              CFG_THROTTLE_PERIOD_MAX ),
+#endif
+
    REG_VARIABLE( CFG_ENABLE_MODULATED_DTIM_NAME, WLAN_PARAM_Integer,
               hdd_config_t, enableModulatedDTIM,
               VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -2449,6 +2465,13 @@ REG_VARIABLE( CFG_HT_SMPS_CAP_FEATURE, WLAN_PARAM_Integer,
              CFG_HT_SMPS_CAP_FEATURE_DEFAULT,
              CFG_HT_SMPS_CAP_FEATURE_MIN,
              CFG_HT_SMPS_CAP_FEATURE_MAX ),
+
+REG_VARIABLE( CFG_DISABLE_DFS_CH_SWITCH, WLAN_PARAM_Integer,
+             hdd_config_t, disableDFSChSwitch,
+             VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+             CFG_DISABLE_DFS_CH_SWITCH_DEFAULT,
+             CFG_DISABLE_DFS_CH_SWITCH_MIN,
+             CFG_DISABLE_DFS_CH_SWITCH_MAX ),
 
    REG_VARIABLE( CFG_ENABLE_FIRST_SCAN_2G_ONLY_NAME, WLAN_PARAM_Integer,
               hdd_config_t, enableFirstScan2GOnly,
@@ -2998,6 +3021,96 @@ REG_VARIABLE( CFG_SAP_MAX_NO_PEERS, WLAN_PARAM_Integer,
                CFG_SAP_MAX_NO_PEERS_DEFAULT,
                CFG_SAP_MAX_NO_PEERS_MIN,
                CFG_SAP_MAX_NO_PEERS_MAX),
+
+#ifndef QCA_WIFI_ISOC
+   REG_VARIABLE( CFG_THERMAL_TEMP_MIN_LEVEL0_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMinLevel0,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL0_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL0_MIN,
+              CFG_THERMAL_TEMP_MIN_LEVEL0_MAX ),
+
+   REG_VARIABLE( CFG_THERMAL_TEMP_MAX_LEVEL0_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMaxLevel0,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL0_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL0_MIN,
+              CFG_THERMAL_TEMP_MAX_LEVEL0_MAX ),
+
+   REG_VARIABLE( CFG_THERMAL_TEMP_MIN_LEVEL1_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMinLevel1,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL1_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL1_MIN,
+              CFG_THERMAL_TEMP_MIN_LEVEL1_MAX ),
+
+   REG_VARIABLE( CFG_THERMAL_TEMP_MAX_LEVEL1_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMaxLevel1,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL1_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL1_MIN,
+              CFG_THERMAL_TEMP_MAX_LEVEL1_MAX ),
+
+   REG_VARIABLE( CFG_THERMAL_TEMP_MIN_LEVEL2_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMinLevel2,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL2_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL2_MIN,
+              CFG_THERMAL_TEMP_MIN_LEVEL2_MAX ),
+
+   REG_VARIABLE( CFG_THERMAL_TEMP_MAX_LEVEL2_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMaxLevel2,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL2_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL2_MIN,
+              CFG_THERMAL_TEMP_MAX_LEVEL2_MAX ),
+
+   REG_VARIABLE( CFG_THERMAL_TEMP_MIN_LEVEL3_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMinLevel3,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL3_DEFAULT,
+              CFG_THERMAL_TEMP_MIN_LEVEL3_MIN,
+              CFG_THERMAL_TEMP_MIN_LEVEL3_MAX ),
+
+   REG_VARIABLE( CFG_THERMAL_TEMP_MAX_LEVEL3_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, thermalTempMaxLevel3,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL3_DEFAULT,
+              CFG_THERMAL_TEMP_MAX_LEVEL3_MIN,
+              CFG_THERMAL_TEMP_MAX_LEVEL3_MAX ),
+
+  REG_VARIABLE( CFG_SET_TXPOWER_LIMIT2G_NAME , WLAN_PARAM_Integer,
+              hdd_config_t, TxPower2g,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_SET_TXPOWER_LIMIT2G_DEFAULT,
+              CFG_SET_TXPOWER_LIMIT2G_MIN,
+              CFG_SET_TXPOWER_LIMIT2G_MAX ),
+
+  REG_VARIABLE( CFG_SET_TXPOWER_LIMIT5G_NAME , WLAN_PARAM_Integer,
+             hdd_config_t, TxPower5g,
+             VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+             CFG_SET_TXPOWER_LIMIT5G_DEFAULT,
+             CFG_SET_TXPOWER_LIMIT5G_MIN,
+             CFG_SET_TXPOWER_LIMIT5G_MAX ),
+#endif /*#ifndef QCA_WIFI_ISOC*/
+   REG_VARIABLE( CFG_ENABLE_DEBUG_CONNECT_ISSUE, WLAN_PARAM_Integer,
+              hdd_config_t, gEnableDebugLog,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_ENABLE_DEBUG_CONNECT_ISSUE_DEFAULT,
+              CFG_ENABLE_DEBUG_CONNECT_ISSUE_MIN ,
+              CFG_ENABLE_DEBUG_CONNECT_ISSUE_MAX),
+REG_VARIABLE( CFG_ENABLE_RX_THREAD, WLAN_PARAM_Integer,
+               hdd_config_t, enableRxThread,
+               VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+               CFG_ENABLE_RX_THREAD_DEFAULT,
+               CFG_ENABLE_RX_THREAD_MIN,
+               CFG_ENABLE_RX_THREAD_MAX),
+REG_VARIABLE( CFG_ENABLE_DFS_PHYERR_FILTEROFFLOAD_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, fDfsPhyerrFilterOffload,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_ENABLE_DFS_PHYERR_FILTEROFFLOAD_DEFAULT,
+              CFG_ENABLE_DFS_PHYERR_FILTEROFFLOAD_MIN,
+              CFG_ENABLE_DFS_PHYERR_FILTEROFFLOAD_MAX ),
 };
 
 /*
@@ -3203,48 +3316,25 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [AutoBmpsTimerEnabled] Value = [%u]",pHddCtx->cfg_ini->fIsAutoBmpsTimerEnabled);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nAutoBmpsTimerValue] Value = [%u]",pHddCtx->cfg_ini->nAutoBmpsTimerValue);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nVccRssiTrigger] Value = [%u]",pHddCtx->cfg_ini->nVccRssiTrigger);
-  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssBssid] Value =[0x%x 0x%x 0x%x 0x%x 0x%x 0x%x]",
-      pHddCtx->cfg_ini->IbssBssid.bytes[0],pHddCtx->cfg_ini->IbssBssid.bytes[1],
-      pHddCtx->cfg_ini->IbssBssid.bytes[2],pHddCtx->cfg_ini->IbssBssid.bytes[3],
-      pHddCtx->cfg_ini->IbssBssid.bytes[4],pHddCtx->cfg_ini->IbssBssid.bytes[5]);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+            "Name = [gIbssBssid] Value =["MAC_ADDRESS_STR"]",
+            MAC_ADDR_ARRAY(pHddCtx->cfg_ini->IbssBssid.bytes));
 
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-          "Name = [Intf0MacAddress] Value =[0x%x 0x%x 0x%x 0x%x 0x%x 0x%x]",
-                                  pHddCtx->cfg_ini->intfMacAddr[0].bytes[0],
-                                  pHddCtx->cfg_ini->intfMacAddr[0].bytes[1],
-                                  pHddCtx->cfg_ini->intfMacAddr[0].bytes[2],
-                                  pHddCtx->cfg_ini->intfMacAddr[0].bytes[3],
-                                  pHddCtx->cfg_ini->intfMacAddr[0].bytes[4],
-                                  pHddCtx->cfg_ini->intfMacAddr[0].bytes[5]);
-
+            "Name = [Intf0MacAddress] Value =["MAC_ADDRESS_STR"]",
+            MAC_ADDR_ARRAY(pHddCtx->cfg_ini->intfMacAddr[0].bytes));
 
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-          "Name = [Intf1MacAddress] Value =[0x%x 0x%x 0x%x 0x%x 0x%x 0x%x]",
-                                  pHddCtx->cfg_ini->intfMacAddr[1].bytes[0],
-                                  pHddCtx->cfg_ini->intfMacAddr[1].bytes[1],
-                                  pHddCtx->cfg_ini->intfMacAddr[1].bytes[2],
-                                  pHddCtx->cfg_ini->intfMacAddr[1].bytes[3],
-                                  pHddCtx->cfg_ini->intfMacAddr[1].bytes[4],
-                                  pHddCtx->cfg_ini->intfMacAddr[1].bytes[5]);
+            "Name = [Intf1MacAddress] Value =["MAC_ADDRESS_STR"]",
+            MAC_ADDR_ARRAY(pHddCtx->cfg_ini->intfMacAddr[1].bytes));
 
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-          "Name = [Intf2MacAddress] Value =[0x%x 0x%x 0x%x 0x%x 0x%x 0x%x]",
-                                  pHddCtx->cfg_ini->intfMacAddr[2].bytes[0],
-                                  pHddCtx->cfg_ini->intfMacAddr[2].bytes[1],
-                                  pHddCtx->cfg_ini->intfMacAddr[2].bytes[2],
-                                  pHddCtx->cfg_ini->intfMacAddr[2].bytes[3],
-                                  pHddCtx->cfg_ini->intfMacAddr[2].bytes[4],
-                                  pHddCtx->cfg_ini->intfMacAddr[2].bytes[5]);
+            "Name = [Intf2MacAddress] Value =["MAC_ADDRESS_STR"]",
+            MAC_ADDR_ARRAY(pHddCtx->cfg_ini->intfMacAddr[2].bytes));
 
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-          "Name = [Intf3MacAddress] Value =[0x%x 0x%x 0x%x 0x%x 0x%x 0x%x]",
-                                  pHddCtx->cfg_ini->intfMacAddr[3].bytes[0],
-                                  pHddCtx->cfg_ini->intfMacAddr[3].bytes[1],
-                                  pHddCtx->cfg_ini->intfMacAddr[3].bytes[2],
-                                  pHddCtx->cfg_ini->intfMacAddr[3].bytes[3],
-                                  pHddCtx->cfg_ini->intfMacAddr[3].bytes[4],
-                                  pHddCtx->cfg_ini->intfMacAddr[3].bytes[5]);
-
+            "Name = [Intf3MacAddress] Value =["MAC_ADDRESS_STR"]",
+            MAC_ADDR_ARRAY(pHddCtx->cfg_ini->intfMacAddr[3].bytes));
 
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gApEnableUapsd] value = [%u]\n",pHddCtx->cfg_ini->apUapsdEnabled);
 
@@ -3334,6 +3424,12 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
 #ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nNeighborReassocRssiThreshold] Value = [%u] ",pHddCtx->cfg_ini->nNeighborReassocRssiThreshold);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nNeighborLookupRssiThreshold] Value = [%u] ",pHddCtx->cfg_ini->nNeighborLookupRssiThreshold);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+            "Name = [nOpportunisticThresholdDiff] Value = [%u] ",
+            pHddCtx->cfg_ini->nOpportunisticThresholdDiff);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+            "Name = [nRoamRescanRssiDiff] Value = [%u] ",
+            pHddCtx->cfg_ini->nRoamRescanRssiDiff);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nNeighborScanMinChanTime] Value = [%u] ",pHddCtx->cfg_ini->nNeighborScanMinChanTime);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nNeighborScanMaxChanTime] Value = [%u] ",pHddCtx->cfg_ini->nNeighborScanMaxChanTime);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nMaxNeighborRetries] Value = [%u] ",pHddCtx->cfg_ini->nMaxNeighborReqTries);
@@ -3391,6 +3487,7 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gAmsduSupportInAMPDU] Value = [%u] ",pHddCtx->cfg_ini->isAmsduSupportInAMPDU);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [nSelect5GHzMargin] Value = [%u] ",pHddCtx->cfg_ini->nSelect5GHzMargin);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gCoalesingInIBSS] Value = [%u] ",pHddCtx->cfg_ini->isCoalesingInIBSSAllowed);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fDfsPhyerrFilterOffload] Value = [%u] ",pHddCtx->cfg_ini->fDfsPhyerrFilterOffload);
 
 #ifdef IPA_OFFLOAD
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIPAEnable] Value = [%u] ",pHddCtx->cfg_ini->IpaEnable);
@@ -3534,6 +3631,116 @@ static int parseHexDigit(char c)
   return 0;
 }
 
+/* convert string to 6 bytes mac address
+ * 00AA00BB00CC -> 0x00 0xAA 0x00 0xBB 0x00 0xCC
+ */
+static void update_mac_from_string(hdd_context_t *pHddCtx, tCfgIniEntry *macTable, int num)
+{
+   int i = 0, j = 0, res = 0;
+   char *candidate = NULL;
+   v_MACADDR_t macaddr[VOS_MAX_CONCURRENCY_PERSONA];
+
+   memset(macaddr, 0, sizeof(macaddr));
+
+   for (i = 0; i < num; i++)
+   {
+      candidate = macTable[i].value;
+      for (j = 0; j < VOS_MAC_ADDR_SIZE; j++) {
+         res = hex2bin(&macaddr[i].bytes[j], &candidate[(j<<1)], 1);
+         if (res < 0)
+            break;
+      }
+      if (res == 0 && !vos_is_macaddr_zero(&macaddr[i])) {
+         vos_mem_copy((v_U8_t *)&pHddCtx->cfg_ini->intfMacAddr[i].bytes[0],
+                      (v_U8_t *)&macaddr[i].bytes[0], VOS_MAC_ADDR_SIZE);
+      }
+   }
+}
+
+/*
+ * This function tries to update macaddress from cfg file.
+ * It overwrites the MAC address if config file exist.
+ */
+VOS_STATUS hdd_update_mac_config(hdd_context_t *pHddCtx)
+{
+   int status, i = 0;
+   const struct firmware *fw = NULL;
+   char *line, *buffer = NULL;
+   char *name, *value;
+   tCfgIniEntry macTable[VOS_MAX_CONCURRENCY_PERSONA];
+
+   VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
+
+   memset(macTable, 0, sizeof(macTable));
+   status = request_firmware(&fw, WLAN_MAC_FILE, pHddCtx->parent_dev);
+
+   if (status)
+   {
+      hddLog(VOS_TRACE_LEVEL_WARN, "%s: request_firmware failed %d\n",
+             __func__, status);
+      vos_status = VOS_STATUS_E_FAILURE;
+      return vos_status;
+   }
+   if (!fw || !fw->data || !fw->size)
+   {
+      hddLog(VOS_TRACE_LEVEL_FATAL, "%s: invalid firmware\n", __func__);
+      vos_status = VOS_STATUS_E_INVAL;
+      goto config_exit;
+   }
+
+   buffer = (char *)fw->data;
+
+   /* data format:
+    * Intf0MacAddress=00AA00BB00CC
+    * Intf1MacAddress=00AA00BB00CD
+    * END
+    */
+   while (buffer != NULL)
+   {
+      line = get_next_line(buffer);
+      buffer = i_trim(buffer);
+
+      if (strlen((char *)buffer) == 0 || *buffer == '#') {
+         buffer = line;
+         continue;
+      }
+      if (strncmp(buffer, "END", 3) == 0)
+         break;
+
+      name = buffer;
+      buffer = strchr(buffer, '=');
+      if (buffer) {
+         *buffer++ = '\0';
+         i_trim(name);
+         if (strlen(name) != 0) {
+            buffer = i_trim(buffer);
+            if (strlen(buffer) == 12) {
+               value = buffer;
+               macTable[i].name = name;
+               macTable[i++].value = value;
+               if (i >= VOS_MAX_CONCURRENCY_PERSONA)
+                  break;
+            }
+         }
+      }
+      buffer = line;
+   }
+   if (i <= VOS_MAX_CONCURRENCY_PERSONA) {
+      hddLog(VOS_TRACE_LEVEL_INFO, "%s: %d Mac addresses provided\n", __func__, i);
+   }
+   else {
+      hddLog(VOS_TRACE_LEVEL_ERROR, "%s: invalid number of Mac address provided, nMac = %d\n",
+             __func__, i);
+      vos_status = VOS_STATUS_E_INVAL;
+      goto config_exit;
+   }
+
+   update_mac_from_string(pHddCtx, &macTable[0], i);
+
+config_exit:
+   release_firmware(fw);
+   return vos_status;
+}
 
 static VOS_STATUS hdd_apply_cfg_ini( hdd_context_t *pHddCtx, tCfgIniEntry* iniTable, unsigned long entries)
 {
@@ -4145,9 +4352,8 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
       if ( VOS_FALSE == vos_is_macaddr_group( &pConfig->IbssBssid ))
       {
          VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_MED,
-                    "MAC Addr (IBSS BSSID) read from Registry is: %02x-%02x-%02x-%02x-%02x-%02x",
-                    pConfig->IbssBssid.bytes[0], pConfig->IbssBssid.bytes[1], pConfig->IbssBssid.bytes[2],
-                    pConfig->IbssBssid.bytes[3], pConfig->IbssBssid.bytes[4], pConfig->IbssBssid.bytes[5]);
+                    "MAC Addr (IBSS BSSID) read from Registry is: " MAC_ADDRESS_STR,
+                    MAC_ADDR_ARRAY(pConfig->IbssBssid.bytes));
          if (ccmCfgSetStr(pHddCtx->hHal, WNI_CFG_BSSID, pConfig->IbssBssid.bytes,
             sizeof(v_BYTE_t) * VOS_MAC_ADDR_SIZE, NULL, eANI_BOOLEAN_FALSE)==eHAL_STATUS_FAILURE)
          {
@@ -4489,7 +4695,7 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
                temp = (temp & 0xFFF3) | (pConfig->vhtTxMCS2x2 << 2);
 
            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-                    "vhtRxMCS2x2 - %x temp - %lu enable2x2 %d\n",
+                    "vhtRxMCS2x2 - %x temp - %u enable2x2 %d\n",
                     pConfig->vhtRxMCS2x2, temp, pConfig->enable2x2);
 
            if(ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_VHT_TX_MCS_MAP,
@@ -4604,7 +4810,12 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
      }
      else
      {
+#ifndef QCA_WIFI_2_0
             val = WNI_CFG_ASSOC_STA_LIMIT_STADEF;
+#else
+            val = pConfig->maxNumberOfPeers;
+#endif
+
      }
      if(ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_ASSOC_STA_LIMIT, val,
          NULL, eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE)
@@ -4841,15 +5052,6 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    smeConfig.csrConfig.nRoamIntraBand            = pConfig->nRoamIntraBand;
    smeConfig.csrConfig.nProbes                   = pConfig->nProbes;
 
-   if (pConfig->nRoamScanHomeAwayTime < (pConfig->nNeighborScanMaxChanTime + (2 * HDD_ROAM_SCAN_CHANNEL_SWITCH_TIME)))
-   {
-       VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_WARN,
-              "%s: Invalid config, Home away time(%d) is less than twice RF switching time + channel max time(%d)"
-              " Hence enforcing home away time to disable (0)",
-              __func__, pConfig->nRoamScanHomeAwayTime,
-              (pConfig->nNeighborScanMaxChanTime + (2 * HDD_ROAM_SCAN_CHANNEL_SWITCH_TIME)));
-       pConfig->nRoamScanHomeAwayTime = 0;
-   }
    smeConfig.csrConfig.nRoamScanHomeAwayTime     = pConfig->nRoamScanHomeAwayTime;
 #endif
    smeConfig.csrConfig.fFirstScanOnly2GChnl      = pConfig->enableFirstScan2GOnly;
@@ -4922,6 +5124,10 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
 #ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
    smeConfig.csrConfig.neighborRoamConfig.nNeighborReassocRssiThreshold = pConfig->nNeighborReassocRssiThreshold;
    smeConfig.csrConfig.neighborRoamConfig.nNeighborLookupRssiThreshold = pConfig->nNeighborLookupRssiThreshold;
+   smeConfig.csrConfig.neighborRoamConfig.nOpportunisticThresholdDiff =
+       pConfig->nOpportunisticThresholdDiff;
+   smeConfig.csrConfig.neighborRoamConfig.nRoamRescanRssiDiff =
+       pConfig->nRoamRescanRssiDiff;
    smeConfig.csrConfig.neighborRoamConfig.nNeighborScanMaxChanTime = pConfig->nNeighborScanMaxChanTime;
    smeConfig.csrConfig.neighborRoamConfig.nNeighborScanMinChanTime = pConfig->nNeighborScanMinChanTime;
    smeConfig.csrConfig.neighborRoamConfig.nNeighborScanTimerPeriod = pConfig->nNeighborScanPeriod;
@@ -4961,6 +5167,7 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
 #ifdef QCA_WIFI_2_0
    /* Update the p2p listen offload setting */
    smeConfig.fP2pListenOffload =  pHddCtx->cfg_ini->fP2pListenOffload;
+   smeConfig.csrConfig.scanBandPreference = eCSR_BAND_ALL;
 #endif
 
 #ifdef FEATURE_WLAN_SCAN_PNO
@@ -4968,6 +5175,10 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    smeConfig.pnoOffload = pHddCtx->cfg_ini->PnoOffload;
 #endif
 
+   /* Update maximum interfaces information */
+   smeConfig.max_intf_count = pHddCtx->max_intf_count;
+
+   smeConfig.fEnableDebugLog = pHddCtx->cfg_ini->gEnableDebugLog;
    halStatus = sme_UpdateConfig( pHddCtx->hHal, &smeConfig);
    if ( !HAL_STATUS_SUCCESS( halStatus ) )
    {

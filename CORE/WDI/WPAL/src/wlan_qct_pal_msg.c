@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,14 +24,15 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**=========================================================================
-  
+
   \file  wlan_qct_pal_msg.c
-  
+
   \brief Implementation message APIs PAL exports. wpt = (Wlan Pal Type) wpal = (Wlan PAL)
-               
+
    Definitions for platform with legacy UMAC support.
-  
+
   ========================================================================*/
 
 #include "wlan_qct_pal_msg.h"
@@ -43,7 +44,7 @@
 
 /*---------------------------------------------------------------------------
      wpalPostCtrlMsg - Post a message to control context so it can be processed in that context.
-    Param: 
+    Param:
         pPalContext - A PAL context
         pMsg - a pointer to called allocated opaque object;
 ---------------------------------------------------------------------------*/
@@ -81,7 +82,7 @@ wpt_status wpalPostCtrlMsg(void *pPalContext, wpt_msg *pMsg)
 
 /*---------------------------------------------------------------------------
      wpalPostTxMsg - Post a message to TX context so it can be processed in that context.
-    Param: 
+    Param:
         pPalContext - A PAL context PAL
         pMsg - a pointer to called allocated opaque object;
 ---------------------------------------------------------------------------*/
@@ -118,7 +119,7 @@ wpt_status wpalPostTxMsg(void *pPalContext, wpt_msg *pMsg)
 
 /*---------------------------------------------------------------------------
      wpalPostRxMsg - Post a message to RX context so it can be processed in that context.
-    Param: 
+    Param:
         pPalContext - A PAL context
         pMsg - a pointer to called allocated opaque object;
 ---------------------------------------------------------------------------*/
@@ -151,4 +152,3 @@ wpt_status wpalPostRxMsg(void *pPalContext, wpt_msg *pMsg)
 
    return status;
 }
-

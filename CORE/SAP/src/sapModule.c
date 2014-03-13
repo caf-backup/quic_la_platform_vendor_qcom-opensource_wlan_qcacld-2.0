@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*===========================================================================
 
                       s a p M o d u l e . C
@@ -37,7 +38,6 @@
   DEPENDENCIES:
 
   Are listed for each API below.
-
 ===========================================================================*/
 
 /*===========================================================================
@@ -145,7 +145,11 @@ WLANSAP_Open
 
     ptSapContext  pSapCtx = NULL;
     /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -*/
-    VOS_ASSERT(pvosGCtx);
+    if (NULL == pvosGCtx)
+    {
+       VOS_ASSERT(pvosGCtx);
+       return VOS_STATUS_E_FAULT;
+    }
     /*------------------------------------------------------------------------
     Allocate (and sanity check?!) SAP control block
     ------------------------------------------------------------------------*/
@@ -592,6 +596,7 @@ WLANSAP_StartBss
 
         /* Channel selection is auto or configured */
         pSapCtx->channel = pConfig->channel;
+        pSapCtx->scanBandPreference = pConfig->scanBandPreference;
         pSapCtx->pUsrContext = pUsrContext;
 
         //Set the BSSID to your "self MAC Addr" read the mac address from Configuation ITEM received from HDD
@@ -1054,10 +1059,9 @@ WLANSAP_ModifyACL
     if (staInWhiteList && staInBlackList)
     {
         VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
-                "Peer mac %02x:%02x:%02x:%02x:%02x:%02x found in white and black lists."
+                "Peer mac "MAC_ADDRESS_STR" found in white and black lists."
                 "Initial lists passed incorrect. Cannot execute this command.",
-                pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2], pPeerStaMac[3],
-                pPeerStaMac[4], pPeerStaMac[5]);
+                MAC_ADDR_ARRAY(pPeerStaMac));
         return VOS_STATUS_E_FAILURE;
 
     }
@@ -1073,18 +1077,16 @@ WLANSAP_ModifyACL
                 if (pSapCtx->nAcceptMac == MAX_ACL_MAC_ADDRESS)
                 {
                     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
-                            "White list is already maxed out. Cannot accept %02x:%02x:%02x:%02x:%02x:%02x",
-                            pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2], pPeerStaMac[3],
-                            pPeerStaMac[4], pPeerStaMac[5]);
+                            "White list is already maxed out. Cannot accept "MAC_ADDRESS_STR,
+                            MAC_ADDR_ARRAY(pPeerStaMac));
                     return VOS_STATUS_E_FAILURE;
                 }
                 if (staInWhiteList)
                 {
                     //Do nothing if already present in white list. Just print a warning
                     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_WARN,
-                            "MAC address already present in white list %02x:%02x:%02x:%02x:%02x:%02x",
-                            pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2], pPeerStaMac[3],
-                            pPeerStaMac[4], pPeerStaMac[5]);
+                            "MAC address already present in white list "MAC_ADDRESS_STR,
+                            MAC_ADDR_ARRAY(pPeerStaMac));
                 } else
                 {
                     if (staInBlackList)
@@ -1113,9 +1115,8 @@ WLANSAP_ModifyACL
                 else
                 {
                     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_WARN,
-                            "MAC address to be deleted is not present in the white list %02x:%02x:%02x:%02x:%02x:%02x",
-                            pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2], pPeerStaMac[3],
-                            pPeerStaMac[4], pPeerStaMac[5]);
+                            "MAC address to be deleted is not present in the white list "MAC_ADDRESS_STR,
+                            MAC_ADDR_ARRAY(pPeerStaMac));
                     return VOS_STATUS_E_FAILURE;
                 }
             }
@@ -1136,18 +1137,16 @@ WLANSAP_ModifyACL
                 if (pSapCtx->nDenyMac == MAX_ACL_MAC_ADDRESS)
                 {
                     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
-                            "Black list is already maxed out. Cannot accept %02x:%02x:%02x:%02x:%02x:%02x",
-                            pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2], pPeerStaMac[3],
-                            pPeerStaMac[4], pPeerStaMac[5]);
+                            "Black list is already maxed out. Cannot accept "MAC_ADDRESS_STR,
+                            MAC_ADDR_ARRAY(pPeerStaMac));
                     return VOS_STATUS_E_FAILURE;
                 }
                 if (staInBlackList)
                 {
                     //Do nothing if already present in white list
                     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_WARN,
-                            "MAC address already present in black list %02x:%02x:%02x:%02x:%02x:%02x",
-                            pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2], pPeerStaMac[3],
-                            pPeerStaMac[4], pPeerStaMac[5]);
+                            "MAC address already present in black list "MAC_ADDRESS_STR,
+                            MAC_ADDR_ARRAY(pPeerStaMac));
                 } else
                 {
                     if (staInWhiteList)
@@ -1176,9 +1175,8 @@ WLANSAP_ModifyACL
                 else
                 {
                     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_WARN,
-                            "MAC address to be deleted is not present in the black list %02x:%02x:%02x:%02x:%02x:%02x",
-                            pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2], pPeerStaMac[3],
-                            pPeerStaMac[4], pPeerStaMac[5]);
+                            "MAC address to be deleted is not present in the black list "MAC_ADDRESS_STR,
+                            MAC_ADDR_ARRAY(pPeerStaMac));
                     return VOS_STATUS_E_FAILURE;
                 }
             }
@@ -2360,6 +2358,187 @@ VOS_STATUS WLANSAP_DeRegisterMgmtFrame( v_PVOID_t pvosGCtx, tANI_U16 frameType,
 
     VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
                     "Failed to Deregister MGMT frame");
+
+    return VOS_STATUS_E_FAULT;
+}
+
+/*==========================================================================
+  FUNCTION   WLANSAP_ChannelChangeRequest
+
+  DESCRIPTION
+   This API is used to send an Indication to SME/PE to change the
+   current operating channel to a different target channel.
+
+   The Channel change will be issued by SAP under the following
+   scenarios.
+   1. A radar indication is received  during SAP CAC WAIT STATE and
+      channel change is required.
+   2. A radar indication is received during SAP STARTED STATE and
+      channel change is required.
+  DEPENDENCIES
+   NA.
+
+  PARAMETERS
+  IN
+  sapContext: Pointer to vos global context structure
+
+  RETURN VALUE
+  The VOS_STATUS code associated with performing the operation
+
+  VOS_STATUS_SUCCESS:  Success
+
+  SIDE EFFECTS
+============================================================================*/
+VOS_STATUS
+WLANSAP_ChannelChangeRequest(v_PVOID_t pSapCtx, tANI_U8 tArgetChannel)
+{
+    ptSapContext sapContext = NULL;
+    eHalStatus halStatus = eHAL_STATUS_FAILURE;
+    v_PVOID_t hHal = NULL;
+    sapContext = (ptSapContext)pSapCtx;
+
+    if ( NULL == sapContext )
+    {
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                   "%s: Invalid SAP pointer from pvosGCtx", __func__);
+        return VOS_STATUS_E_FAULT;
+    }
+
+    hHal = VOS_GET_HAL_CB(sapContext->pvosGCtx);
+    if (NULL == hHal)
+    {
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                   "%s: Invalid HAL pointer from pvosGCtx", __func__);
+        return VOS_STATUS_E_FAULT;
+    }
+
+    halStatus = sme_RoamChannelChangeReq( hHal, sapContext->sessionId, tArgetChannel,
+                sapConvertSapPhyModeToCsrPhyMode(sapContext->csrRoamProfile.phyMode));
+
+    if (halStatus == eHAL_STATUS_SUCCESS)
+    {
+        return VOS_STATUS_SUCCESS;
+    }
+    return VOS_STATUS_E_FAULT;
+}
+
+/*==========================================================================
+
+ FUNCTION    WLANSAP_StartBeaconReq
+ DESCRIPTION
+  This API is used to send an Indication to SME/PE to start
+  beaconing on the current operating channel.
+
+  Brief:When SAP is started on DFS channel and when ADD BSS RESP is received
+  LIM temporarily holds off Beaconing for SAP to do CAC WAIT. When
+  CAC WAIT is done SAP resumes the Beacon Tx by sending a start beacon
+  request to LIM.
+
+ DEPENDENCIES
+  NA.
+
+PARAMETERS
+
+IN
+  pvosGCtx: Pointer to vos global context structure
+
+RETURN VALUE
+  The VOS_STATUS code associated with performing the operation
+
+VOS_STATUS_SUCCESS:  Success
+
+SIDE EFFECTS
+============================================================================*/
+VOS_STATUS WLANSAP_StartBeaconReq(v_PVOID_t pSapCtx)
+{
+    ptSapContext sapContext = NULL;
+    eHalStatus halStatus = eHAL_STATUS_FAILURE;
+    v_PVOID_t hHal = NULL;
+    tANI_U8 dfsCacWaitStatus = 0;
+    sapContext = (ptSapContext)pSapCtx;
+
+    if ( NULL == sapContext )
+    {
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                   "%s: Invalid SAP pointer from pvosGCtx", __func__);
+        return VOS_STATUS_E_FAULT;
+    }
+
+    hHal = VOS_GET_HAL_CB(sapContext->pvosGCtx);
+    if (NULL == hHal)
+    {
+       VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+       "%s: Invalid HAL pointer from pvosGCtx", __func__);
+       return VOS_STATUS_E_FAULT;
+    }
+
+    /* No Radar was found during CAC WAIT, So start Beaconing */
+    if (sapContext->SapDfsInfo.sap_radar_found_status == VOS_FALSE)
+    {
+       /* CAC Wait done without any Radar Detection */
+       dfsCacWaitStatus = VOS_TRUE;
+       halStatus = sme_RoamStartBeaconReq( hHal,
+                   sapContext->sessionId, dfsCacWaitStatus);
+       if (halStatus == eHAL_STATUS_SUCCESS)
+       {
+           return VOS_STATUS_SUCCESS;
+       }
+       return VOS_STATUS_E_FAULT;
+    }
+
+    return VOS_STATUS_E_FAULT;
+}
+
+
+/*==========================================================================
+  FUNCTION    WLANSAP_DfsSendCSAIeRequest
+
+  DESCRIPTION
+   This API is used to send channel switch announcement request to PE
+  DEPENDENCIES
+   NA.
+
+  PARAMETERS
+  IN
+  sapContext: Pointer to vos global context structure
+
+  RETURN VALUE
+  The VOS_STATUS code associated with performing the operation
+
+  VOS_STATUS_SUCCESS:  Success
+
+  SIDE EFFECTS
+============================================================================*/
+VOS_STATUS
+WLANSAP_DfsSendCSAIeRequest(v_PVOID_t pSapCtx)
+{
+    ptSapContext sapContext = NULL;
+    eHalStatus halStatus = eHAL_STATUS_FAILURE;
+    v_PVOID_t hHal = NULL;
+    sapContext = (ptSapContext)pSapCtx;
+
+    if ( NULL == sapContext )
+    {
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                   "%s: Invalid SAP pointer from pvosGCtx", __func__);
+        return VOS_STATUS_E_FAULT;
+    }
+
+    hHal = VOS_GET_HAL_CB(sapContext->pvosGCtx);
+    if (NULL == hHal)
+    {
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                   "%s: Invalid HAL pointer from pvosGCtx", __func__);
+        return VOS_STATUS_E_FAULT;
+    }
+
+    halStatus = sme_RoamCsaIeRequest(hHal, sapContext->sessionId,
+                              sapContext->SapDfsInfo.target_channel,
+                              sapContext->SapDfsInfo.csaIERequired);
+    if (halStatus == eHAL_STATUS_SUCCESS)
+    {
+        return VOS_STATUS_SUCCESS;
+    }
 
     return VOS_STATUS_E_FAULT;
 }

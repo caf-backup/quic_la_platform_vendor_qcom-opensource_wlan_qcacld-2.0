@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,19 +24,19 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- * */
+
+
 #if !defined( __VOS_UTILS_H )
 #define __VOS_UTILS_H
- 
+
 /**=========================================================================
-  
+
   \file  vos_utils.h
-  
+
   \brief virtual Operating System Services (vOSS) utility APIs
-               
+
    Various utility functions
-  
+
   ========================================================================*/
 
 /* $Header$ */
@@ -48,7 +48,7 @@
 #include <vos_status.h>
 //#include <Wincrypt.h>
 
-/*-------------------------------------------------------------------------- 
+/*--------------------------------------------------------------------------
   Preprocessor definitions and constants
   ------------------------------------------------------------------------*/
 #define VOS_DIGEST_SHA1_SIZE    20
@@ -64,12 +64,12 @@
 #define VOS_CHAN_14_FREQ       2484
 #define VOS_CHAN_15_FREQ       2512
 
-/*-------------------------------------------------------------------------- 
+/*--------------------------------------------------------------------------
   Type declarations
   ------------------------------------------------------------------------*/
 
 
-/*------------------------------------------------------------------------- 
+/*-------------------------------------------------------------------------
   Function declarations and documenation
   ------------------------------------------------------------------------*/
 
@@ -89,7 +89,7 @@ VOS_STATUS vos_crypto_deinit( v_U32_t hCryptProv );
  * @param pbBuf - the caller allocated location where the bytes should be copied
  * @param numBytes the number of bytes that should be generated and
  * copied
- * 
+ *
  * @return VOS_STATUS_SUCCSS if the operation succeeds
 */
 VOS_STATUS vos_rand_get_bytes( v_U32_t handle, v_U8_t *pbBuf, v_U32_t numBytes );
@@ -168,4 +168,9 @@ VOS_STATUS vos_decrypt_AES(v_U32_t cryptHandle, /* Handle */
 
 v_U32_t vos_chan_to_freq(v_U8_t chan);
 v_U8_t vos_freq_to_chan(v_U32_t freq);
+#ifdef WLAN_FEATURE_11W
+v_BOOL_t vos_is_mmie_valid(v_U8_t *key, v_U8_t *ipn,
+				v_U8_t* frm, v_U8_t* efrm);
+v_U8_t vos_get_mmie_size(void);
+#endif /* WLAN_FEATURE_11W */
 #endif // #if !defined __VOSS_UTILS_H

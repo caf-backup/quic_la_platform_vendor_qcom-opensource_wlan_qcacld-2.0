@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _VOW_DEFINES__H_
 #define _VOW_DEFINES__H_
 
@@ -32,7 +33,7 @@
 #define RTP_HDR_OFFSET  42    /* RTP header offset in network buffer */
 #define EXT_HDR_OFFSET 54     /* Extension header offset in network buffer */
 #define UDP_PDU_RTP_EXT  0x90   /* ((2 << 6) | (1 << 4)) RTP Version 2 + X bit */
-#define IP_VER4_N_NO_EXTRA_HEADERS 0x45 
+#define IP_VER4_N_NO_EXTRA_HEADERS 0x45
 #define IPERF3_DATA_OFFSET 12  /* iperf3 data offset from EXT_HDR_OFFSET */
 #define HAL_RX_40  0x08 /* 40 Mhz */
 #define HAL_RX_GI  0x04    /* full gi */
@@ -58,7 +59,7 @@ struct vow_extstats {
 
 /**
  * @brief populates vow ext stats in given network buffer.
- * @param msdu - network buffer handle 
+ * @param msdu - network buffer handle
  * @param pdev - handle to htt dev.
  */
 void ol_ath_add_vow_extstats(htt_pdev_handle pdev, adf_nbuf_t msdu);

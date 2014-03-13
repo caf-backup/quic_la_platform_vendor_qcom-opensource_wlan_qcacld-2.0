@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file parserApi.h contains the definitions used
  * for parsing received 802.11 frames
@@ -180,7 +181,7 @@ typedef struct sSirAssocReq
     tSirMacWpaInfo            wpa;
     tSirMacRsnInfo            rsn;
     tSirAddie                 addIE;
-    
+
     tSirPropIEStruct          propIEinfo;
     tSirMacPowerCapabilityIE  powerCapability;
     tSirMacSupportedChannelIE supportedChannels;
@@ -203,7 +204,7 @@ typedef struct sSirAssocReq
 
     tANI_U8                   powerCapabilityPresent;
     tANI_U8                   supportedChannelsPresent;
-    // keeing copy of assoction request received, this is 
+    // keeing copy of assoction request received, this is
     // required for indicating the frame to upper layers
     tANI_U32                  assocReqFrameLength;
     tANI_U8*                  assocReqFrame;
@@ -211,6 +212,7 @@ typedef struct sSirAssocReq
     tDot11fIEVHTCaps          VHTCaps;
     tDot11fIEOperatingMode    operMode;
 #endif
+    tDot11fIEExtCap           ExtCap;
 } tSirAssocReq, *tpSirAssocReq;
 
 
@@ -232,7 +234,7 @@ typedef struct sSirAssocRsp
 #if defined WLAN_FEATURE_VOWIFI_11R
     tDot11fIEFTInfo           FTInfo;
     tANI_U8                   mdie[SIR_MDIE_SIZE];
-    tANI_U8                   num_RICData; 
+    tANI_U8                   num_RICData;
     tDot11fIERICDataDesc      RICData[2];
 #endif
 
@@ -257,11 +259,12 @@ typedef struct sSirAssocRsp
 #ifdef FEATURE_WLAN_CCX
     tANI_U8                   tspecPresent;
     tANI_U8                   tsmPresent;
-#endif    
+#endif
 #ifdef WLAN_FEATURE_11AC
     tDot11fIEVHTCaps          VHTCaps;
     tDot11fIEVHTOperation     VHTOperation;
 #endif
+    tDot11fIEExtCap           ExtCap;
 } tSirAssocRsp, *tpSirAssocRsp;
 
 #if defined(FEATURE_WLAN_CCX_UPLOAD)
@@ -521,9 +524,9 @@ PopulateDot11fExtSuppRates(tpAniSirGlobal      pMac,
                            tpPESession psessionEntry);
 
 #if defined WLAN_FEATURE_VOWIFI
-tSirRetStatus 
-PopulateDot11fBeaconReport(tpAniSirGlobal       pMac, 
-                           tDot11fIEMeasurementReport *pDot11f, 
+tSirRetStatus
+PopulateDot11fBeaconReport(tpAniSirGlobal       pMac,
+                           tDot11fIEMeasurementReport *pDot11f,
                            tSirMacBeaconReport *pBeaconReport );
 #endif
 
@@ -624,7 +627,7 @@ void
 PopulateDot11fQOSCapsStation(tpAniSirGlobal           pMac,
                              tDot11fIEQOSCapsStation *pDot11f);
 
-tSirRetStatus 
+tSirRetStatus
 PopulateDot11fRSN(tpAniSirGlobal  pMac,
                   tpSirRSNie      pRsnIe,
                   tDot11fIERSN   *pDot11f);
@@ -828,12 +831,12 @@ tSirRetStatus DePopulateDot11fWscRegistrarInfoInProbeRes(tpAniSirGlobal pMac,
                                                          tDot11fIEWscProbeRes *pDot11f);
 
 
-tSirRetStatus PopulateDot11fAssocResWscIE(tpAniSirGlobal pMac, 
-                                          tDot11fIEWscAssocRes *pDot11f, 
+tSirRetStatus PopulateDot11fAssocResWscIE(tpAniSirGlobal pMac,
+                                          tDot11fIEWscAssocRes *pDot11f,
                                           tpSirAssocReq pRcvdAssocReq);
 
-tSirRetStatus PopulateDot11AssocResP2PIE(tpAniSirGlobal pMac, 
-                                       tDot11fIEP2PAssocRes *pDot11f, 
+tSirRetStatus PopulateDot11AssocResP2PIE(tpAniSirGlobal pMac,
+                                       tDot11fIEP2PAssocRes *pDot11f,
                                        tpSirAssocReq pRcvdAssocReq);
 
 tSirRetStatus PopulateDot11fWscInAssocRes(tpAniSirGlobal pMac,
@@ -844,8 +847,8 @@ tSirRetStatus PopulateDot11fWscInAssocRes(tpAniSirGlobal pMac,
 tSirRetStatus PopulateDot11fWFATPC( tpAniSirGlobal        pMac,
                                     tDot11fIEWFATPC *pDot11f, tANI_U8 txPower, tANI_U8 linkMargin );
 
-tSirRetStatus PopulateDot11fRRMIe( tpAniSirGlobal pMac, 
-                                   tDot11fIERRMEnabledCap *pDot11f, 
+tSirRetStatus PopulateDot11fRRMIe( tpAniSirGlobal pMac,
+                                   tDot11fIERRMEnabledCap *pDot11f,
                                    tpPESession    psessionEntry );
 #endif
 
@@ -856,7 +859,7 @@ void PopulateFTInfo( tpAniSirGlobal      pMac,
                      tDot11fIEFTInfo     *pDot11f );
 #endif
 
-void PopulateDot11fAssocRspRates ( tpAniSirGlobal pMac, tDot11fIESuppRates *pSupp, 
+void PopulateDot11fAssocRspRates ( tpAniSirGlobal pMac, tDot11fIESuppRates *pSupp,
       tDot11fIEExtSuppRates *pExt, tANI_U16 *_11bRates, tANI_U16 *_11aRates );
 
 int FindIELocation( tpAniSirGlobal pMac,
@@ -876,7 +879,7 @@ tSirRetStatus
 PopulateDot11fVHTExtBssLoad(tpAniSirGlobal  pMac, tDot11fIEVHTExtBssLoad   *pDot11f);
 
 tSirRetStatus
-PopulateDot11fExtCap(tpAniSirGlobal pMac, tDot11fIEExtCap * pDot11f);
+PopulateDot11fExtCap(tpAniSirGlobal pMac, tANI_BOOLEAN isVHTEnabled, tDot11fIEExtCap * pDot11f);
 
 tSirRetStatus
 PopulateDot11fOperatingMode(tpAniSirGlobal pMac, tDot11fIEOperatingMode *pDot11f, tpPESession psessionEntry );

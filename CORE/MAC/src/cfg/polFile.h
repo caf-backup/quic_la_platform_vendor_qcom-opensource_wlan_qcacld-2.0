@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,14 +24,16 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 //==================================================================
 //
 //  File:         polFile.h
 //
-//  Description:  Structures that define the firmware file format.                
+//  Description:  Structures that define the firmware file format.
 //
 //  Author:       Larry Cawley
-// 
+//
+////
 //  Change History:
 //  04/09/2002 - LAC - Initial version.
 //
@@ -41,7 +43,7 @@
 
 
 
-   
+
 // File format
 //
 //  byte 0        1        2       3
@@ -68,7 +70,7 @@
 // |                                    |                             |
 // | Directory Entry 1 Length           |   DirEntryLength            |
 // +------------------------------------+                        <----+
-// |            . . .                   |                        . . . 
+// |            . . .                   |                        . . .
 // +------------------------------------+                        <----+
 // |                                    |                             |
 // | Directory Entry n Type             |                             |
@@ -100,7 +102,7 @@
 // +---------+---------+
 //
 //
-//         
+//
 //
 
 
@@ -121,8 +123,8 @@ typedef struct sPolFileHeader {
 
   tPolFileVersion FileVersion;
   tPolFileVersion HWCapabilities;
-  unsigned long   FileLength;
-  unsigned long   NumDirectoryEntries;
+  unsigned int   FileLength;
+  unsigned int   NumDirectoryEntries;
 
 } tPolFileHeader;
 
@@ -141,9 +143,9 @@ typedef enum ePolFileDirTypes {
 
 typedef struct sPolFileDirEntry {
 
-  unsigned long DirEntryType;
-  unsigned long DirEntryFileOffset;
-  unsigned long DirEntryLength;
+  unsigned int DirEntryType;
+  unsigned int DirEntryFileOffset;
+  unsigned int DirEntryLength;
 
 } tPolFileDirEntry;
 
@@ -169,4 +171,3 @@ __inline unsigned short polFileChkSum( unsigned short *FileData, unsigned long N
 
 
 #endif
-

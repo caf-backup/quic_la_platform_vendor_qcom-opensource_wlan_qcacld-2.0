@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -25,16 +25,17 @@
  * to the Linux Foundation.
  */
 
+
 #if !defined( __SMERRMAPI_H )
 #define __SMERRMAPI_H
 
 
 /**=========================================================================
-  
+
   \file  sme_RrmApi.h
-  
+
   \brief prototype for SME RRM APIs
-  
+
   ========================================================================*/
 
 /* $Header$ */
@@ -53,7 +54,7 @@
 
 
 //APIs
-eHalStatus sme_RrmMsgProcessor( tpAniSirGlobal pMac,  v_U16_t msg_type, 
+eHalStatus sme_RrmMsgProcessor( tpAniSirGlobal pMac,  v_U16_t msg_type,
                                 void *pMsgBuf);
 
 VOS_STATUS rrmClose (tpAniSirGlobal pMac);

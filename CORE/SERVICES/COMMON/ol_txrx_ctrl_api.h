@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_txrx_ctrl_api.h
  * @brief Define the host data API functions called by the host control SW.
@@ -148,7 +149,7 @@ ol_txrx_peer_attach(
 /**
 * @brief Parameter type to be input to ol_txrx_peer_update
 * @details
-*  This struct is union,to be used to specify various informations to update 
+*  This struct is union,to be used to specify various informations to update
 *   txrx peer object.
 */
 typedef union  {
@@ -270,8 +271,8 @@ ol_txrx_tx_release(
 /**
  * @brief Suspend all tx data for the specified virtual device.
  * @details
- *  This function applies only to HL systems - in LL systems, tx flow control
- *  is handled entirely within the target FW.
+ *  This function applies primarily to HL systems, but also applies to
+ *  LL systems that use per-vdev tx queues for MCC or thermal throttling.
  *  As an example, this function could be used when a single-channel physical
  *  device supports multiple channels by jumping back and forth between the
  *  channels in a time-shared manner.  As the device is switched from channel
@@ -288,10 +289,29 @@ ol_txrx_vdev_pause(ol_txrx_vdev_handle data_vdev);
 #endif /* CONFIG_HL_SUPPORT */
 
 /**
+ * @brief Drop all tx data for the specified virtual device.
+ * @details
+ *  This function applies primarily to HL systems, but also applies to
+ *  LL systems that use per-vdev tx queues for MCC or thermal throttling.
+ *  This function would typically be used by the ctrl SW after it parks
+ *  a STA vdev and then resumes it, but to a new AP.  In this case, though
+ *  the same vdev can be used, any old tx frames queued inside it would be
+ *  stale, and would need to be discarded.
+ *
+ * @param data_vdev - the virtual device being flushed
+ */
+#if defined(CONFIG_HL_SUPPORT) || defined(QCA_SUPPORT_TXRX_VDEV_PAUSE_LL)
+void
+ol_txrx_vdev_flush(ol_txrx_vdev_handle data_vdev);
+#else
+#define ol_txrx_vdev_flush(data_vdev) /* no-op */
+#endif /* CONFIG_HL_SUPPORT */
+
+/**
  * @brief Resume tx for the specified virtual device.
  * @details
- *  This function applies only to HL systems - in LL systems, tx flow control
- *  is handled entirely within the target FW.
+ *  This function applies primarily to HL systems, but also applies to
+ *  LL systems that use per-vdev tx queues for MCC or thermal throttling.
  *
  * @param data_vdev - the virtual device being unpaused
  */
@@ -311,7 +331,7 @@ ol_txrx_vdev_unpause(ol_txrx_vdev_handle data_vdev);
  *  suspend all WLAN traffic, e.g. to allow another device such as bluetooth
  *  to temporarily have exclusive access to shared RF chain resources.
  *  This function suspends tx traffic within the specified physical device.
- * 
+ *
  * @param data_pdev - the physical device being paused
  */
 #if defined(CONFIG_HL_SUPPORT)
@@ -500,8 +520,8 @@ ol_txrx_mgmt_tx_cb_set(
  * @param vdev - virtual device transmitting the frame
  * @param tx_mgmt_frm - management frame to transmit
  * @param type - the type of managment frame (determines what callback to use)
- * @param use_6mbps - specify whether management frame to transmit should use 6 Mbps 
- *                    rather than 1 Mbps min rate(for 5GHz band or P2P) 
+ * @param use_6mbps - specify whether management frame to transmit should use 6 Mbps
+ *                    rather than 1 Mbps min rate(for 5GHz band or P2P)
  * @return
  *      0 -> the frame is accepted for transmission, -OR-
  *      1 -> the frame was not accepted
@@ -511,7 +531,8 @@ ol_txrx_mgmt_send(
     ol_txrx_vdev_handle vdev,
     adf_nbuf_t tx_mgmt_frm,
     u_int8_t type,
-    u_int8_t use_6mbps);
+    u_int8_t use_6mbps,
+    u_int16_t chanfreq);
 
 /**
  * @brief Setup the monitor mode vap (vdev) for this pdev
@@ -524,7 +545,7 @@ ol_txrx_mgmt_send(
  *  object that only receives monitor mode packets OR a point to a a vdev
  *  object that also receives non-monitor traffic. In the second case the
  *  OS stack is responsible for delivering the two streams using approprate
- *  OS APIs 
+ *  OS APIs
  *
  * @param pdev - the data physical device object
  * @param vdev - the data virtual device object to deliver monitor mode
@@ -539,10 +560,10 @@ ol_txrx_set_monitor_mode_vap(
     ol_txrx_vdev_handle vdev);
 
 /**
- * @brief Setup the current operating channel of the device 
+ * @brief Setup the current operating channel of the device
  * @details
  *  Mainly used when populating monitor mode status that requires the
- *  current operating channel 
+ *  current operating channel
  *
  * @param pdev - the data physical device object
  * @param chan_mhz - the channel frequency (mhz)
@@ -582,8 +603,8 @@ ol_txrx_discard_tx_pending(
 /**
  * @brief set the safemode of the device
  * @details
- *  This flag is used to bypass the encrypt and decrypt processes when send and 
- *  receive packets. It works like open AUTH mode, HW will treate all packets 
+ *  This flag is used to bypass the encrypt and decrypt processes when send and
+ *  receive packets. It works like open AUTH mode, HW will treate all packets
  *  as non-encrypt frames because no key installed. For rx fragmented frames,
  *  it bypasses all the rx defragmentaion.
  *
@@ -591,7 +612,7 @@ ol_txrx_discard_tx_pending(
  * @param val - the safemode state
  * @return - void
  */
-void 
+void
 ol_txrx_set_safemode(
     ol_txrx_vdev_handle vdev,
     u_int32_t val);
@@ -609,7 +630,7 @@ ol_txrx_set_safemode(
  */
 void
 ol_txrx_set_privacy_filters(
-    ol_txrx_vdev_handle vdev, 
+    ol_txrx_vdev_handle vdev,
 	void *filter,
     u_int32_t num);
 
@@ -618,7 +639,7 @@ ol_txrx_set_privacy_filters(
  * @details
  *  Rx related. When set this flag, all the unencrypted frames
  *  received over a secure connection will be discarded
- * 
+ *
  * @param vdev - the data virtual device object
  * @param val - flag
  * @return - void
@@ -937,5 +958,43 @@ ol_tx_delay_hist(ol_txrx_pdev_handle pdev, u_int16_t *bin_values,
         bin_values, QCA_TX_DELAY_HIST_REPORT_BINS * sizeof(*bin_values));
 }
 #endif
+
+#if defined(QCA_SUPPORT_TX_THROTTLE_LL)
+/**
+ * @brief Set the thermal mitgation throttling level.
+ * @details
+ *  This function applies only to LL systems. This function is used set the
+ *  tx throttle level used for thermal mitigation
+ *
+ * @param pdev - the physics device being throttled
+ */
+void ol_tx_throttle_set_level(struct ol_txrx_pdev_t *pdev, int level);
+#else
+static inline void ol_tx_throttle_set_level(struct ol_txrx_pdev_t *pdev,
+    int level)
+{
+    /* no-op */
+}
+#endif /* QCA_SUPPORT_TX_THROTTLE_LL */
+
+#if defined(QCA_SUPPORT_TX_THROTTLE_LL)
+/**
+ * @brief Configure the thermal mitgation throttling period.
+ * @details
+ *  This function applies only to LL systems. This function is used set the
+ *  period over which data will be throttled
+ *
+ * @param pdev - the physics device being throttled
+ */
+void ol_tx_throttle_init_period(struct ol_txrx_pdev_t *pdev, int period);
+#else
+static inline void ol_tx_throttle_init_period(struct ol_txrx_pdev_t *pdev,
+    int period)
+{
+    /* no-op */
+}
+#endif /* QCA_SUPPORT_TX_THROTTLE_LL */
+
+void ol_vdev_rx_set_intrabss_fwd(ol_txrx_vdev_handle vdev, a_bool_t val);
 
 #endif /* _OL_TXRX_CTRL_API__H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -23,9 +23,6 @@
  * This file was originally distributed by Qualcomm Atheros, Inc.
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
- */
-/*
- * $ATH_LICENSE_TARGET_C$
  */
 
 
@@ -93,7 +90,9 @@ CE_completed_send_next_nolock(struct CE_state *CE_state,
                               void **per_transfer_contextp,
                               CE_addr_t *bufferp,
                               unsigned int *nbytesp,
-                              unsigned int *transfer_idp);
+                              unsigned int *transfer_idp,
+                              unsigned int *sw_idx,
+                              unsigned int *hw_idx);
 
 void WAR_CE_SRC_RING_WRITE_IDX_SET(struct hif_pci_softc *sc,
                                    void __iomem *targid,
@@ -148,13 +147,13 @@ CE_send_nolock(struct CE_handle *copyeng,
     unsigned int nentries_mask = src_ring->nentries_mask;
     unsigned int sw_index = src_ring->sw_index;
     unsigned int write_index = src_ring->write_index;
-    
+
 	A_TARGET_ACCESS_BEGIN(targid);
     if (unlikely(CE_RING_DELTA(nentries_mask, write_index, sw_index-1) <= 0)) {
         OL_ATH_CE_PKT_ERROR_COUNT_INCR(sc,CE_RING_DELTA_FAIL);
         status = A_ERROR;
-    	A_TARGET_ACCESS_END(targid);
-    	return status;
+	A_TARGET_ACCESS_END(targid);
+	return status;
     }
     {
         struct CE_src_desc *src_ring_base = (struct CE_src_desc *)src_ring->base_addr_owner_space;
@@ -281,7 +280,7 @@ CE_sendlist_send(struct CE_handle *copyeng,
             item = &sl->item[i];
             /* TBDXXX: Support extensible sendlist_types? */
             A_ASSERT(item->send_type == CE_SIMPLE_BUFFER_TYPE);
-            status = CE_send_nolock(copyeng, CE_SENDLIST_ITEM_CTXT, 
+            status = CE_send_nolock(copyeng, CE_SENDLIST_ITEM_CTXT,
                                     (CE_addr_t)item->data, item->u.nbytes,
                                     transfer_id,
                                     item->flags | CE_SEND_FLAG_GATHER);
@@ -291,7 +290,7 @@ CE_sendlist_send(struct CE_handle *copyeng,
         item = &sl->item[i];
         /* TBDXXX: Support extensible sendlist_types? */
         A_ASSERT(item->send_type == CE_SIMPLE_BUFFER_TYPE);
-        status = CE_send_nolock(copyeng, per_transfer_context, 
+        status = CE_send_nolock(copyeng, per_transfer_context,
                                 (CE_addr_t)item->data, item->u.nbytes,
                                 transfer_id, item->flags);
         A_ASSERT(status == A_OK);
@@ -337,7 +336,7 @@ CE_recv_buf_enqueue(struct CE_handle *copyeng,
         dest_desc->info.nbytes = 0; /* NB: Enable CE_completed_recv_next_nolock to
 								protect against race between DRRI update and
 								desc update */
-		
+
         dest_ring->per_transfer_context[write_index] = per_recv_context;
 
         /* Update Destination Ring Write Index */
@@ -520,9 +519,9 @@ CE_completed_recv_next_nolock(struct CE_state *CE_state,
     int nbytes;
     struct dest_desc_info dest_desc_info;
 
-    /* 
+    /*
      * By copying the dest_desc_info element to local memory, we could
-     * avoid extra memory read from non-cachable memory.          
+     * avoid extra memory read from non-cachable memory.
      */
     dest_desc_info = dest_desc->info;
     nbytes = dest_desc_info.nbytes;
@@ -538,7 +537,7 @@ CE_completed_recv_next_nolock(struct CE_state *CE_state,
     }
 
     dest_desc->info.nbytes = 0;
-		
+
     /* Return data from completed destination descriptor */
     *bufferp      = (CE_addr_t)(dest_desc->dest_ptr);
     *nbytesp      = nbytes;
@@ -651,7 +650,9 @@ CE_completed_send_next_nolock(struct CE_state *CE_state,
                               void **per_transfer_contextp,
                               CE_addr_t *bufferp,
                               unsigned int *nbytesp,
-                              unsigned int *transfer_idp)
+                              unsigned int *transfer_idp,
+                              unsigned int *sw_idx,
+                              unsigned int *hw_idx)
 {
     int status = A_ERROR;
     struct CE_ring_state *src_ring = CE_state->src_ring;
@@ -677,6 +678,12 @@ CE_completed_send_next_nolock(struct CE_state *CE_state,
     }
     read_index = src_ring->hw_index;
 
+    if (sw_idx)
+        *sw_idx = sw_index;
+
+    if (hw_idx)
+        *hw_idx = read_index;
+
     if ((read_index != sw_index) && (read_index != 0xffffffff)) {
         struct CE_src_desc *shadow_base = (struct CE_src_desc *)src_ring->shadow_base;
         struct CE_src_desc *shadow_src_desc = CE_SRC_RING_TO_DESC(shadow_base, sw_index);
@@ -685,7 +692,7 @@ CE_completed_send_next_nolock(struct CE_state *CE_state,
         *bufferp      = (CE_addr_t)(shadow_src_desc->src_ptr);
         *nbytesp      = shadow_src_desc->nbytes;
         *transfer_idp = shadow_src_desc->meta_data;
-        
+
         if (per_CE_contextp) {
             *per_CE_contextp = CE_state->send_context;
         }
@@ -775,7 +782,9 @@ CE_completed_send_next(struct CE_handle *copyeng,
                        void **per_transfer_contextp,
                        CE_addr_t *bufferp,
                        unsigned int *nbytesp,
-                       unsigned int *transfer_idp)
+                       unsigned int *transfer_idp,
+                       unsigned int *sw_idx,
+                       unsigned int *hw_idx)
 {
     struct CE_state *CE_state = (struct CE_state *)copyeng;
     struct hif_pci_softc *sc = CE_state->sc;
@@ -784,7 +793,8 @@ CE_completed_send_next(struct CE_handle *copyeng,
 
     adf_os_spin_lock(&sc->target_lock);
     status = CE_completed_send_next_nolock(CE_state, per_CE_contextp, per_transfer_contextp,
-                                               bufferp, nbytesp, transfer_idp);
+                                               bufferp, nbytesp, transfer_idp,
+                                               sw_idx, hw_idx);
     adf_os_spin_unlock(&sc->target_lock);
 
     return status;
@@ -797,7 +807,7 @@ CE_completed_send_next(struct CE_handle *copyeng,
    does recieve and reaping of completed descriptor ,
    This function only handles reaping of Tx complete descriptor.
    The Function is called from threshold reap  poll routine HIFSendCompleteCheck
-   So should not countain recieve functionality within it . 
+   So should not countain recieve functionality within it .
  */
 
 void
@@ -810,6 +820,7 @@ CE_per_engine_servicereap(struct hif_pci_softc *sc, unsigned int CE_id)
     CE_addr_t buf;
     unsigned int nbytes;
     unsigned int id;
+    unsigned int sw_idx, hw_idx;
 
     A_TARGET_ACCESS_BEGIN(targid);
 
@@ -820,11 +831,12 @@ CE_per_engine_servicereap(struct hif_pci_softc *sc, unsigned int CE_id)
        {
             /* Pop completed send buffers and call the registered send callback for each */
             while (CE_completed_send_next_nolock(CE_state, &CE_context, &transfer_context,
-                        &buf, &nbytes, &id) == A_OK)
+                        &buf, &nbytes, &id, &sw_idx, &hw_idx) == A_OK)
             {
                 if(CE_id != CE_HTT_H2T_MSG){
                     adf_os_spin_unlock(&sc->target_lock);
-                    CE_state->send_cb((struct CE_handle *)CE_state, CE_context, transfer_context, buf, nbytes, id);
+                    CE_state->send_cb((struct CE_handle *)CE_state, CE_context, transfer_context, buf, nbytes, id,
+                                      sw_idx, hw_idx);
                     adf_os_spin_lock(&sc->target_lock);
                 }else{
                      struct HIF_CE_pipe_info *pipe_info = (struct HIF_CE_pipe_info *)CE_context;
@@ -842,6 +854,17 @@ CE_per_engine_servicereap(struct hif_pci_softc *sc, unsigned int CE_id)
 }
 
 #endif /*ATH_11AC_TXCOMPACT*/
+
+/*
+ * Number of times to check for any pending tx/rx completion on
+ * a copy engine, this count should be big enough. Once we hit
+ * this threashold we'll not check for any Tx/Rx comlpetion in same
+ * interrupt handling. Note that this threashold is only used for
+ * Rx interrupt processing, this can be used tor Tx as well if we
+ * suspect any infinite loop in checking for pending Tx completion.
+ */
+#define CE_TXRX_COMP_CHECK_THRESHOLD 20
+
 /*
  * Guts of interrupt handler for per-engine interrupts on a particular CE.
  *
@@ -861,16 +884,20 @@ CE_per_engine_service(struct hif_pci_softc *sc, unsigned int CE_id)
     unsigned int id;
     unsigned int flags;
     u_int32_t CE_int_status;
+    unsigned int more_comp_cnt = 0;
+    unsigned int more_snd_comp_cnt = 0;
+    unsigned int sw_idx, hw_idx;
 
     A_TARGET_ACCESS_BEGIN(targid);
 
     adf_os_spin_lock(&sc->target_lock);
 
+    /* Clear force_break flag and re-initialize receive_count to 0 */
+    sc->receive_count = 0;
+    sc->force_break = 0;
 more_completions:
     if (CE_state->recv_cb) {
-        /* Clear force_break flag and re-initialize receive_count to 0 */
-        sc->receive_count = 0;
-        
+
         /* Pop completed recv buffers and call the registered recv callback for each */
         while (CE_completed_recv_next_nolock(CE_state, &CE_context, &transfer_context,
                     &buf, &nbytes, &id, &flags) == A_OK)
@@ -878,9 +905,9 @@ more_completions:
                 adf_os_spin_unlock(&sc->target_lock);
                 CE_state->recv_cb((struct CE_handle *)CE_state, CE_context, transfer_context,
                                     buf, nbytes, id, flags);
-                
+
                 /*
-                 * EV #112693 - [Peregrine][ES1][WB342][Win8x86][Performance] BSoD_0x133 occurred in VHT80 UDP_DL      
+                 * EV #112693 - [Peregrine][ES1][WB342][Win8x86][Performance] BSoD_0x133 occurred in VHT80 UDP_DL
                  * Break out DPC by force if number of loops in HIF_PCI_CE_recv_data reaches MAX_NUM_OF_RECEIVES to avoid spending too long time in DPC for each interrupt handling.
                  * Schedule another DPC to avoid data loss if we had taken force-break action before
                  * Apply to Windows OS only currently, Linux/MAC os can expand to their platform if necessary
@@ -902,17 +929,18 @@ more_completions:
      * Attention: We may experience potential infinite loop for below While Loop during Sending Stress test
      * Resolve the same way as Receive Case (Refer to EV #112693)
      */
-    
+
     if (CE_state->send_cb) {
         /* Pop completed send buffers and call the registered send callback for each */
 
 #ifdef ATH_11AC_TXCOMPACT
         while (CE_completed_send_next_nolock(CE_state, &CE_context, &transfer_context,
-                    &buf, &nbytes, &id) == A_OK){
+                    &buf, &nbytes, &id, &sw_idx, &hw_idx) == A_OK){
 
             if(CE_id != CE_HTT_H2T_MSG){
                 adf_os_spin_unlock(&sc->target_lock);
-                CE_state->send_cb((struct CE_handle *)CE_state, CE_context, transfer_context, buf, nbytes, id);
+                CE_state->send_cb((struct CE_handle *)CE_state, CE_context, transfer_context, buf, nbytes, id,
+                                  sw_idx, hw_idx);
                 adf_os_spin_lock(&sc->target_lock);
             }else{
                 struct HIF_CE_pipe_info *pipe_info = (struct HIF_CE_pipe_info *)CE_context;
@@ -922,11 +950,12 @@ more_completions:
                 adf_os_spin_unlock(&pipe_info->completion_freeq_lock);
             }
         }
-#else  /*ATH_11AC_TXCOMPACT*/ 
+#else  /*ATH_11AC_TXCOMPACT*/
         while (CE_completed_send_next_nolock(CE_state, &CE_context, &transfer_context,
-                    &buf, &nbytes, &id) == A_OK){
+                    &buf, &nbytes, &id, &sw_idx, &hw_idx) == A_OK){
             adf_os_spin_unlock(&sc->target_lock);
-            CE_state->send_cb((struct CE_handle *)CE_state, CE_context, transfer_context, buf, nbytes, id);
+            CE_state->send_cb((struct CE_handle *)CE_state, CE_context, transfer_context, buf, nbytes, id,
+                              sw_idx, hw_idx);
             adf_os_spin_lock(&sc->target_lock);
         }
 #endif /*ATH_11AC_TXCOMPACT*/
@@ -965,11 +994,27 @@ more_watermarks:
      * we find no more events to process.
      */
     if (CE_state->recv_cb && CE_recv_entries_done_nolock(sc, CE_state)) {
-        goto more_completions;
+        if (more_comp_cnt++ < CE_TXRX_COMP_CHECK_THRESHOLD) {
+            goto more_completions;
+        } else {
+            adf_os_print("%s:Potential infinite loop detected during Rx processing"
+                         "nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x\n",
+                        __func__, CE_state->dest_ring->nentries_mask,
+                        CE_state->dest_ring->sw_index,
+                        CE_DEST_RING_READ_IDX_GET(targid, CE_state->ctrl_addr));
+        }
     }
 
     if (CE_state->send_cb && CE_send_entries_done_nolock(sc, CE_state)) {
-        goto more_completions;
+        if (more_snd_comp_cnt++ < CE_TXRX_COMP_CHECK_THRESHOLD) {
+            goto more_completions;
+        } else {
+            adf_os_print("%s:Potential infinite loop detected during send completion"
+                         "nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x\n",
+                         __func__, CE_state->src_ring->nentries_mask,
+                         CE_state->src_ring->sw_index,
+                         CE_SRC_RING_READ_IDX_GET(targid, CE_state->ctrl_addr));
+        }
     }
 
 
@@ -1000,7 +1045,7 @@ CE_per_engine_service_any(int irq, void *arg)
     A_target_id_t targid = TARGID(sc);
     int CE_id;
     A_UINT32 intr_summary;
-	
+
     A_TARGET_ACCESS_BEGIN(targid);
     if (!adf_os_atomic_read(&sc->tasklet_from_intr)) {
         for (CE_id=0; CE_id < sc->ce_count; CE_id++) {
@@ -1016,14 +1061,14 @@ CE_per_engine_service_any(int irq, void *arg)
     }
 
     intr_summary = CE_INTERRUPT_SUMMARY(targid);
-	
+
     for (CE_id=0; intr_summary && (CE_id < sc->ce_count); CE_id++) {
         if (intr_summary & (1<<CE_id)) {
             intr_summary &= ~(1<<CE_id);
         } else {
             continue; /* no intr pending on this CE */
         }
-		
+
         CE_per_engine_service(sc, CE_id);
     }
 
@@ -1069,12 +1114,12 @@ void CE_disable_any_copy_compl_intr_nolock(struct hif_pci_softc *sc)
 {
     A_target_id_t targid = TARGID(sc);
     int CE_id;
-    
+
     A_TARGET_ACCESS_BEGIN(targid);
     for (CE_id=0; CE_id < sc->ce_count; CE_id++) {
         struct CE_state *CE_state = sc->CE_id_to_state[CE_id];
         u_int32_t ctrl_addr = CE_state->ctrl_addr;
-        
+
         /* if the interrupt is currently enabled, disable it */
         if (!CE_state->disable_copy_compl_intr && (CE_state->send_cb || CE_state->recv_cb)) {
             CE_COPY_COMPLETE_INTR_DISABLE(targid, ctrl_addr);
@@ -1232,17 +1277,23 @@ CE_init(struct hif_pci_softc *sc,
     unsigned int nentries;
     adf_os_dma_addr_t base_addr;
     struct ol_softc *scn = sc->ol_sc;
+    bool malloc_CE_state = false;
+    bool malloc_src_ring = false;
 
     A_ASSERT(CE_id < sc->ce_count);
     ctrl_addr = CE_BASE_ADDRESS(CE_id);
     adf_os_spin_lock(&sc->target_lock);
     CE_state = sc->CE_id_to_state[CE_id];
-    
+
 
     if (!CE_state) {
         adf_os_spin_unlock(&sc->target_lock);
         CE_state = (struct CE_state *)A_MALLOC(sizeof(*CE_state));
-		A_ASSERT(CE_state); /* TBDXXX */
+        if (!CE_state) {
+            dev_err(&sc->pdev->dev, "ath ERROR: CE_state has no mem\n");
+            return NULL;
+        } else
+            malloc_CE_state = true;
         A_MEMZERO(CE_state, sizeof(*CE_state));
         adf_os_spin_lock(&sc->target_lock);
         if (!sc->CE_id_to_state[CE_id]) { /* re-check under lock */
@@ -1260,6 +1311,7 @@ CE_init(struct hif_pci_softc *sc,
              * CE_state (and free the one we allocated).
              */
             A_FREE(CE_state);
+            malloc_CE_state = false;
             CE_state = sc->CE_id_to_state[CE_id];
         }
     }
@@ -1293,7 +1345,24 @@ CE_init(struct hif_pci_softc *sc,
             CE_nbytes = sizeof(struct CE_ring_state)
                       + (nentries * sizeof(void *)); /* per-send context */
             ptr = A_MALLOC(CE_nbytes);
-            A_ASSERT(ptr); /* TBDXXX */
+            if (!ptr) {
+                /* cannot allocate src ring. If teh CE_state is allocated
+                 * locally free CE_State and return error. */
+                dev_err(&sc->pdev->dev, "ath ERROR: src ring has no mem\n");
+                if (malloc_CE_state) {
+                    /* allocated CE_state locally */
+                    adf_os_spin_lock(&sc->target_lock);
+                    sc->CE_id_to_state[CE_id]= NULL;
+                    adf_os_spin_unlock(&sc->target_lock);
+                    A_FREE(CE_state);
+                    malloc_CE_state = false;
+                }
+                return NULL;
+            } else {
+                /* we can allocate src ring.
+                 * Mark that the src ring is allocated locally */
+                malloc_src_ring = true;
+            }
             A_MEMZERO(ptr, CE_nbytes);
 
             src_ring = CE_state->src_ring = (struct CE_ring_state *)ptr;
@@ -1315,7 +1384,7 @@ CE_init(struct hif_pci_softc *sc,
                                     (nentries * sizeof(struct CE_src_desc) + CE_DESC_RING_ALIGN),
                                     &base_addr);
             src_ring->base_addr_CE_space_unaligned = base_addr;
-		
+
 
             if (src_ring->base_addr_CE_space_unaligned & (CE_DESC_RING_ALIGN-1)) {
 
@@ -1366,7 +1435,25 @@ CE_init(struct hif_pci_softc *sc,
             CE_nbytes = sizeof(struct CE_ring_state)
                       + (nentries * sizeof(void *)); /* per-recv context */
             ptr = A_MALLOC(CE_nbytes);
-            A_ASSERT(ptr); /* TBDXXX */
+            if (!ptr) {
+                /* cannot allocate dst ring. If the CE_state or src ring is allocated
+                 * locally free CE_State and src ring and return error. */
+                dev_err(&sc->pdev->dev, "ath ERROR: dest ring has no mem\n");
+                if (malloc_src_ring) {
+                    A_FREE(CE_state->src_ring);
+                    CE_state->src_ring= NULL;
+                    malloc_src_ring = false;
+                }
+                if (malloc_CE_state) {
+                    /* allocated CE_state locally */
+                    adf_os_spin_lock(&sc->target_lock);
+                    sc->CE_id_to_state[CE_id]= NULL;
+                    adf_os_spin_unlock(&sc->target_lock);
+                    A_FREE(CE_state);
+                    malloc_CE_state = false;
+                }
+                return NULL;
+            }
             A_MEMZERO(ptr, CE_nbytes);
 
             dest_ring = CE_state->dest_ring = (struct CE_ring_state *)ptr;

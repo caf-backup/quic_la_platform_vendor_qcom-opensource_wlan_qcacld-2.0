@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file limSendSmeRspMessages.h contains the definitions for
  * sending SME response/notification messages to applications above
@@ -50,7 +51,7 @@ void limSendSmeScanRsp(tpAniSirGlobal, tANI_U16, tSirResultCodes,tANI_U8, tANI_U
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
 void limSendSmeLfrScanRsp(tpAniSirGlobal, tANI_U16, tSirResultCodes,tANI_U8, tANI_U16);
 #endif
-void limPostSmeScanRspMessage(tpAniSirGlobal, tANI_U16, tSirResultCodes,tANI_U8,tANI_U16); 
+void limPostSmeScanRspMessage(tpAniSirGlobal, tANI_U16, tSirResultCodes,tANI_U8,tANI_U16);
 void limSendSmeAuthRsp(tpAniSirGlobal, tSirResultCodes,
                        tSirMacAddr, tAniAuthType, tANI_U16,tpPESession,tANI_U8,tANI_U16);
 
@@ -74,7 +75,7 @@ void limHandleCSAoffloadMsg(tpAniSirGlobal pMac,tpSirMsgQ MsgQ);
 
 #ifdef WLAN_FEATURE_VOWIFI_11R
 void
-limSendSmeAggrQosRsp(tpAniSirGlobal pMac, tpSirAggrQosRsp aggrQosRsp, 
+limSendSmeAggrQosRsp(tpAniSirGlobal pMac, tpSirAggrQosRsp aggrQosRsp,
                      tANI_U8 smesessionId);
 #endif /*WLAN_FEATURE_VOWIFI_11R*/
 
@@ -123,5 +124,13 @@ void limSendSmeTdlsEventNotify(tpAniSirGlobal pMac, tANI_U16 msgType,
 #endif
 #endif
 
-#endif /* __LIM_SEND_SME_RSP_H */
+void limSendSmeDfsEventNotify(tpAniSirGlobal pMac, tANI_U16 msgType,
+                                       void *event);
+void limSendSmeAPChannelSwitchResp(tpAniSirGlobal pMac,
+                                   tpPESession psessionEntry,
+                                   tpSwitchChannelParams pChnlParams);
+void
+limProcessBeaconTxSuccessInd(tpAniSirGlobal pMac, tANI_U16 msgType,
+                                       void *event);
 
+#endif /* __LIM_SEND_SME_RSP_H */

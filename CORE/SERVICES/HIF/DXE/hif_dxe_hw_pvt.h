@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,9 +24,10 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file hif_dxe_desc_pvt.h
- * @brief Defines DXE HW Descriptor Structure Format 
+ * @brief Defines DXE HW Descriptor Structure Format
  * @details
  *  This file Provides the HIF DXE HW Descriptor Definitions/ DMA Channel Structure / DMA Control And Data Descriptors.
  *  DXE software module communicates with the RIVA DXE HW block for data path which
@@ -389,7 +390,7 @@ typedef struct
    {
       WLANDXE_LongDesc             dxe_long_desc;
       WLANDXE_ShortDesc            dxe_short_desc;
-   }dxedesc; 
+   }dxedesc;
 } WLANDXE_DescType;
 
 #endif

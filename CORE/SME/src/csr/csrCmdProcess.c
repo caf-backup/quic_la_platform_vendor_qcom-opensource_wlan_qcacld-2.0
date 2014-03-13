@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,13 +24,13 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /** ------------------------------------------------------------------------- *
     ------------------------------------------------------------------------- *
     \file csrCmdProcess.c
 
     Implementation for processing various commands.
-
-   ========================================================================== */
+========================================================================== */
 
 
 
@@ -50,36 +50,36 @@ eHalStatus csrMsgProcessor( tpAniSirGlobal pMac,  void *pMsgBuf )
     tSirSmeRsp *pSmeRsp = (tSirSmeRsp *)pMsgBuf;
 
     smsLog( pMac, LOG2, "  Message %d[0x%04X] received in curState %d and substate %d",
-                pSmeRsp->messageType, pSmeRsp->messageType, 
+                pSmeRsp->messageType, pSmeRsp->messageType,
                 pMac->roam.curState[pSmeRsp->sessionId],
                 pMac->roam.curSubState[pSmeRsp->sessionId] );
 
     // Process the message based on the state of the roaming states...
-    
+
 #if defined( ANI_RTT_DEBUG )
     if(!pAdapter->fRttModeEnabled)
     {
-#endif//RTT    
+#endif//RTT
         switch (pMac->roam.curState[pSmeRsp->sessionId])
         {
-        case eCSR_ROAMING_STATE_SCANNING: 
+        case eCSR_ROAMING_STATE_SCANNING:
         {
             //Are we in scan state
 #if defined( ANI_EMUL_ASSOC )
             emulScanningStateMsgProcessor( pAdapter, pMBBufHdr );
 #else
             status = csrScanningStateMsgProcessor(pMac, pMsgBuf);
-#endif    
+#endif
             break;
         }
-        
-        case eCSR_ROAMING_STATE_JOINED: 
+
+        case eCSR_ROAMING_STATE_JOINED:
         {
             //are we in joined state
             csrRoamJoinedStateMsgProcessor( pMac, pMsgBuf );
             break;
         }
-        
+
         case eCSR_ROAMING_STATE_JOINING:
         {
             //are we in roaming states
@@ -90,10 +90,10 @@ eHalStatus csrMsgProcessor( tpAniSirGlobal pMac,  void *pMsgBuf )
             break;
         }
 
-        //For all other messages, we ignore it        
+        //For all other messages, we ignore it
         default:
         {
-            /*To work-around an issue where checking for set/remove key base on connection state is no longer 
+            /*To work-around an issue where checking for set/remove key base on connection state is no longer
             * workable due to failure or finding the condition meets both SAP and infra/IBSS requirement.
             */
             if( (eWNI_SME_SETCONTEXT_RSP == pSmeRsp->messageType) ||
@@ -108,9 +108,9 @@ eHalStatus csrMsgProcessor( tpAniSirGlobal pMac,  void *pMsgBuf )
             }
             break;
         }
-        
+
         }//switch
-        
+
 #if defined( ANI_RTT_DEBUG )
     }
 #endif//RTT
@@ -124,7 +124,11 @@ tANI_BOOLEAN csrCheckPSReady(void *pv)
 {
     tpAniSirGlobal pMac = PMAC_STRUCT( pv );
 
-    VOS_ASSERT( pMac->roam.sPendingCommands >= 0 );
+    if (pMac->roam.sPendingCommands < 0)
+    {
+       VOS_ASSERT( pMac->roam.sPendingCommands >= 0 );
+       return 0;
+    }
     return (pMac->roam.sPendingCommands == 0);
 }
 
@@ -143,7 +147,7 @@ void csrFullPowerCallback(void *pv, eHalStatus status)
     tSmeCmd *pCommand;
 
     (void)status;
-    
+
     while( NULL != ( pEntry = csrLLRemoveHead( &pMac->roam.roamCmdPendingList, eANI_BOOLEAN_TRUE ) ) )
     {
         pCommand = GET_BASE_ADDR( pEntry, tSmeCmd, Link );
@@ -168,5 +172,3 @@ void csrFullPowerOffloadCallback(void *pv, tANI_U32 sessionId, eHalStatus status
     }
 
 }
-
-

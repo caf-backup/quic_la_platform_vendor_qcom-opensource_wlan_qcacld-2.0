@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -23,6 +23,11 @@
  * This file was originally distributed by Qualcomm Atheros, Inc.
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
+ */
+
+/*
+ * $File: //depot/software/projects/feature_branches/gen5_phase1/os/linux/classic/ap/apps/include/aniSsmReplayCtr.h $
+ *
  */
 /*
  * Contains declarations of various utilities for SSM replay counter
@@ -74,7 +79,7 @@ typedef struct sAniSsmReplayCtr tAniSsmReplayCtr;
  * @return ANI_OK if the operation succeeds
  */
 int
-aniSsmReplayCtrCreate(v_U32_t cryptHandle, tAniSsmReplayCtr **ctrPtr, 
+aniSsmReplayCtrCreate(v_U32_t cryptHandle, tAniSsmReplayCtr **ctrPtr,
                       v_U8_t size,
                       int initValue);
 
@@ -82,7 +87,7 @@ aniSsmReplayCtrCreate(v_U32_t cryptHandle, tAniSsmReplayCtr **ctrPtr,
  * aniSsmReplayCtrCmp
  *
  * Used to check if the passed in value is greater
- * than, less than, or the same as the previous value. 
+ * than, less than, or the same as the previous value.
  *
  * Can be used on the TX side to determine if the response to a
  * request contains the same counter as the one in the request.

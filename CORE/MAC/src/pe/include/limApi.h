@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * This file limApi.h contains the definitions exported by
@@ -164,8 +165,8 @@ extern void limSendSmeTDLSDelStaInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, t
 /// Function that checks for change in AP's capabilties on STA
 extern void limDetectChangeInApCapabilities(tpAniSirGlobal,
                                              tpSirProbeRespBeacon,tpPESession);
-tSirRetStatus limUpdateShortSlot(tpAniSirGlobal pMac, 
-                                                            tpSirProbeRespBeacon pBeacon, 
+tSirRetStatus limUpdateShortSlot(tpAniSirGlobal pMac,
+                                                            tpSirProbeRespBeacon pBeacon,
                                                             tpUpdateBeaconParams pBeaconParams,tpPESession);
 
 /// creates an addts request action frame and sends it out to staid
@@ -213,24 +214,24 @@ static inline void limGetRfBand(tpAniSirGlobal pMac, tSirRFBand *band, tpPESessi
 }
 
 /*--------------------------------------------------------------------------
-  
+
   \brief peProcessMessages() - Message Processor for PE
-  
+
   Voss calls this function to dispatch the message to PE
-  
+
   \param pMac - Pointer to Global MAC structure
   \param pMsg - Pointer to the message structure
-  
+
   \return  tANI_U32 - TX_SUCCESS for success.
-  
+
   --------------------------------------------------------------------------*/
 tSirRetStatus peProcessMessages(tpAniSirGlobal pMac, tSirMsgQ* pMsg);
 /** -------------------------------------------------------------
 \fn peFreeMsg
 \brief Called by VOS scheduler (function vos_sched_flush_mc_mqs)
 \      to free a given PE message on the TX and MC thread.
-\      This happens when there are messages pending in the PE 
-\      queue when system is being stopped and reset. 
+\      This happens when there are messages pending in the PE
+\      queue when system is being stopped and reset.
 \param   tpAniSirGlobal pMac
 \param   tSirMsgQ       pMsg
 \return none

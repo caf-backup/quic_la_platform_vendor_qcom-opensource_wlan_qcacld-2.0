@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,14 +24,15 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**=========================================================================
-  
+
   \file  wlan_qct_pal_timer.c
-  
+
   \brief Implementation trace/logging APIs PAL exports. wpt = (Wlan Pal Type) wpal = (Wlan PAL)
-               
+
    Definitions for platform Windows.
-  
+
   ========================================================================*/
 
 #include "wlan_qct_pal_timer.h"
@@ -82,7 +83,7 @@ wpt_status wpalTimerInit(wpt_timer * pTimer, wpal_timer_callback callback, void 
       return eWLAN_PAL_STATUS_E_INVAL;
    }
 
-   if ( vos_timer_init( &pTimer->timer.timerObj, VOS_TIMER_TYPE_SW, 
+   if ( vos_timer_init( &pTimer->timer.timerObj, VOS_TIMER_TYPE_SW,
                         wpalTimerCback, (void*)pTimer ) == VOS_STATUS_SUCCESS )
    {
       pTimer->callback = callback;

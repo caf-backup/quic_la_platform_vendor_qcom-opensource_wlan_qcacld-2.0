@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,18 +24,19 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( __WLAN_QCT_PAL_MSG_H )
 #define __WLAN_QCT_PAL_MSG_H
 
 /**=========================================================================
-  
+
   \file  wlan_qct_pal_msg.h
-  
-  \brief define general message APIs PAL exports to support legacy UMAC. 
+
+  \brief define general message APIs PAL exports to support legacy UMAC.
    wpt = (Wlan Pal Type) wpal = (Wlan PAL)
-               
+
    Definitions for platform dependent. Only work with legacy UMAC.
-  
+
   ========================================================================*/
 
 #include "wlan_qct_pal_type.h"
@@ -53,15 +54,15 @@ struct swpt_msg
    wpt_uint32 val;
    wpal_msg_callback callback;
    void *pContext;
-}; 
+};
 
 
 /*---------------------------------------------------------------------------
-   wpalPostCtrlMsg – Post a message to control context so it can 
+   wpalPostCtrlMsg – Post a message to control context so it can
                            be processed in that context.
-   Param: 
+   Param:
       pPalContext – A PAL context
-      pMsg – a pointer to called allocated object; Caller retain the ownership 
+      pMsg – a pointer to called allocated object; Caller retain the ownership
              after this API returns.
 ---------------------------------------------------------------------------*/
 wpt_status wpalPostCtrlMsg(void *pPalContext, wpt_msg *pMsg);
@@ -69,18 +70,18 @@ wpt_status wpalPostCtrlMsg(void *pPalContext, wpt_msg *pMsg);
 
 /*---------------------------------------------------------------------------
    wpalPostTxMsg – Post a message to TX context so it can be processed in that context.
-   Param: 
+   Param:
       pPalContext – A PAL context
-      pMsg – a pointer to called allocated object; Caller retain the ownership 
+      pMsg – a pointer to called allocated object; Caller retain the ownership
              after this API returns.
 ---------------------------------------------------------------------------*/
 wpt_status wpalPostTxMsg(void *pPalContext, wpt_msg *pMsg);
 
 /*---------------------------------------------------------------------------
    wpalPostRxMsg – Post a message to RX context so it can be processed in that context.
-   Param: 
+   Param:
       pPalContext – A PAL context
-      pMsg – a pointer to called allocated object; Caller retain the ownership 
+      pMsg – a pointer to called allocated object; Caller retain the ownership
              after this API returns.
 ---------------------------------------------------------------------------*/
 wpt_status wpalPostRxMsg(void *pPalContext, wpt_msg *pMsg);

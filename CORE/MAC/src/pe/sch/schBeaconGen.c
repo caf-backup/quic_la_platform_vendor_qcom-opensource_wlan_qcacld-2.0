@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file schBeaconGen.cc contains beacon generation related
  * functions
@@ -64,7 +65,7 @@ const tANI_U8 P2pOui[] = {0x50, 0x6F, 0x9A, 0x9};
 
 tSirRetStatus schGetP2pIeOffset(tANI_U8 *pExtraIe, tANI_U32 extraIeLen, tANI_U16 *pP2pIeOffset)
 {
-    tSirRetStatus status = eSIR_FAILURE;   
+    tSirRetStatus status = eSIR_FAILURE;
     *pP2pIeOffset = 0;
 
     // Extra IE is not present
@@ -87,7 +88,7 @@ tSirRetStatus schGetP2pIeOffset(tANI_U8 *pExtraIe, tANI_U32 extraIeLen, tANI_U16
 
         (*pP2pIeOffset)++;
         pExtraIe++;
-     }while(--extraIeLen > 0); 
+     }while(--extraIeLen > 0);
 
      return status;
 }
@@ -99,7 +100,7 @@ tSirRetStatus schAppendAddnIE(tpAniSirGlobal pMac, tpPESession psessionEntry,
     tSirRetStatus status = eSIR_FAILURE;
     tANI_U32 present, len;
     tANI_U8 addIE[WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA_LEN];
-    
+
      if((status = wlan_cfgGetInt(pMac, WNI_CFG_PROBE_RSP_BCN_ADDNIE_FLAG,
                                  &present)) != eSIR_SUCCESS)
     {
@@ -117,10 +118,10 @@ tSirRetStatus schAppendAddnIE(tpAniSirGlobal pMac, tpPESession psessionEntry,
             return status;
         }
 
-        if(len <= WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA_LEN && len && 
+        if(len <= WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA_LEN && len &&
           ((len + *nBytes) <= maxBeaconSize))
         {
-            if((status = wlan_cfgGetStr(pMac, 
+            if((status = wlan_cfgGetStr(pMac,
                           WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA, &addIE[0], &len))
                           == eSIR_SUCCESS)
             {
@@ -189,6 +190,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
     tANI_U16 extraIeOffset = 0;
     tANI_U16 p2pIeOffset = 0;
     tSirRetStatus status = eSIR_SUCCESS;
+    tANI_BOOLEAN  isVHTEnabled = eANI_BOOLEAN_FALSE;
 
     pBcn1 = vos_mem_malloc(sizeof(tDot11fBeacon1));
     if ( NULL == pBcn1 )
@@ -230,7 +232,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
 
     for (i=0; i<6; i++)
         mac->da[i] = 0xff;
-    
+
     /* Knocking out Global pMac update */
     /* limGetMyMacAddr(pMac, mac->sa); */
     /* limGetBssid(pMac, mac->bssId); */
@@ -271,7 +273,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
     offset = sizeof( tAniBeaconStruct );
     ptr    = pMac->sch.schObject.gSchBeaconFrameBegin + offset;
 
-    if((psessionEntry->limSystemRole == eLIM_AP_ROLE) 
+    if((psessionEntry->limSystemRole == eLIM_AP_ROLE)
         && (psessionEntry->proxyProbeRspEn))
     {
         /* Initialize the default IE bitmap to zero */
@@ -312,7 +314,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
      * Initialize the 'new' fields at the end of the beacon
      */
 
-    
+
     PopulateDot11fCountry( pMac, &pBcn2->Country, psessionEntry);
     if(pBcn1->Capabilities.qos)
     {
@@ -323,6 +325,33 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
     {
       PopulateDot11fPowerConstraints( pMac, &pBcn2->PowerConstraints );
       PopulateDot11fTPCReport( pMac, &pBcn2->TPCReport, psessionEntry);
+
+      /* Need to insert channel switch announcement here */
+      if ((psessionEntry->limSystemRole == eLIM_AP_ROLE ||
+           psessionEntry->limSystemRole == eLIM_P2P_DEVICE_GO) &&
+           psessionEntry->dfsIncludeChanSwIe == VOS_TRUE)
+      {
+         /* Channel switch announcement only if radar is detected
+          * and SAP has instructed to announce channel switch IEs
+          * in beacon and probe responses
+          */
+         PopulateDot11fChanSwitchAnn(pMac, &pBcn2->ChanSwitchAnn,
+                                     psessionEntry);
+
+         /* TODO: depending the CB mode, extended channel switch announcement
+          * need to be called
+          */
+         /*PopulateDot11fExtChanSwitchAnn(pMac, &pBcn2->ExtChanSwitchAnn,
+                                        psessionEntry);*/
+#ifdef WLAN_FEATURE_11AC
+         /* TODO: If in 11AC mode, wider bw channel switch announcement needs
+          * to be called
+          */
+         /*PopulateDot11fWiderBWChanSwitchAnn(pMac, &pBcn2->WiderBWChanSwitchAnn,
+                                            psessionEntry);*/
+#endif
+
+      }
     }
 
 
@@ -336,21 +365,23 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
     }
 #ifdef WLAN_FEATURE_11AC
     if(psessionEntry->vhtCapability)
-    {        
+    {
         schLog( pMac, LOGW, FL("Populate VHT IEs in Beacon"));
         PopulateDot11fVHTCaps( pMac, psessionEntry, &pBcn2->VHTCaps );
         PopulateDot11fVHTOperation( pMac, &pBcn2->VHTOperation);
+        isVHTEnabled = eANI_BOOLEAN_TRUE;
         // we do not support multi users yet
         //PopulateDot11fVHTExtBssLoad( pMac, &bcn2.VHTExtBssLoad);
-        PopulateDot11fExtCap( pMac, &pBcn2->ExtCap);
         if(psessionEntry->gLimOperatingMode.present)
             PopulateDot11fOperatingMode( pMac, &pBcn2->OperatingMode, psessionEntry );
     }
 #endif
 
+    PopulateDot11fExtCap(pMac, isVHTEnabled, &pBcn2->ExtCap);
+
     PopulateDot11fExtSuppRates( pMac, POPULATE_DOT11F_RATES_OPERATIONAL,
                                 &pBcn2->ExtSuppRates, psessionEntry );
- 
+
     if( psessionEntry->pLimStartBssReq != NULL )
     {
           PopulateDot11fWPA( pMac, &psessionEntry->pLimStartBssReq->rsnIE,
@@ -367,7 +398,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
     {
         if(psessionEntry->wps_state != SAP_WPS_DISABLED)
         {
-            PopulateDot11fBeaconWPSIEs( pMac, &pBcn2->WscBeacon, psessionEntry);            
+            PopulateDot11fBeaconWPSIEs( pMac, &pBcn2->WscBeacon, psessionEntry);
         }
     }
     else
@@ -395,7 +426,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
         }
     }
 
-    if((psessionEntry->limSystemRole == eLIM_AP_ROLE) 
+    if((psessionEntry->limSystemRole == eLIM_AP_ROLE)
         && (psessionEntry->proxyProbeRspEn))
     {
         /* Can be efficiently updated whenever new IE added  in Probe response in future */
@@ -447,7 +478,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
     extraIeOffset = nBytes;
 
     //TODO: Append additional IE here.
-    schAppendAddnIE(pMac, psessionEntry, 
+    schAppendAddnIE(pMac, psessionEntry,
                     pMac->sch.schObject.gSchBeaconFrameEnd + nBytes,
                     SCH_MAX_BEACON_SIZE, &nBytes);
 
@@ -461,7 +492,7 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
     if(eSIR_SUCCESS == status)
     {
        //Update the P2P Ie Offset
-       pMac->sch.schObject.p2pIeOffset = 
+       pMac->sch.schObject.p2pIeOffset =
                     pMac->sch.schObject.gSchBeaconOffsetBegin + TIM_IE_SIZE +
                     extraIeOffset + p2pIeOffset;
     }
@@ -696,7 +727,7 @@ void writeBeaconToMemory(tpAniSirGlobal pMac, tANI_U16 size, tANI_U16 length, tp
         for (i=0; i < pMac->sch.schObject.gSchBeaconOffsetEnd; i++)
             pMac->sch.schObject.gSchBeaconFrameBegin[size++] = pMac->sch.schObject.gSchBeaconFrameEnd[i];
     }
-    
+
     // Update the beacon length
     pBeacon = (tpAniBeaconStruct) pMac->sch.schObject.gSchBeaconFrameBegin;
     // Do not include the beaconLength indicator itself
@@ -765,8 +796,8 @@ schProcessPreBeaconInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
     {
         PELOGE(schLog(pMac, LOGE, FL("session lookup fails"));)
         goto end;
-    } 
-           
+    }
+
 
 
     // If SME is not in normal mode, no need to generate beacon

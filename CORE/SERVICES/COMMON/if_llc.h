@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -128,7 +128,7 @@ struct frmrinfo {
 #define	llc_fid			llc_un.type_u.format_id
 #define	llc_class		llc_un.type_u.class
 #define	llc_window		llc_un.type_u.window_x2
-#define	llc_frmrinfo 		llc_un.type_frmr.frmr_rej_pdu0
+#define	llc_frmrinfo		llc_un.type_frmr.frmr_rej_pdu0
 #define	llc_frmr_pdu0		llc_un.type_frmr.frmr_rej_pdu0
 #define	llc_frmr_pdu1		llc_un.type_frmr.frmr_rej_pdu1
 #define	llc_frmr_control	llc_un.type_frmr.frmr_control

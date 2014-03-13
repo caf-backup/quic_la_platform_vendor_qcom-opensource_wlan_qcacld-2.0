@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _WMI_TLV_DEFS_H_
 #define _WMI_TLV_DEFS_H_
 
@@ -417,6 +418,11 @@ typedef enum {
     WMITLV_TAG_STRUC_wmi_mhf_offload_plumb_routing_table_cmd_fixed_param,
     WMITLV_TAG_STRUC_WMI_ADD_PROACTIVE_ARP_RSP_PATTERN_CMD_fixed_param,
     WMITLV_TAG_STRUC_WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMD_fixed_param,
+    WMITLV_TAG_STRUC_wmi_nan_cmd_param,
+    WMITLV_TAG_STRUC_wmi_nan_event_hdr,
+    WMITLV_TAG_STRUC_wmi_pdev_l1ss_track_event_fixed_param,
+    WMITLV_TAG_STRUC_wmi_diag_data_container_event_fixed_param,
+    WMITLV_TAG_STRUC_wmi_modem_power_state_cmd_param,
 } WMITLV_TAG_ID;
 
 /*
@@ -566,7 +572,9 @@ typedef enum {
     OP(WMI_BATCH_SCAN_TRIGGER_RESULT_CMDID) \
     OP(WMI_THERMAL_MGMT_CMDID) \
     OP(WMI_ADD_PROACTIVE_ARP_RSP_PATTERN_CMDID) \
-    OP(WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMDID)
+    OP(WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMDID) \
+    OP(WMI_NAN_CMDID) \
+    OP(WMI_MODEM_POWER_STATE_CMDID)
 
 /*
  * IMPORTANT: Please add _ALL_ WMI Events Here.
@@ -627,7 +635,10 @@ typedef enum {
     OP(WMI_DFS_RADAR_EVENTID) \
     OP(WMI_BATCH_SCAN_ENABLED_EVENTID) \
     OP(WMI_BATCH_SCAN_RESULT_EVENTID) \
-    OP(WMI_THERMAL_MGMT_EVENTID)
+    OP(WMI_THERMAL_MGMT_EVENTID) \
+    OP(WMI_NAN_EVENTID) \
+    OP(WMI_PDEV_L1SS_TRACK_EVENTID) \
+    OP(WMI_DIAG_DATA_CONTAINER_EVENTID)
 
 /* TLV definitions of WMI commands */
 
@@ -1508,6 +1519,16 @@ WMITLV_CREATE_PARAM_STRUC(WMI_ADD_PROACTIVE_ARP_RSP_PATTERN_CMDID);
     WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMD_fixed_param, WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMD_fixed_param, fixed_param, WMITLV_SIZE_FIX)
 WMITLV_CREATE_PARAM_STRUC(WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMDID);
 
+/* NaN Request */
+#define WMITLV_TABLE_WMI_NAN_CMDID(id,op,buf,len) \
+   WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_wmi_nan_cmd_param, wmi_nan_cmd_param, fixed_param, WMITLV_SIZE_FIX) \
+   WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_BYTE, A_UINT8, data, WMITLV_SIZE_VAR)
+WMITLV_CREATE_PARAM_STRUC(WMI_NAN_CMDID);
+
+/* Modem power state cmd */
+#define WMITLV_TABLE_WMI_MODEM_POWER_STATE_CMDID(id,op,buf,len) \
+   WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_wmi_modem_power_state_cmd_param, wmi_modem_power_state_cmd_param, fixed_param, WMITLV_SIZE_FIX)
+WMITLV_CREATE_PARAM_STRUC(WMI_MODEM_POWER_STATE_CMDID);
 
 /************************** TLV definitions of WMI events *******************************/
 
@@ -1809,9 +1830,24 @@ WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_wmi_dfs_radar_event_fixed_param, wmi
 WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_wmi_thermal_mgmt_event_fixed_param, wmi_thermal_mgmt_event_fixed_param, fixed_param, WMITLV_SIZE_FIX)
     WMITLV_CREATE_PARAM_STRUC(WMI_THERMAL_MGMT_EVENTID);
 
+/* NAN Response/Indication Event */
+#define WMITLV_TABLE_WMI_NAN_EVENTID(id,op,buf,len)                                     \
+WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_wmi_nan_event_hdr, wmi_nan_event_hdr, fixed_param, WMITLV_SIZE_FIX) \
+WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_BYTE, A_UINT8, data, WMITLV_SIZE_VAR)
+    WMITLV_CREATE_PARAM_STRUC(WMI_NAN_EVENTID);
+
+/* L1SS track Event */
+#define WMITLV_TABLE_WMI_PDEV_L1SS_TRACK_EVENTID(id,op,buf,len)\
+    WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_wmi_pdev_l1ss_track_event_fixed_param, wmi_pdev_l1ss_track_event_fixed_param, fixed_param, WMITLV_SIZE_FIX)
+WMITLV_CREATE_PARAM_STRUC(WMI_PDEV_L1SS_TRACK_EVENTID);
+
+#define WMITLV_TABLE_WMI_DIAG_DATA_CONTAINER_EVENTID(id,op,buf,len) \
+    WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_STRUC_wmi_diag_data_container_event_fixed_param, wmi_diag_data_container_event_fixed_param, fixed_param, WMITLV_SIZE_FIX)   \
+    WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_BYTE, A_UINT8, bufp, WMITLV_SIZE_VAR)
+WMITLV_CREATE_PARAM_STRUC(WMI_DIAG_DATA_CONTAINER_EVENTID);
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /*_WMI_TLV_DEFS_H_*/
-

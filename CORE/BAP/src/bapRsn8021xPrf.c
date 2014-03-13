@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -23,6 +23,11 @@
  * This file was originally distributed by Qualcomm Atheros, Inc.
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
+ */
+
+/*
+ * $File: //depot/software/projects/feature_branches/gen5_phase1/os/linux/classic/ap/apps/ssm/auth8021x/ani8021xPrf.c $
+ *
  */
 /*
  * Contains definitions for routines to calculate the 802.11i PRF
@@ -111,7 +116,7 @@ int
 aagPtkPrf(v_U32_t cryptHandle,
           v_U8_t result[AAG_PRF_MAX_OUTPUT_SIZE],
           v_U32_t prfLen,
-          tAniPacket *pmk, 
+          tAniPacket *pmk,
           tAniMacAddr authAddr,
           tAniMacAddr suppAddr,
           v_U8_t aNonce[ANI_EAPOL_KEY_RSN_NONCE_SIZE],
@@ -156,8 +161,8 @@ aagPtkPrf(v_U32_t cryptHandle,
     }
 
     return aagPrf(cryptHandle,
-                  result, 
-                  keyBytes, keyLen, 
+                  result,
+                  keyBytes, keyLen,
                   (v_U8_t *)AAG_PTK_PRF_CONST, AAG_PTK_PRF_CONST_LEN,
                   text, sizeof(text),
                   prfLen);
@@ -247,10 +252,14 @@ aagPrf(v_U32_t cryptHandle,
     numLoops = prfLen + AAG_PTK_PRF_ADD_PARAM;
     numLoops /= AAG_PTK_PRF_DIV_PARAM;
 
-    for (i = 0; i < numLoops; i++) 
+    for (i = 0; i < numLoops; i++)
     {
-        VOS_ASSERT((resultOffset - result + VOS_DIGEST_SHA1_SIZE)
-               <= AAG_PRF_MAX_OUTPUT_SIZE);
+        if ((resultOffset - result + VOS_DIGEST_SHA1_SIZE) > AAG_PRF_MAX_OUTPUT_SIZE)
+        {
+            VOS_ASSERT(0);
+            return ANI_ERROR;
+        }
+
         hmacText[loopCtrPos] = i;
         if( VOS_IS_STATUS_SUCCESS( vos_sha1_hmac_str(cryptHandle, hmacText, loopCtrPos + 1, key, keyLen, resultOffset) ) )
         {
@@ -267,4 +276,3 @@ aagPrf(v_U32_t cryptHandle,
 
     return retVal;
 }
-

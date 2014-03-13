@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 
 
 #ifndef __ATH_PCI_H__
@@ -87,6 +88,7 @@ struct hif_pci_softc {
     struct targetdef_s *targetdef;
     struct hostdef_s *hostdef;
     atomic_t tasklet_from_intr;
+    bool hif_init_done;
 };
 #define TARGID(sc) ((A_target_id_t)(&(sc)->mem))
 #define TARGID_TO_HIF(targid) (((struct hif_pci_softc *)((char *)(targid) - (char *)&(((struct hif_pci_softc *)0)->mem)))->hif_device)
@@ -119,6 +121,9 @@ extern int pktlogmod_init(void *context);
 extern void pktlogmod_exit(void *context);
 #endif
 
+int hif_pci_check_soc_status(struct hif_pci_softc *sc);
+void dump_CE_debug_register(struct hif_pci_softc *sc);
+
 /*
  * A firmware interrupt to the Host is indicated by the
  * low bit of SCRATCH_3_ADDRESS being set.
@@ -128,7 +133,7 @@ extern void pktlogmod_exit(void *context);
 /*
  * Typically, MSI Interrupts are used with PCIe. To force use of legacy
  * "ABCD" PCI line interrupts rather than MSI, define FORCE_LEGACY_PCI_INTERRUPTS.
- * Even when NOT forced, the driver may attempt to use legacy PCI interrupts 
+ * Even when NOT forced, the driver may attempt to use legacy PCI interrupts
  * MSI allocation fails
  */
 #define LEGACY_INTERRUPTS(sc) ((sc)->num_msi_intrs == 0)

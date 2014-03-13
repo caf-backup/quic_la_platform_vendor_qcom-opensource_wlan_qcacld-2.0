@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _DMUX_DXE_INTERNAL__H_
 #define _DMUX_DXE_INTERNAL__H_
 
@@ -36,7 +37,7 @@
 
 struct dmux_dxe_pdev_t {
     adf_os_atomic_t  ref_count;  /* module reference count */
-    hif_dxe_handle   h_hif_dxe;  
+    hif_dxe_handle   h_hif_dxe;
     dmux_dxe_data_cb rx_data_cb;
     dmux_dxe_mgmt_cb rx_mgmt_cb;
     dmux_dxe_ctrl_cb rx_ctrl_cb;

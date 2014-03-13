@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( __I_VOS_PACKET_H )
 #define __I_VOS_PACKET_H
 
@@ -62,6 +63,7 @@ typedef struct
    u_int8_t  offloadScanLearn:1;
    u_int8_t  roamCandidateInd:1;
    u_int8_t  scan:1;
+   u_int8_t  dpuFeedback;
 }t_packetmeta, *tp_packetmeta;
 
 /* implementation specific vos packet type */

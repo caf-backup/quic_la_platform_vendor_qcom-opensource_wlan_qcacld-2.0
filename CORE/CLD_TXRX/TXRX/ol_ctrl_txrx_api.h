@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_ctrl_txrx_api.h
  * @brief Define the host control API functions called by the host data SW.
@@ -59,7 +60,7 @@ enum ol_rx_err_type {
 #ifdef SUPPORT_HOST_STATISTICS
 /** * @brief Update tx statistics
  * @details
- *  Update tx statistics after tx complete. 
+ *  Update tx statistics after tx complete.
  *
  * @param pdev - ol_pdev_handle instance
  * @param vdev_id - ID of the virtual device that tx frame
@@ -69,7 +70,7 @@ void ol_tx_statistics(ol_pdev_handle pdev,
                       u_int16_t vdev_id,
 					  int had_error);
 #else
-#define ol_tx_statistics(pdev, vdev_id, had_error) 
+#define ol_tx_statistics(pdev, vdev_id, had_error)
 #endif
 
 /** * @brief Count on received packets for invalid peer case
@@ -114,6 +115,8 @@ void ol_rx_err_statistics(ol_pdev_handle pdev,
  *      one of the fragments that when reassembled, constitute the rx frame
  * @param err_type - what kind of error occurred
  * @param rx_frame - the rx frame that had an error
+ * @pn - Packet sequence number
+ * @key_id - Key index octet received in IV of the frame
  */
 void
 ol_rx_err(
@@ -123,7 +126,9 @@ ol_rx_err(
     int tid,
     u_int32_t tsf32,
     enum ol_rx_err_type err_type,
-    adf_nbuf_t rx_frame);
+    adf_nbuf_t rx_frame,
+    u_int64_t *pn,
+    u_int8_t key_id);
 
 
 enum ol_rx_notify_type {
@@ -186,7 +191,6 @@ ol_rx_notify(
  */
 void
 ol_tx_paused_peer_data(ol_peer_handle peer, int has_tx_data);
-
 
 #ifdef QCA_WIFI_ISOC
 

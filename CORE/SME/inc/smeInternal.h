@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,20 +20,23 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2011-2013 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 #if !defined( __SMEINTERNAL_H )
 #define __SMEINTERNAL_H
 
 
 /**=========================================================================
-  
+
   \file  smeInternal.h
-  
+
   \brief prototype for SME internal structures and APIs used for SME and MAC
-  
+
   ========================================================================*/
 
 /* $Header$ */
@@ -49,30 +52,30 @@
 #include "vos_diag_core_event.h"
 #include "csrLinkList.h"
 
-/*-------------------------------------------------------------------------- 
+/*--------------------------------------------------------------------------
   Type declarations
   ------------------------------------------------------------------------*/
 
 // Mask can be only have one bit set
-typedef enum eSmeCommandType 
+typedef enum eSmeCommandType
 {
-    eSmeNoCommand = 0, 
+    eSmeNoCommand = 0,
     eSmeDropCommand,
     //CSR
     eSmeCsrCommandMask = 0x10000,   //this is not a command, it is to identify this is a CSR command
     eSmeCommandScan,
-    eSmeCommandRoam, 
-    eSmeCommandWmStatusChange, 
+    eSmeCommandRoam,
+    eSmeCommandWmStatusChange,
     eSmeCommandSetKey,
     eSmeCommandRemoveKey,
     eSmeCommandAddStaSession,
     eSmeCommandDelStaSession,
 #ifdef FEATURE_WLAN_TDLS
     //eSmeTdlsCommandMask = 0x80000,  //To identify TDLS commands <TODO>
-    //These can be considered as csr commands. 
-    eSmeCommandTdlsSendMgmt, 
-    eSmeCommandTdlsAddPeer, 
-    eSmeCommandTdlsDelPeer, 
+    //These can be considered as csr commands.
+    eSmeCommandTdlsSendMgmt,
+    eSmeCommandTdlsAddPeer,
+    eSmeCommandTdlsDelPeer,
     eSmeCommandTdlsLinkEstablish,
 #ifdef FEATURE_WLAN_TDLS_INTERNAL
     eSmeCommandTdlsDiscovery,
@@ -124,7 +127,7 @@ typedef struct tagSmeStruct
     tDblLinkList smeCmdActiveList;
     tDblLinkList smeCmdPendingList;
     tDblLinkList smeCmdFreeList;   //preallocated roam cmd list
-    void (*pTxPerHitCallback) (void *pCallbackContext); /* callback for Tx PER hit to HDD */ 
+    void (*pTxPerHitCallback) (void *pCallbackContext); /* callback for Tx PER hit to HDD */
     void *pTxPerHitCbContext;
     tVOS_CON_MODE currDeviceMode;
 #ifdef FEATURE_WLAN_LPHB
@@ -140,6 +143,8 @@ typedef struct tagSmeStruct
 #ifdef FEATURE_WLAN_CH_AVOID
     void (*pChAvoidNotificationCb) (void *hdd_context, void *indi_param);
 #endif /* FEATURE_WLAN_CH_AVOID */
+    /* Maximum interfaces allowed by the host */
+    tANI_U8 max_intf_count;
 } tSmeStruct, *tpSmeStruct;
 
 

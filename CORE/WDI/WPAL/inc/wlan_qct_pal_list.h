@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,17 +24,18 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( __WLAN_QCT_PAL_LIST_H )
 #define __WLAN_QCT_PAL_LIST_H
 
 /**=========================================================================
-  
+
   \file  wlan_qct_pal_list.h
-  
+
   \brief define linked list PAL exports. wpt = (Wlan Pal Type) wpal = (Wlan PAL)
-               
-   Definitions for platform independent. 
-  
+
+   Definitions for platform independent.
+
   ========================================================================*/
 
 #include "wlan_qct_os_list.h"

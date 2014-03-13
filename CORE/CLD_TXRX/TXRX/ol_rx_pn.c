@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #include <adf_nbuf.h>         /* adf_nbuf_t */
 
 #include <ol_htt_rx_api.h>    /* htt_rx_pn_t, etc. */
@@ -36,14 +37,14 @@
 #include <ol_rx.h>            /* ol_rx_deliver */
 
 /* add the MSDUs from this MPDU to the list of good frames */
-#define ADD_MPDU_TO_LIST(head, tail, mpdu, mpdu_tail) do { 	\
+#define ADD_MPDU_TO_LIST(head, tail, mpdu, mpdu_tail) do {	\
         if (!head) {                                        \
-            head = mpdu;                                	\
+            head = mpdu;					\
         } else {                                            \
-            adf_nbuf_set_next(tail, mpdu);    				\
+            adf_nbuf_set_next(tail, mpdu);				\
         }                                                   \
-        tail = mpdu_tail;                               	\
-    } while(0);                                          
+        tail = mpdu_tail;					\
+    } while(0);
 
 int ol_rx_pn_cmp24(
     union htt_rx_pn_t *new_pn,
@@ -185,7 +186,7 @@ ol_rx_pn_check_base(
                 pdev->ctrl_pdev,
                 vdev->vdev_id, peer->mac_addr.raw, tid,
                 htt_rx_mpdu_desc_tsf32(pdev->htt_pdev, rx_desc),
-                OL_RX_ERR_PN, mpdu);
+                OL_RX_ERR_PN, mpdu, NULL, 0);
             /* free all MSDUs within this MPDU */
             do {
                 adf_nbuf_t next_msdu;
@@ -342,6 +343,6 @@ ol_rx_pn_trace_display(ol_txrx_pdev_handle pdev, int just_once)
         cnt++;
         i++;
         i &= pdev->rx_pn_trace.mask;
-    } while (i != end); 
+    } while (i != end);
 }
 #endif /* ENABLE_RX_PN_TRACE */

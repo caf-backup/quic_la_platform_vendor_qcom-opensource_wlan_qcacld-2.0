@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _WCNSS_API_H_
 #define _WCNSS_API_H_
 
@@ -87,6 +88,7 @@ static inline unsigned int wcnss_get_serial_number(void)
         return 0;
 }
 
+#if !defined(CONFIG_CNSS)
 static inline void *wcnss_wlan_crypto_alloc_ahash(const char *alg_name,
                                                   unsigned int type,
                                                   unsigned int mask)
@@ -123,6 +125,7 @@ static inline void wcnss_wlan_ablkcipher_request_free(void *req)
 static inline void wcnss_wlan_crypto_free_ablkcipher(void *tfm)
 {
 }
+#endif /* !CONFIG_CNSS */
 
 static inline int req_riva_power_on_lock(char *driver_name)
 {

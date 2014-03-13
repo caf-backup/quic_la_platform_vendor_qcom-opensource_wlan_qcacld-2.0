@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * $ATH_LICENSE_HOSTSDK0_C$
@@ -319,6 +320,8 @@ ValidWriteOTP(int dev, A_UINT32 offset, A_UINT8 *buffer, A_UINT32 length)
     A_UINT8 *otp_contents;
 
     otp_contents = MALLOC(length);
+    if (otp_contents == NULL)
+        return 0;
     ReadTargetOTP(dev, offset, otp_contents, length);
 
     for (i=0; i<length; i++) {
@@ -326,10 +329,11 @@ ValidWriteOTP(int dev, A_UINT32 offset, A_UINT8 *buffer, A_UINT32 length)
             fprintf(stderr, "Abort. Cannot change offset %d from 0x%02x"
                     " to 0x%02x\n",
                     offset+i, otp_contents[i], buffer[i]);
+            free(otp_contents);
             return 0;
         }
     }
-
+    free(otp_contents);
     return 1;
 }
 
@@ -404,6 +408,8 @@ DumpTargetMem(int dev, unsigned int target_idx, char *pathname)
     unsigned int i, address, length, remaining;
 
     buffer = (A_UINT8 *)MALLOC(MAX_BUF);
+    if (buffer == NULL)
+        return;
     reg_info = target_info[target_idx].reg_info;
 
     while ((reg_info->reg_start != 0) || (reg_info->reg_len != 0)) {
@@ -492,7 +498,7 @@ main (int argc, char **argv) {
     int i;
     FILE * dump_fd;
     unsigned int address = 0, target_idx = 0, length = 0;
-    A_UINT32 param;
+    A_UINT32 param = 0;
     char filename[PATH_MAX], tempfn[PATH_MAX];
     char pathname[PATH_MAX];
     char devicename[PATH_MAX];
@@ -681,7 +687,11 @@ main (int argc, char **argv) {
             }
 
             buffer = (A_UINT8 *)MALLOC(MAX_BUF);
-
+            if (buffer == NULL) {
+                fclose(dump_fd);
+                close(dev);
+                exit(1);
+            }
             nqprintf(
                     "DIAG Read Target (address: 0x%x, length: %d,"
                     " filename: %s)\n", address, length, filename);
@@ -757,6 +767,10 @@ main (int argc, char **argv) {
             }
             memset(&filestat, '\0', sizeof(struct stat));
             buffer = (A_UINT8 *)MALLOC(MAX_BUF);
+            if (buffer == NULL) {
+                close(fd);
+                exit(1);
+            }
             fstat(fd, &filestat);
             file_length = filestat.st_size;
             if (file_length == 0) {

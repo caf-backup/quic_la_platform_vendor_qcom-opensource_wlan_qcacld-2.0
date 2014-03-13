@@ -3,8 +3,8 @@
 # Assume no targets will be supported
 WLAN_CHIPSET :=
 
-# Build/Package options for 8084 target
-ifeq ($(call is-board-platform,apq8084),true)
+# Build/Package options for 8084/8092 target
+ifeq ($(call is-board-platform-in-list, apq8084 mpq8092),true)
 	WLAN_CHIPSET     := qca_cld
 	WLAN_SELECT      := CONFIG_QCA_CLD_WLAN=m
 	WLAN_ISOC_SELECT := CONFIG_QCA_WIFI_ISOC=0
@@ -22,8 +22,10 @@ ifneq ($(findstring vendor,$(LOCAL_PATH)),)
 # Determine if we are Proprietary or Open Source
 ifneq ($(findstring opensource,$(LOCAL_PATH)),)
     WLAN_PROPRIETARY := 0
+    WLAN_OPEN_SOURCE := 1
 else
     WLAN_PROPRIETARY := 1
+    WLAN_OPEN_SOURCE := 0
 endif
 
 ifeq ($(WLAN_PROPRIETARY),1)
@@ -52,6 +54,7 @@ KBUILD_OPTIONS += MODNAME=wlan
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 KBUILD_OPTIONS += $(WLAN_SELECT)
 KBUILD_OPTIONS += $(WLAN_ISOC_SELECT)
+KBUILD_OPTIONS += WLAN_OPEN_SOURCE=$(WLAN_OPEN_SOURCE)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(WLAN_CHIPSET)_wlan.ko
@@ -69,6 +72,7 @@ include $(DLKM_DIR)/AndroidKernelModule.mk
 $(shell mkdir -p $(TARGET_OUT)/lib/modules; \
     ln -sf /system/lib/modules/$(WLAN_CHIPSET)/$(WLAN_CHIPSET)_wlan.ko \
            $(TARGET_OUT)/lib/modules/wlan.ko)
+$(shell ln -sf /persist/wlan_mac.bin $(TARGET_OUT_ETC)/firmware/wlan/qca_cld/wlan_mac.bin)
 
 endif # DLKM check
 

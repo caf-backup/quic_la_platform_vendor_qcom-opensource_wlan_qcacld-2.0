@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_tx_desc.h
  * @brief API definitions for the tx descriptor module within the data SW.
@@ -103,7 +104,7 @@ ol_tx_desc_find(struct ol_txrx_pdev_t *pdev, u_int16_t tx_desc_id);
  *  Irregular tx frames like TSO or managment frames that require
  *  special handling are processed by the ol_tx_desc_frame_free_nonstd
  *  function rather than this function.
- *  
+ *
  * @param pdev - the data physical device that sent the data
  * @param tx_descs - a list of SW tx descriptors for the tx frames
  * @param had_error - boolean indication of whether the transmission failed.
@@ -125,7 +126,7 @@ void ol_tx_desc_frame_list_free(
  *  After performing any special steps based on tx frame type, free the
  *  tx descriptor, i.e. return it to the freelist, and unmap and
  *  free the netbuf referenced by the tx descriptor.
- *  
+ *
  * @param pdev - the data physical device that sent the data
  * @param tx_desc - the SW tx descriptor for the tx frame that was sent
  * @param had_error - boolean indication of whether the transmission failed.

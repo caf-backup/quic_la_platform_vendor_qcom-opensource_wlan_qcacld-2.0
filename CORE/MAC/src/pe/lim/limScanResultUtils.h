@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file limScanResultUtils.h contains the utility definitions
  * LIM uses for maintaining and accessing scan results on STA.
@@ -42,7 +43,7 @@
 // Scan result hash related functions
 tANI_U8 limScanHashFunction(tSirMacAddr);
 void    limInitHashTable(tpAniSirGlobal);
-eHalStatus    
+eHalStatus
    limLookupNaddHashEntry(tpAniSirGlobal, tLimScanResultNode *, tANI_U8, tANI_U8);
 void    limDeleteHashEntry(tLimScanResultNode *);
 void    limDeleteCachedScanResults(tpAniSirGlobal);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file  wlan_hdd_ftm.c
@@ -80,6 +81,7 @@
 #include "ol_fw.h"
 #include "testmode.h"
 #include "wlan_hdd_cfg80211.h"
+#include "if_pci.h"
 #endif
 
 #define RXMODE_DISABLE_ALL 0
@@ -434,6 +436,10 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
 #if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM)
    adf_os_device_t adf_ctx;
    HTC_INIT_INFO  htcInfo;
+#ifndef QCA_WIFI_ISOC
+   v_PVOID_t pHifContext = NULL;
+   v_PVOID_t pHtcContext = NULL;
+#endif
 #endif
    hdd_context_t *pHddCtx;
 
@@ -502,14 +508,22 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
 #if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM)
 #ifndef QCA_WIFI_ISOC
    /* Initialize BMI and Download firmware */
-   if (bmi_download_firmware(vos_get_context(VOS_MODULE_ID_HIF, gpVosContext))) {
+   pHifContext = vos_get_context(VOS_MODULE_ID_HIF, gpVosContext);
+   if (!pHifContext)
+   {
+       VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+                 "%s: failed to get HIF context", __func__);
+       goto err_sched_close;
+   }
+
+   if (bmi_download_firmware(pHifContext)) {
        VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                  "%s: BMI failed to download target", __func__);
        goto err_bmi_close;
    }
    htcInfo.pContext = gpVosContext->pHIFContext;
    htcInfo.TargetFailure = ol_target_failure;
-   htcInfo.TargetSendSuspendComplete = wma_target_suspend_complete;
+   htcInfo.TargetSendSuspendComplete = wma_target_suspend_acknowledge;
 #endif
    adf_ctx = vos_get_context(VOS_MODULE_ID_ADF, gpVosContext);
 
@@ -525,7 +539,7 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
    }
 
 #ifndef QCA_WIFI_ISOC
-   if (bmi_done(vos_get_context(VOS_MODULE_ID_HIF, gpVosContext))) {
+   if (bmi_done(pHifContext)) {
        VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                  "%s: Failed to complete BMI phase", __func__);
        goto err_htc_close;
@@ -562,8 +576,14 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
 
    macOpenParms.powersaveOffloadEnabled =
       pHddCtx->cfg_ini->enablePowersaveOffload;
+#ifndef QCA_WIFI_ISOC
+   vStatus = WDA_open(gpVosContext, gpVosContext->pHDDContext,
+                      NULL, NULL,
+                      &macOpenParms);
+#else
    vStatus = WDA_open(gpVosContext, gpVosContext->pHDDContext,
                       NULL, &macOpenParms);
+#endif
    if (!VOS_IS_STATUS_SUCCESS(vStatus))
    {
       /* Critical Error ...  Cannot proceed further */
@@ -575,7 +595,14 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
 
 #if defined (QCA_WIFI_2_0) && defined(QCA_WIFI_FTM) \
    && !defined (QCA_WIFI_ISOC)
-   if (HTCWaitTarget(vos_get_context(VOS_MODULE_ID_HTC, gpVosContext))) {
+   pHtcContext = vos_get_context(VOS_MODULE_ID_HTC, gpVosContext);
+   if (!pHtcContext)
+   {
+       VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+                 "%s: failed to get HTC context", __func__);
+       goto err_wda_close;
+   }
+   if (HTCWaitTarget(pHtcContext)) {
       VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                 "%s: Failed to complete BMI phase", __func__);
            goto err_wda_close;
@@ -622,6 +649,7 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
      goto err_nv_close;
    }
 
+#ifndef QCA_WIFI_FTM
    /* Now proceed to open the SME */
    vStatus = sme_Open(gpVosContext->pMACContext);
    if (!VOS_IS_STATUS_SUCCESS(vStatus))
@@ -641,8 +669,13 @@ static VOS_STATUS wlan_ftm_vos_open( v_CONTEXT_t pVosContext, v_SIZE_t hddContex
                 "%s: VOSS successfully Opened", __func__);
       return VOS_STATUS_SUCCESS;
    }
+#else
+   return VOS_STATUS_SUCCESS;
+#endif
 
+#ifndef QCA_WIFI_FTM
 err_mac_close:
+#endif
    macClose(gpVosContext->pMACContext);
 
 err_nv_close:
@@ -663,7 +696,7 @@ err_htc_close:
 
 #ifndef QCA_WIFI_ISOC
 err_bmi_close:
-   BMICleanup(vos_get_context(VOS_MODULE_ID_HIF, gpVosContext));
+   BMICleanup(pHifContext);
 #endif /* #ifndef QCA_WIFI_ISOC */
 #endif /* #QCA_WIFI_2_0 && QCA_WIFI_FTM */
 
@@ -701,6 +734,7 @@ static VOS_STATUS wlan_ftm_vos_close( v_CONTEXT_t vosContext )
   VOS_STATUS vosStatus;
   pVosContextType gpVosContext = (pVosContextType)vosContext;
 
+#ifndef QCA_WIFI_FTM
   vosStatus = sme_Close(((pVosContextType)vosContext)->pMACContext);
   if (!VOS_IS_STATUS_SUCCESS(vosStatus))
   {
@@ -708,6 +742,7 @@ static VOS_STATUS wlan_ftm_vos_close( v_CONTEXT_t vosContext )
          "%s: Failed to close BAL",__func__);
      VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vosStatus ) );
   }
+#endif
 
   vosStatus = macClose( ((pVosContextType)vosContext)->pMACContext);
   if (!VOS_IS_STATUS_SUCCESS(vosStatus))
@@ -744,13 +779,14 @@ static VOS_STATUS wlan_ftm_vos_close( v_CONTEXT_t vosContext )
      VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vosStatus ) );
   }
 
-#if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM)
+#if defined(QCA_WIFI_2_0) && defined(QCA_WIFI_FTM) && !defined(QCA_WIFI_ISOC)
   if (gpVosContext->htc_ctx)
   {
       HTCStop(gpVosContext->htc_ctx);
       HTCDestroy(gpVosContext->htc_ctx);
       gpVosContext->htc_ctx = NULL;
   }
+  hif_disable_isr(gpVosContext->pHIFContext);
 #endif
 
   vos_mq_deinit(&((pVosContextType)vosContext)->freeVosMq);
@@ -4363,7 +4399,8 @@ static VOS_STATUS wlan_ftm_priv_set_mac_address(hdd_adapter_t *pAdapter,char *bu
        return VOS_STATUS_E_FAILURE;
     }
 
-    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "MacAddress = %02x:%02x:%02x:%02x:%02x:%02x",MAC_ADDR_ARRAY(macAddr));
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+              "MacAddress = " MAC_ADDRESS_STR, MAC_ADDR_ARRAY(macAddr));
 
 
     pMacAddress = &pMsgBody->SetNvField.fieldData.macAddr.macAddr1[0];
@@ -4372,7 +4409,8 @@ static VOS_STATUS wlan_ftm_priv_set_mac_address(hdd_adapter_t *pAdapter,char *bu
        pMacAddress[ii] = (v_U8_t)macAddr[ii];
 
 
-    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "pMacAddress = %02x:%02x:%02x:%02x:%02x:%02x",MAC_ADDR_ARRAY(pMacAddress));
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+              "pMacAddress = " MAC_ADDRESS_STR, MAC_ADDR_ARRAY(pMacAddress));
     status = wlan_ftm_postmsg((v_U8_t*)pMsgBuf,pMsgBuf->msgBodyLength);
 
     if (status != VOS_STATUS_SUCCESS)
@@ -4787,7 +4825,7 @@ static int iw_ftm_get_char_setnone(struct net_device *dev, struct iw_request_inf
         }
         default:
         {
-            hddLog(LOGE, "Invalid IOCTL command %d  \n",  sub_cmd );
+            hddLog(LOGE, "%s: Invalid IOCTL command %d", __func__, sub_cmd );
             break;
         }
     }

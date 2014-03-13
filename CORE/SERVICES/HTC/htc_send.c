@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,9 +24,8 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- *
- */
+
+
 
 #include "htc_internal.h"
 #include <adf_nbuf.h> /* adf_nbuf_t */
@@ -58,6 +57,31 @@ static unsigned ep_debug_mask = (1 << ENDPOINT_0) | (1 << ENDPOINT_1) | (1 << EN
 #ifndef ENABLE_BUNDLE_TX
 #define ENABLE_BUNDLE_TX 0
 #endif
+
+
+void HTC_dump_counter_info(HTC_HANDLE HTCHandle)
+{
+    HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(HTCHandle);
+
+    AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
+                    ("%s: CE_send_cnt = %d, TX_comp_cnt = %d",
+		     __func__, target->CE_send_cnt, target->TX_comp_cnt));
+}
+
+void HTCGetHostCredits(HTC_HANDLE HTCHandle,int *credits)
+{
+    HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(HTCHandle);
+
+    if (!target) {
+        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("Target Pointer is NULL!"));
+        AR_DEBUG_ASSERT(FALSE);
+        *credits = 0;
+    }
+
+    LOCK_HTC_TX(target);
+    *credits = target->TotalHostCredits;
+    UNLOCK_HTC_TX(target);
+}
 
 static INLINE void RestoreTxPacket(HTC_TARGET *target, HTC_PACKET *pPacket)
 {
@@ -337,7 +361,7 @@ static A_STATUS HTCIssuePackets(HTC_TARGET       *target,
             HTC_WRITE32(pHtcHdr, SM(payloadLen, HTC_FRAME_HDR_PAYLOADLEN) |
                     SM(pPacket->PktInfo.AsTx.SendFlags, HTC_FRAME_HDR_FLAGS) |
                     SM(pPacket->Endpoint, HTC_FRAME_HDR_ENDPOINTID));
-            HTC_WRITE32(((A_UINT32 *)pHtcHdr) + 1, 
+            HTC_WRITE32(((A_UINT32 *)pHtcHdr) + 1,
                     SM(pPacket->PktInfo.AsTx.SeqNo, HTC_FRAME_HDR_CONTROLBYTES1));
 
             /*
@@ -367,6 +391,8 @@ static A_STATUS HTCIssuePackets(HTC_TARGET       *target,
                               HTC_HDR_LENGTH + pPacket->ActualLength,
                               netbuf);
 
+	target->CE_send_cnt++;
+
         if (adf_os_unlikely(A_FAILED(status))) {
             if (status != A_NO_RESOURCE) {
                 /* TODO : if more than 1 endpoint maps to the same PipeID it is possible
@@ -374,6 +400,7 @@ static A_STATUS HTCIssuePackets(HTC_TARGET       *target,
                 AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("HIFSend Failed status:%d \n",status));
             }
             LOCK_HTC_TX(target);
+	    target->CE_send_cnt--;
             pEndpoint->ul_outstanding_cnt--;
             HTC_PACKET_REMOVE(&pEndpoint->TxLookupQueue,pPacket);
                 /* reclaim credits */
@@ -394,12 +421,12 @@ static A_STATUS HTCIssuePackets(HTC_TARGET       *target,
     }
 
     if (adf_os_unlikely(A_FAILED(status))) {
-#if defined(HIF_USB)                
+#if defined(HIF_USB)
         if (pEndpoint->Id >= ENDPOINT_2 && pEndpoint->Id <= ENDPOINT_5)
             target->avail_tx_credits += pPacket->PktInfo.AsTx.CreditsUsed;
         else
             pEndpoint->TxCredits += pPacket->PktInfo.AsTx.CreditsUsed;
-#endif        
+#endif
         while (!HTC_QUEUE_EMPTY(pPktQueue)) {
             if (status != A_NO_RESOURCE) {
                 AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("HTCIssuePackets, failed pkt:0x%p status:%d \n",pPacket,status));
@@ -465,7 +492,7 @@ void GetHTCSendPacketsCreditBased(HTC_TARGET        *target,
             /* endpoint 0 is special, it always has a credit and does not require credit based
              * flow control */
             creditsRequired = 0;
-#if defined(HIF_USB)            
+#if defined(HIF_USB)
         } else if (pEndpoint->Id >= ENDPOINT_2 && pEndpoint->Id <= ENDPOINT_5) {
             if (target->avail_tx_credits < creditsRequired)
                 break;
@@ -1011,7 +1038,7 @@ A_STATUS HTCSendDataPkt(HTC_HANDLE HTCHandle, adf_nbuf_t       netbuf, int Epid,
     HTC_WRITE32(((A_UINT32 *)pHtcHdr) + 1, SM(pEndpoint->SeqNo, HTC_FRAME_HDR_CONTROLBYTES1));
 
     pEndpoint->SeqNo++;
-   
+
     status = HIFSend_head(target->hif_dev,
             pEndpoint->UL_PipeID,
             pEndpoint->Id,
@@ -1264,6 +1291,7 @@ A_STATUS HTCTxCompletionHandler(void *Context,
 #endif
 
     pEndpoint = &target->EndPoint[EpID];
+    target->TX_comp_cnt++;
 
     do {
         pPacket = HTCLookupTxPacket(target, pEndpoint, netbuf);
@@ -1491,7 +1519,7 @@ void HTCProcessCreditRpt(HTC_TARGET *target, HTC_CREDIT_REPORT *pRpt, int NumEnt
             LOCK_HTC_TX(target);
         } else {
             pEndpoint->TxCredits += rpt_credits;
-                    
+
             if (pEndpoint->TxCredits && HTC_PACKET_QUEUE_DEPTH(&pEndpoint->TxQueue)) {
                 UNLOCK_HTC_TX(target);
                 HTCTrySend(target,pEndpoint,NULL);
@@ -1518,6 +1546,8 @@ void HTCProcessCreditRpt(HTC_TARGET *target, HTC_CREDIT_REPORT *pRpt, int NumEnt
         totalCredits += rpt_credits;
     }
 
+    target->TotalHostCredits = totalCredits;
+
     AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("  Report indicated %d credits to distribute \n", totalCredits));
 
     UNLOCK_HTC_TX(target);
@@ -1529,7 +1559,6 @@ void HTCProcessCreditRpt(HTC_TARGET *target, HTC_CREDIT_REPORT *pRpt, int NumEnt
 struct ol_ath_htc_stats *ieee80211_ioctl_get_htc_stats(HTC_HANDLE HTCHandle)
 {
     HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(HTCHandle);
-    
+
     return(&(target->htc_pkt_stats));
 }
-

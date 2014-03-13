@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,9 +24,10 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*============================================================================
 csrLogDump.c
-Implements the dump commands specific to the csr module. 
+Implements the dump commands specific to the csr module.
 ============================================================================*/
 #include "aniGlobal.h"
 #include "csrApi.h"
@@ -54,7 +55,7 @@ dump_csr( tpAniSirGlobal pMac, tANI_U32 arg1, tANI_U32 arg2, tANI_U32 arg3, tANI
     }
     return p;
 }
-static char *dump_btcSetEvent( tpAniSirGlobal pMac, tANI_U32 arg1, 
+static char *dump_btcSetEvent( tpAniSirGlobal pMac, tANI_U32 arg1,
                                tANI_U32 arg2, tANI_U32 arg3, tANI_U32 arg4, char *p )
 {
     tSmeBtEvent btEvent;
@@ -98,7 +99,7 @@ static char *dump_btcSetEvent( tpAniSirGlobal pMac, tANI_U32 arg1,
     }
     return p;
 }
-static char* dump_csrApConcScanParams( tpAniSirGlobal pMac, tANI_U32 arg1, 
+static char* dump_csrApConcScanParams( tpAniSirGlobal pMac, tANI_U32 arg1,
                                tANI_U32 arg2, tANI_U32 arg3, tANI_U32 arg4, char *p )
 {
     if( arg1 )
@@ -128,7 +129,7 @@ static tDumpFuncEntry csrMenuDumpTable[] = {
 
 void csrDumpInit(tHalHandle hHal)
 {
-    logDumpRegisterTable( (tpAniSirGlobal)hHal, &csrMenuDumpTable[0], 
+    logDumpRegisterTable( (tpAniSirGlobal)hHal, &csrMenuDumpTable[0],
                           sizeof(csrMenuDumpTable)/sizeof(csrMenuDumpTable[0]) );
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef __WLAN_HDD_KEEP_ALIVE_H__
 #define __WLAN_HDD_KEEP_ALIVE_H__
 
@@ -33,7 +34,7 @@
 
   \brief Android WLAN HDD Keep-Alive API
 
-  ==========================================================================*/
+==========================================================================*/
 
 /* Packet Types. */
 #define WLAN_KEEP_ALIVE_UNSOLICIT_ARP_RSP     2
@@ -48,11 +49,10 @@ typedef struct
 {
     v_U8_t packetType;
     v_U32_t timePeriod;
-    v_U8_t  hostIpv4Addr[4]; 
+    v_U8_t  hostIpv4Addr[4];
     v_U8_t  destIpv4Addr[4];
     v_U8_t  destMacAddr [6];
     v_U8_t  bssIdx;
 } tKeepAliveRequest, *tpKeepAliveRequest;
 
 #endif // __WLAN_HDD_KEEP_ALIVE_H__
-

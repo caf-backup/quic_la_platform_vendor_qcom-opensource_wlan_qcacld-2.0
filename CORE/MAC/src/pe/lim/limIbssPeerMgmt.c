@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /*
  * This file limIbssPeerMgmt.cc contains the utility functions
  * LIM uses to maintain peers in IBSS.
@@ -197,6 +200,7 @@ ibss_peer_collect(
         pPeer->htShortGI40Mhz = (tANI_U8)pBeacon->HTCaps.shortGI40MHz;
         pPeer->htMaxRxAMpduFactor = pBeacon->HTCaps.maxRxAMPDUFactor;
         pPeer->htSecondaryChannelOffset = pBeacon->HTInfo.secondaryChannelOffset;
+        pPeer->htLdpcCapable = (tANI_U8)pBeacon->HTCaps.advCodingCap;
     }
 
     /* Collect peer VHT capabilities based on the received beacon from the peer */
@@ -265,6 +269,7 @@ ibss_sta_caps_update(
             // In the future, may need to check for "delayedBA"
             // For now, it is IMMEDIATE BA only on ALL TID's
             pStaDs->baPolicyFlag = 0xFF;
+            pStaDs->htLdpcCapable = pPeerNode->htLdpcCapable;
         }
     }
 #ifdef WLAN_FEATURE_11AC
@@ -278,6 +283,7 @@ ibss_sta_caps_update(
            // If in 11AC mode and if session requires 11AC mode, consider peer's
            // max AMPDU length factor
            pStaDs->htMaxRxAMpduFactor = pPeerNode->VHTCaps.maxAMPDULenExp;
+           pStaDs->vhtLdpcCapable = (tANI_U8)pPeerNode->VHTCaps.ldpcCodingCap;
         }
     }
 #endif
@@ -324,7 +330,7 @@ ibss_sta_caps_update(
         }
         return;
     }
-    /* When the peer device supports EDCA parameters, then we were not 
+    /* When the peer device supports EDCA parameters, then we were not
       considering. Added this code when we saw that one of the Peer Device
       was advertising WMM param where we were not honouring that. CR# 210756
     */
@@ -500,8 +506,8 @@ ibss_status_chg_notify(
     tpAniSirGlobal          pMac,
     tSirMacAddr             peerAddr,
     tANI_U16                staIndex,
-    tANI_U8                 ucastSig, 
-    tANI_U8                 bcastSig, 
+    tANI_U8                 ucastSig,
+    tANI_U8                 bcastSig,
     tANI_U16                status,
     tANI_U8                 sessionId)
 {
@@ -575,8 +581,8 @@ ibss_bss_add(
         #endif//TO SUPPORT BT-AMP
         psessionEntry->beaconParams.beaconInterval = pBeacon->beaconInterval;
 
-    /* This function ibss_bss_add (and hence the below code) is only called during ibss coalescing. We need to 
-     * adapt to peer's capability with respect to short slot time. Changes have been made to limApplyConfiguration() 
+    /* This function ibss_bss_add (and hence the below code) is only called during ibss coalescing. We need to
+     * adapt to peer's capability with respect to short slot time. Changes have been made to limApplyConfiguration()
      * so that the IBSS doesnt blindly start with short slot = 1. If IBSS start is part of coalescing then it will adapt
      * to peer's short slot using code below.
      */
@@ -614,7 +620,7 @@ ibss_bss_add(
     {
             limLog(pMac, LOGP, FL("could not update ExtendedOperRateset at CFG"));
         return;
-    } 
+    }
 
 
     /*
@@ -763,7 +769,7 @@ void limIbssDeleteAllPeers( tpAniSirGlobal pMac ,tpPESession psessionEntry)
         if( pStaDs )
         {
 
-            ibss_status_chg_notify( pMac, pCurrNode->peerMacAddr, pStaDs->staIndex, 
+            ibss_status_chg_notify( pMac, pCurrNode->peerMacAddr, pStaDs->staIndex,
                                     pStaDs->ucUcastSig, pStaDs->ucBcastSig,
                                     eWNI_SME_IBSS_PEER_DEPARTED_IND, psessionEntry->smeSessionId );
             limReleasePeerIdx(pMac, peerIdx, psessionEntry);
@@ -1029,7 +1035,7 @@ limIbssDecideProtection(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpUpdateBeaco
         {
             /* As we found in the past, it is possible that a 11n STA sends
              * Beacon with HT IE but not ERP IE.  So the absense of ERP IE
-             * in the Beacon is not enough to conclude that STA is 11b. 
+             * in the Beacon is not enough to conclude that STA is 11b.
              */
             if ((pStaDs->erpEnabled == eHAL_CLEAR) &&
                 (!pStaDs->mlmStaContext.htCapability))
@@ -1044,6 +1050,29 @@ limIbssDecideProtection(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpUpdateBeaco
     return;
 }
 
+/**
+ * limIbssPeerFind()
+ *
+ *FUNCTION:
+ * This function is called while adding a context at
+ * DPH & Polaris for a peer in IBSS.
+ * If peer is found in the list, capabilities from the
+ * returned BSS description are used at DPH node & Polaris.
+ *
+ *LOGIC:
+ *
+ *ASSUMPTIONS:
+ *
+ *NOTE:
+ *
+ * @param  macAddr - MAC address of the peer
+ *
+ * @return Pointer to peer node if found, else NULL
+ */
+tLimIbssPeerNode* limIbssPeerFind(tpAniSirGlobal pMac, tSirMacAddr macAddr)
+{
+    return ibss_peer_find(pMac, macAddr);
+}
 
 /**
  * limIbssStaAdd()
@@ -1078,7 +1107,7 @@ limIbssStaAdd(
     tLimIbssPeerNode    *pPeerNode;
     tLimMlmStates       prevState;
     tSirMacAddr         *pPeerAddr = (tSirMacAddr *) pBody;
-    tUpdateBeaconParams beaconParams; 
+    tUpdateBeaconParams beaconParams;
 
     vos_mem_set((tANI_U8 *) &beaconParams, sizeof(tUpdateBeaconParams), 0);
 
@@ -1183,7 +1212,7 @@ limIbssAddStaRsp(
 
     PELOGW(limLog(pMac, LOGW, FL("IBSS: sending IBSS_NEW_PEER msg to SME!"));)
 
-    ibss_status_chg_notify(pMac, pAddStaParams->staMac, pStaDs->staIndex, 
+    ibss_status_chg_notify(pMac, pAddStaParams->staMac, pStaDs->staIndex,
                            pStaDs->ucUcastSig, pStaDs->ucBcastSig,
                            eWNI_SME_IBSS_NEW_PEER_IND,
                            psessionEntry->smeSessionId);
@@ -1301,7 +1330,7 @@ limIbssDelBssRsp(
     */
     if(true == pMac->lim.gLimIbssCoalescingHappened)
     {
-       
+
         limIbssDelBssRspWhenCoalescing(pMac,msg,psessionEntry);
         return;
     }
@@ -1318,7 +1347,7 @@ limIbssDelBssRsp(
 
 
 
-    if(limSetLinkState(pMac, eSIR_LINK_IDLE_STATE, nullBssid,  
+    if(limSetLinkState(pMac, eSIR_LINK_IDLE_STATE, nullBssid,
         psessionEntry->selfMacAddr, NULL, NULL) != eSIR_SUCCESS)
     {
         PELOGE(limLog(pMac, LOGE, FL("IBSS: DEL_BSS_RSP setLinkState failed"));)
@@ -1338,7 +1367,7 @@ limIbssDelBssRsp(
     psessionEntry->limSystemRole = eLIM_STA_ROLE;
 
     /* Change the short slot operating mode to Default (which is 1 for now) so that when IBSS starts next time with Libra
-     * as originator, it picks up the default. This enables us to remove hard coding of short slot = 1 from limApplyConfiguration 
+     * as originator, it picks up the default. This enables us to remove hard coding of short slot = 1 from limApplyConfiguration
      */
     psessionEntry->shortSlotTimeSupported = WNI_CFG_SHORT_SLOT_TIME_STADEF;
 
@@ -1461,7 +1490,7 @@ limIbssCoalesce(
     tSirMacAddr         currentBssId;
     tLimIbssPeerNode    *pPeerNode;
     tpDphHashNode       pStaDs;
-    tUpdateBeaconParams beaconParams; 
+    tUpdateBeaconParams beaconParams;
 
     vos_mem_set((tANI_U8 *)&beaconParams, sizeof(tUpdateBeaconParams), 0);
 
@@ -1632,14 +1661,14 @@ void limIbssHeartBeatHandle(tpAniSirGlobal pMac,tpPESession psessionEntry)
     tANI_U8 ucBcastSig=0;
 
     /** MLM BSS is started and if PE in scanmode then MLM state will be waiting for probe resp.
-     *  If Heart beat timeout triggers during this corner case then we need to reactivate HeartBeat timer 
+     *  If Heart beat timeout triggers during this corner case then we need to reactivate HeartBeat timer
      */
     if(psessionEntry->limMlmState != eLIM_MLM_BSS_STARTED_STATE) {
-        /****** 
-         * Note: Use this code once you have converted all  
-         * limReactivateHeartBeatTimer() calls to 
+        /******
+         * Note: Use this code once you have converted all
+         * limReactivateHeartBeatTimer() calls to
          * limReactivateTimer() calls.
-         * 
+         *
          ******/
         //limReactivateTimer(pMac, eLIM_HEART_BEAT_TIMER, psessionEntry);
         limReactivateHeartBeatTimer(pMac, psessionEntry);
@@ -1679,7 +1708,7 @@ void limIbssHeartBeatHandle(tpAniSirGlobal pMac,tpPESession psessionEntry)
                     limDeleteDphHashEntry(pMac, pStaDs->staAddr, peerIdx,psessionEntry);
                     limReleasePeerIdx(pMac, peerIdx, psessionEntry);
                     //Send indication.
-                    ibss_status_chg_notify( pMac, pTempNode->peerMacAddr, staIndex, 
+                    ibss_status_chg_notify( pMac, pTempNode->peerMacAddr, staIndex,
                                             ucUcastSig, ucBcastSig,
                                             eWNI_SME_IBSS_PEER_DEPARTED_IND,
                                             psessionEntry->smeSessionId );
@@ -1749,14 +1778,14 @@ void limIbssHeartBeatHandle(tpAniSirGlobal pMac,tpPESession psessionEntry)
 \return None
   -------------------------------------------------------------*/
 void
-limIbssDecideProtectionOnDelete(tpAniSirGlobal pMac, 
+limIbssDecideProtectionOnDelete(tpAniSirGlobal pMac,
       tpDphHashNode pStaDs, tpUpdateBeaconParams pBeaconParams,  tpPESession psessionEntry)
 {
     tANI_U32 phyMode;
     tHalBitVal erpEnabled = eHAL_CLEAR;
     tSirRFBand rfBand = SIR_BAND_UNKNOWN;
-    tANI_U32 i;    
-    
+    tANI_U32 i;
+
     if(NULL == pStaDs)
       return;
 
@@ -1873,4 +1902,3 @@ limProcessIbssPeerInactivity(tpAniSirGlobal pMac, void *buf)
       }
    }
 }
-

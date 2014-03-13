@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,14 +24,16 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 //==================================================================
 //
 //  File:         utilsApi.cc
 //
-//  Description:  Implemention of a few utility routines. 
+//  Description:  Implemention of a few utility routines.
 //
 //  Author:       Neelay Das
 //
+////
 //  Change gHistory:
 //  12/15/2003 - NDA - Initial version.
 //

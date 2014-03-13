@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,23 +24,24 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( HDD_CFG80211_H__ )
 #define HDD_CFG80211_H__
 
 
 /**===========================================================================
-  
+
   \file  wlan_hdd_cfg80211.h
-  
+
   \brief cfg80211 functions declarations
-    
+
   ==========================================================================*/
-  
+
 /* $HEADER$ */
 
 
 //value for initial part of frames and number of bytes to be compared
-#define GAS_INITIAL_REQ "\x04\x0a"  
+#define GAS_INITIAL_REQ "\x04\x0a"
 #define GAS_INITIAL_REQ_SIZE 2
 
 #define GAS_INITIAL_RSP "\x04\x0b"
@@ -52,7 +53,7 @@
 #define GAS_COMEBACK_RSP "\x04\x0d"
 #define GAS_COMEBACK_RSP_SIZE 2
 
-#define P2P_PUBLIC_ACTION_FRAME "\x04\x09\x50\x6f\x9a\x09" 
+#define P2P_PUBLIC_ACTION_FRAME "\x04\x09\x50\x6f\x9a\x09"
 #define P2P_PUBLIC_ACTION_FRAME_SIZE 6
 
 #define P2P_ACTION_FRAME "\x7f\x50\x6f\x9a\x09"
@@ -103,6 +104,32 @@ typedef struct {
    u32 age;
 }__attribute__((packed)) qcom_ie_age ;
 #endif
+
+/* Vendor id to be used in vendor specific command and events
+ * to user space
+ */
+#define QCOM_NL80211_VENDOR_ID                0x001374
+
+/* Vendor speicific sub-command id and their index */
+#ifdef FEATURE_WLAN_CH_AVOID
+#define QCOM_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY         10
+#define QCOM_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_INDEX   0
+#endif /* FEATURE_WLAN_CH_AVOID */
+
+#ifdef FEATURE_WLAN_CH_AVOID
+#define HDD_MAX_AVOID_FREQ_RANGES   4
+typedef struct sHddAvoidFreqRange
+{
+   u32 startFreq;
+   u32 endFreq;
+} tHddAvoidFreqRange;
+
+typedef struct sHddAvoidFreqList
+{
+   u32 avoidFreqRangeCount;
+   tHddAvoidFreqRange avoidFreqRange[HDD_MAX_AVOID_FREQ_RANGES];
+} tHddAvoidFreqList;
+#endif /* FEATURE_WLAN_CH_AVOID */
 
 struct cfg80211_bss* wlan_hdd_cfg80211_update_bss_db( hdd_adapter_t *pAdapter,
                                       tCsrRoamInfo *pRoamInfo
@@ -186,6 +213,11 @@ void wlan_hdd_testmode_rx_event(void *buf, size_t buf_len);
 void hdd_suspend_wlan(void (*callback)(void *callbackContext),
                       void *callbackContext);
 void hdd_resume_wlan(void);
+#endif
+
+#ifdef FEATURE_WLAN_CH_AVOID
+int wlan_hdd_send_avoid_freq_event(hdd_context_t *pHddCtx,
+                                   tHddAvoidFreqList *pAvoidFreqList);
 #endif
 
 #endif

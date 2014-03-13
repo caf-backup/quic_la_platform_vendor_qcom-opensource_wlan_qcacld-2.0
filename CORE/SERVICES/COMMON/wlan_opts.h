@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _WLAN_OPTS_H_
 #define _WLAN_OPTS_H_
 
@@ -35,7 +36,7 @@
 #define ATH_DEBUG 1 /* default: include debug code */
 #endif
 
-#if ATH_DEBUG  
+#if ATH_DEBUG
 #define DEBUG_VAR_DECL_INIT(_var,_type,_value) _type (_var)=_value
 #else
 #define DEBUG_VAR_DECL_INIT(_var,_type,_value)

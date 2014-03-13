@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-14 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -33,18 +33,19 @@
 #include <adf_os_types.h>
 #include <adf_nbuf.h>
 
+adf_nbuf_trace_update_t  trace_update_cb = NULL;
 
 /*
  * @brief This allocates an nbuf aligns if needed and reserves
  *        some space in the front, since the reserve is done
  *        after alignment the reserve value if being unaligned
  *        will result in an unaligned address.
- * 
+ *
  * @param hdl
  * @param size
  * @param reserve
  * @param align
- * 
+ *
  * @return nbuf or NULL if no memory
  */
 struct sk_buff *
@@ -138,7 +139,7 @@ __adf_nbuf_shared(struct sk_buff *skb)
  * @brief create a nbuf map
  * @param osdev
  * @param dmap
- * 
+ *
  * @return a_status_t
  */
 a_status_t
@@ -152,13 +153,13 @@ __adf_nbuf_dmamap_create(adf_os_device_t osdev, __adf_os_dma_map_t *dmap)
     (*dmap) = kzalloc(sizeof(struct __adf_os_dma_map), GFP_KERNEL);
     if(!(*dmap))
         error = A_STATUS_ENOMEM;
-    
+
     return error;
 }
 
 /**
  * @brief free the nbuf map
- * 
+ *
  * @param osdev
  * @param dmap
  */
@@ -170,12 +171,12 @@ __adf_nbuf_dmamap_destroy(adf_os_device_t osdev, __adf_os_dma_map_t dmap)
 
 /**
  * @brief get the dma map of the nbuf
- * 
+ *
  * @param osdev
  * @param bmap
  * @param skb
  * @param dir
- * 
+ *
  * @return a_status_t
  */
 a_status_t
@@ -249,36 +250,36 @@ __adf_nbuf_unmap_single(
     adf_os_device_t osdev, adf_nbuf_t buf, adf_os_dma_dir_t dir)
 {
 #if !defined(A_SIMOS_DEVHOST)
-    dma_unmap_single(osdev->dev, NBUF_MAPPED_PADDR_LO(buf), 
+    dma_unmap_single(osdev->dev, NBUF_MAPPED_PADDR_LO(buf),
                      skb_end_pointer(buf) - buf->data, dir);
 #endif	/* #if !defined(A_SIMOS_DEVHOST) */
 }
 
 /**
- * @brief return the dma map info 
- * 
+ * @brief return the dma map info
+ *
  * @param[in]  bmap
  * @param[out] sg (map_info ptr)
  */
-void 
+void
 __adf_nbuf_dmamap_info(__adf_os_dma_map_t bmap, adf_os_dmamap_info_t *sg)
 {
     adf_os_assert(bmap->mapped);
     adf_os_assert(bmap->nsegs <= ADF_OS_MAX_SCATTER);
-    
-    memcpy(sg->dma_segs, bmap->seg, bmap->nsegs * 
+
+    memcpy(sg->dma_segs, bmap->seg, bmap->nsegs *
            sizeof(struct __adf_os_segment));
     sg->nsegs = bmap->nsegs;
 }
 /**
  * @brief return the frag data & len, where frag no. is
  *        specified by the index
- * 
+ *
  * @param[in] buf
  * @param[out] sg (scatter/gather list of all the frags)
- * 
+ *
  */
-void  
+void
 __adf_nbuf_frag_info(struct sk_buff *skb, adf_os_sglist_t  *sg)
 {
 #if defined(ADF_OS_DEBUG) || defined(__ADF_SUPPORT_FRAG_MEM)
@@ -294,7 +295,7 @@ __adf_nbuf_frag_info(struct sk_buff *skb, adf_os_sglist_t  *sg)
 #else
     for(int i = 1; i <= sh->nr_frags; i++){
         skb_frag_t    *f        = &sh->frags[i - 1];
-        sg->sg_segs[i].vaddr    = (uint8_t *)(page_address(f->page) + 
+        sg->sg_segs[i].vaddr    = (uint8_t *)(page_address(f->page) +
                                   f->page_offset);
         sg->sg_segs[i].len      = f->size;
 
@@ -304,7 +305,7 @@ __adf_nbuf_frag_info(struct sk_buff *skb, adf_os_sglist_t  *sg)
 #endif
 }
 
-a_status_t 
+a_status_t
 __adf_nbuf_set_rx_cksum(struct sk_buff *skb, adf_nbuf_rx_cksum_t *cksum)
 {
     switch (cksum->l4_result) {
@@ -347,8 +348,8 @@ __adf_nbuf_get_tx_cksum(struct sk_buff *skb)
     }
 }
 
-a_status_t      
-__adf_nbuf_get_vlan_info(adf_net_handle_t hdl, struct sk_buff *skb, 
+a_status_t
+__adf_nbuf_get_vlan_info(adf_net_handle_t hdl, struct sk_buff *skb,
                          adf_net_vlanhdr_t *vlan)
 {
      return A_STATUS_OK;
@@ -357,7 +358,13 @@ __adf_nbuf_get_vlan_info(adf_net_handle_t hdl, struct sk_buff *skb,
 a_uint8_t
 __adf_nbuf_get_tid(struct sk_buff *skb)
 {
-    return ADF_NBUF_TX_EXT_TID_INVALID;
+    return skb->priority;
+}
+
+void
+__adf_nbuf_set_tid(struct sk_buff *skb, a_uint8_t tid)
+{
+        skb->priority = tid;
 }
 
 a_uint8_t
@@ -371,6 +378,56 @@ __adf_nbuf_dmamap_set_cb(__adf_os_dma_map_t dmap, void *cb, void *arg)
 {
     return;
 }
+
+void
+__adf_nbuf_reg_trace_cb(adf_nbuf_trace_update_t cb_func_ptr)
+{
+   trace_update_cb = cb_func_ptr;
+   return;
+}
+
+#ifdef QCA_PKT_PROTO_TRACE
+void
+__adf_nbuf_trace_update(adf_nbuf_t buf, char *event_string)
+{
+
+   char string_buf[NBUF_PKT_TRAC_MAX_STRING];
+
+   if ((!trace_update_cb) || (!event_string)) {
+      return;
+   }
+
+   if (!adf_nbuf_trace_get_proto_type(buf)) {
+      return;
+   }
+
+   /* Buffer over flow */
+   if (NBUF_PKT_TRAC_MAX_STRING <
+       (adf_os_str_len(event_string) + NBUF_PKT_TRAC_PROTO_STRING)) {
+      return;
+   }
+
+   adf_os_mem_zero(string_buf,
+                   NBUF_PKT_TRAC_MAX_STRING);
+   adf_os_mem_copy(string_buf,
+                   event_string, adf_os_str_len(event_string));
+   if (NBUF_PKT_TRAC_TYPE_EAPOL &
+       adf_nbuf_trace_get_proto_type(buf)) {
+      adf_os_mem_copy(string_buf + adf_os_str_len(event_string),
+                      "EPL",
+                      NBUF_PKT_TRAC_PROTO_STRING);
+   }
+   else if (NBUF_PKT_TRAC_TYPE_DHCP &
+            adf_nbuf_trace_get_proto_type(buf)) {
+      adf_os_mem_copy(string_buf + adf_os_str_len(event_string),
+                      "DHC",
+                      NBUF_PKT_TRAC_PROTO_STRING);
+   }
+
+   trace_update_cb(string_buf);
+   return;
+}
+#endif /* QCA_PKT_PROTO_TRACE */
 
 EXPORT_SYMBOL(__adf_nbuf_alloc);
 EXPORT_SYMBOL(__adf_nbuf_free);
@@ -388,5 +445,6 @@ EXPORT_SYMBOL(__adf_nbuf_set_rx_cksum);
 EXPORT_SYMBOL(__adf_nbuf_get_tx_cksum);
 EXPORT_SYMBOL(__adf_nbuf_get_vlan_info);
 EXPORT_SYMBOL(__adf_nbuf_get_tid);
+EXPORT_SYMBOL(__adf_nbuf_set_tid);
 EXPORT_SYMBOL(__adf_nbuf_get_exemption_type);
 EXPORT_SYMBOL(__adf_nbuf_dmamap_set_cb);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,17 +20,19 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2011-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /** ------------------------------------------------------------------------- *
     ------------------------------------------------------------------------- *
     \file csrApi.h
 
     Exports and types for the Common Scan and Roaming Module interfaces.
-
-   ========================================================================== */
+========================================================================== */
 #ifndef CSRAPI_H__
 #define CSRAPI_H__
 
@@ -466,6 +468,13 @@ typedef enum
     eCSR_ROAM_CCX_ADJ_AP_REPORT_IND,
     eCSR_ROAM_CCX_BCN_REPORT_IND,
 #endif /* FEATURE_WLAN_CCX && FEATURE_WLAN_CCX_UPLOAD */
+
+    // Radar indication from lower layers
+    eCSR_ROAM_DFS_RADAR_IND,
+    eCSR_ROAM_SET_CHANNEL_RSP,
+
+    // Channel sw update notification
+    eCSR_ROAM_DFS_CHAN_SW_NOTIFY
 }eRoamCmdStatus;
 
 
@@ -559,6 +568,12 @@ typedef enum
     eCSR_ROAM_RESULT_TDLS_SHOULD_PEER_DISCONNECTED,
 #endif
 #endif
+
+    eCSR_ROAM_RESULT_DFS_RADAR_FOUND_IND,
+    eCSR_ROAM_RESULT_CHANNEL_CHANGE_SUCCESS,
+    eCSR_ROAM_RESULT_CHANNEL_CHANGE_FAILURE,
+    eCSR_ROAM_RESULT_DFS_CHANSW_UPDATE_SUCCESS,
+    eCSR_ROAM_RESULT_DFS_CHANSW_UPDATE_FAILURE,
 }eCsrRoamResult;
 
 
@@ -889,6 +904,8 @@ typedef struct tagCsrRoamProfile
 #endif
     tVOS_CON_MODE csrPersona;
 
+    tANI_U8 disableDFSChSwitch;
+
 }tCsrRoamProfile;
 
 
@@ -930,6 +947,7 @@ typedef struct tagCsrRoamConnectedProfile
     tANI_BOOLEAN    isCCXAssoc;
 #endif
     tANI_U32 dot11Mode;
+    tANI_U8 proxyARPService;
 }tCsrRoamConnectedProfile;
 
 
@@ -953,6 +971,8 @@ typedef struct tagCsrNeighborRoamConfigParams
     tANI_U8        nMaxNeighborRetries;
     tANI_U16       nNeighborResultsRefreshPeriod;
     tANI_U16       nEmptyScanRefreshPeriod;
+    tANI_U8        nOpportunisticThresholdDiff;
+    tANI_U8        nRoamRescanRssiDiff;
 }tCsrNeighborRoamConfigParams;
 #endif
 
@@ -1124,7 +1144,7 @@ typedef struct tagCsrConfigParam
 
     tANI_U8 isCoalesingInIBSSAllowed;
 
-
+    eCsrBand  scanBandPreference;
 }tCsrConfigParam;
 
 //Tush
@@ -1203,6 +1223,9 @@ typedef struct tagCsrRoamInfo
     tANI_U8* assocReqPtr;
 
     tANI_S8 rxRssi;
+    tSirSmeDfsEventInd dfs_event;
+    tSirChanChangeResponse *channelChangeRespEvent;
+    tANI_U8 timingMeasCap;
 }tCsrRoamInfo;
 
 
@@ -1232,6 +1255,7 @@ typedef struct sSirSmeAssocIndToUpperLayerCnf
     tSirRSNie            rsnIE;           // RSN IE received from peer
     tSirAddie            addIE;           // Additional IE received from peer, which can be WSC and/or P2P IE
     tANI_U8              reassocReq;      //set to true if reassoc
+    tANI_U8              timingMeasCap;
 } tSirSmeAssocIndToUpperLayerCnf, *tpSirSmeAssocIndToUpperLayerCnf;
 
 typedef struct tagCsrSummaryStatsInfo
@@ -1613,4 +1637,3 @@ eCsrBand csrGetCurrentBand (tHalHandle hHal);
 
 typedef void (*csrReadyToSuspendCallback)(void *pContext);
 #endif
-

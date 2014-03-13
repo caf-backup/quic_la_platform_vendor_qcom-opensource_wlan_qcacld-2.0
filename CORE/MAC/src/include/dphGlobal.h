@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
 
@@ -361,13 +362,13 @@ typedef struct sDphHashNode
 
     tANI_U8   burstEnableForce:1; // allow bursting regardless of qosMode
 
-    tANI_U8   staAuthenticated:1;    
+    tANI_U8   staAuthenticated:1;
 
     /// Whether the peer is ANI or not
 
     tANI_U8  aniPeer:1;
 
-    tANI_U8   titanPeer:1;                // flag to indicate if its a titan peer    
+    tANI_U8   titanPeer:1;                // flag to indicate if its a titan peer
 
     tANI_U8  fAniCount:1;
 
@@ -426,7 +427,7 @@ typedef struct sDphHashNode
 
    //Taurus capabilities
 
-   tANI_U16 baPolicyFlag;                 //BA Policy for each TID. 
+   tANI_U16 baPolicyFlag;                 //BA Policy for each TID.
 
 
     /*
@@ -539,7 +540,7 @@ typedef struct sDphHashNode
 
     tANI_U8    staAddr[6];
 
-    /*The DPU signatures will be sent eventually to TL to help it determine the 
+    /*The DPU signatures will be sent eventually to TL to help it determine the
 
       association to which a packet belongs to*/
 
@@ -605,11 +606,18 @@ typedef struct sDphHashNode
     tANI_U8 htLdpcCapable;
     tANI_U8 vhtLdpcCapable;
 
-    /* When a station with already an existing dph entry tries to 
+#ifdef FEATURE_WLAN_TDLS
+    tANI_U16 ht_caps;
+    tANI_U32 vht_caps;
+#endif
 
-     * associate again, the old dph entry will be zeroed out except 
+    tANI_U8 timingMeasCap;
 
-     * for the next pointer. The next pointer must be defined at the  
+    /* When a station with already an existing dph entry tries to
+
+     * associate again, the old dph entry will be zeroed out except
+
+     * for the next pointer. The next pointer must be defined at the
 
      * end of the structure.
 
@@ -650,7 +658,3 @@ typedef struct sAniSirDph
 
 
 #endif
-
-
-
-

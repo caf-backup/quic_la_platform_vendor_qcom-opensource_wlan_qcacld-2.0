@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_txrx_peer_find.h
  * @brief Define the API for the rx peer lookup datapath module.
@@ -115,6 +116,6 @@ ol_txrx_assoc_peer_find(struct ol_txrx_vdev_t *vdev);
 void ol_txrx_peer_find_display(ol_txrx_pdev_handle pdev, int indent);
 #else
 #define ol_txrx_peer_find_display(pdev, indent)
-#endif /* TXRX_DEBUG_LEVEL */    
+#endif /* TXRX_DEBUG_LEVEL */
 
 #endif /* _OL_TXRX_PEER_FIND__H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #include <ol_cfg.h>
 #include <ol_if_athvar.h>
 
@@ -32,7 +33,7 @@ module_param(vow_config, uint, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 MODULE_PARM_DESC(vow_config, "Do VoW Configuration");
 EXPORT_SYMBOL(vow_config);
 
-/* FIX THIS - 
+/* FIX THIS -
  * For now, all these configuration parameters are hardcoded.
  * Many of these should actually be determined dynamically instead.
  */
@@ -73,6 +74,8 @@ ol_pdev_handle ol_pdev_cfg_attach(adf_os_device_t osdev)
 	cfg_ctx->max_nbuf_frags = 1;
 	cfg_ctx->vow_config = vow_config;
 	cfg_ctx->target_tx_credit = CFG_TGT_NUM_MSDU_DESC;
+	cfg_ctx->throttle_period_ms = 40;
+	cfg_ctx->rx_fwd_disabled = 0;
 	return (ol_pdev_handle) cfg_ctx;
 }
 
@@ -108,6 +111,23 @@ int ol_cfg_rx_fwd_check(ol_pdev_handle pdev)
 {
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 	return cfg->pn_rx_fwd_check;
+}
+
+void ol_set_cfg_rx_fwd_disabled(ol_pdev_handle pdev, u_int8_t disable_rx_fwd)
+{
+	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
+	cfg->rx_fwd_disabled = disable_rx_fwd;
+}
+
+int ol_cfg_rx_fwd_disabled(ol_pdev_handle pdev)
+{
+#if defined(ATHR_WIN_NWF)
+	/* for Windows, let the OS handle the forwarding */
+	return 1;
+#else
+	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
+	return cfg->rx_fwd_disabled;
+#endif
 }
 
 int ol_cfg_rx_fwd_inter_bss(ol_pdev_handle pdev)
@@ -164,4 +184,10 @@ int ol_cfg_rx_host_defrag_timeout_duplicate_check(ol_pdev_handle pdev)
 {
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 	return cfg->defrag_timeout_check;
+}
+
+int ol_cfg_throttle_period_ms(ol_pdev_handle pdev)
+{
+	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
+	return cfg->throttle_period_ms;
 }

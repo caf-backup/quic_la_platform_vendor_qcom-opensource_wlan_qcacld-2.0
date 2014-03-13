@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file  bap_hdd_main.c
@@ -478,7 +479,7 @@ static VOS_STATUS WLANBAP_STAFetchPktCB
     {
         VOS_TRACE( VOS_MODULE_ID_BAP, VOS_TRACE_LEVEL_ERROR, "WLANBAP_STAFetchPktCB vos_pkt_wrap_data_packet "
              "failed status =%d\n", VosStatus );
-        kfree_skb(skb);  
+        kfree_skb(skb);
         return VosStatus;
     }
 
@@ -495,7 +496,7 @@ static VOS_STATUS WLANBAP_STAFetchPktCB
 
         // return the packet
         VosStatus = vos_pkt_return_packet( pVosPkt );
-        kfree_skb(skb);  
+        kfree_skb(skb);
         VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ));
 
         return VosStatus;
@@ -572,14 +573,14 @@ static VOS_STATUS WLANBAP_STARxCB
        // get the pointer to the next packet in the chain
        // (but don't unlink the packet since we free the entire chain later)
        VosStatus = vos_pkt_walk_packet_chain( pVosPacket, &pNextVosPacket, VOS_FALSE);
-       
+
        // both "success" and "empty" are acceptable results
        if (!((VosStatus == VOS_STATUS_SUCCESS) || (VosStatus == VOS_STATUS_E_EMPTY)))
        {
            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,"%s: Failure walking packet chain", __func__);
            return VOS_STATUS_E_FAILURE;
        }
-       
+
        // process the packet
        VosStatus = WLANBAP_XlateRxDataPkt( ppctx->bapHdl, pctx->PhyLinkHdl,
                                               &Ac, pVosPacket );
@@ -612,7 +613,7 @@ static VOS_STATUS WLANBAP_STARxCB
        bt_cb(skb)->pkt_type = HCI_ACLDATA_PKT;
        //skb->protocol = eth_type_trans(skb, skb->dev);
        //skb->ip_summed = CHECKSUM_UNNECESSARY;
- 
+
        // This is my receive skb pointer
        gpBslctx->rx_skb = skb;
 
@@ -621,7 +622,7 @@ static VOS_STATUS WLANBAP_STARxCB
 
        // now process the next packet in the chain
        pVosPacket = pNextVosPacket;
-       
+
    } while (pVosPacket);
 
 
@@ -795,11 +796,17 @@ static void BslReleasePhyCtx
     {
         VosStatus = vos_list_remove_node( &pPhyCtx->pClientCtx->PhyLinks,
                                           &((BslPhyLinksNodeType*)pPhyCtx->pPhyLinkDescNode)->node);
-        VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
-        //Return the PhyLink handle to the free pool
-        VosStatus = vos_list_insert_front(&BslPhyLinksDescPool,&((BslPhyLinksNodeType*)pPhyCtx->pPhyLinkDescNode)->node);
-        VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
-
+        if (VOS_STATUS_SUCCESS != VosStatus)
+        {
+           VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,"%s: vos_list_remove_node() is not succses", __func__);
+        } else {
+           //Return the PhyLink handle to the free pool
+           VosStatus = vos_list_insert_front(&BslPhyLinksDescPool,&((BslPhyLinksNodeType*)pPhyCtx->pPhyLinkDescNode)->node);
+           if (VOS_STATUS_SUCCESS != VosStatus)
+           {
+              VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,"%s: vos_list_insert_front() is not succses", __func__);
+           }
+        }
         pPhyCtx->pPhyLinkDescNode = NULL;
     }
     pPhyCtx->pClientCtx = NULL;//Moved here to bebug the exception
@@ -867,13 +874,13 @@ static VOS_STATUS WLANBAP_EventCB
 
     if ( pHddHdl == NULL )
     {
-        /* Consider the following error scenarios to bypass the NULL check: 
-        - create LL without a call for create PL before 
-        - delete LL or PL when no AMP connection has been established yet 
-        Client context is unimportant from HCI point of view, only needed by the TLV API in BAP 
-        TODO: Change the TLV APIs to not to carry the client context; it doesn't use it anyway 
+        /* Consider the following error scenarios to bypass the NULL check:
+        - create LL without a call for create PL before
+        - delete LL or PL when no AMP connection has been established yet
+        Client context is unimportant from HCI point of view, only needed by the TLV API in BAP
+        TODO: Change the TLV APIs to not to carry the client context; it doesn't use it anyway
         */
-        if (( AssocSpecificEvent ) && 
+        if (( AssocSpecificEvent ) &&
             (BTAMP_TLV_HCI_PHYSICAL_LINK_COMPLETE_EVENT != pBapHCIEvent->bapHCIEventCode) &&
             (BTAMP_TLV_HCI_DISCONNECT_PHYSICAL_LINK_COMPLETE_EVENT != pBapHCIEvent->bapHCIEventCode))
         {
@@ -1447,7 +1454,12 @@ static VOS_STATUS WLANBAP_EventCB
     }
     }
 
-    VOS_ASSERT(Written <= BSL_MAX_EVENT_SIZE);
+    if (BSL_MAX_EVENT_SIZE < Written)
+    {
+       VosStatus = vos_pkt_return_packet( pVosPkt );
+       VOS_ASSERT(0);
+       return(VOS_STATUS_E_FAILURE);
+    }
 
     // stick the event into a VoS pkt
     VosStatus = vos_pkt_push_head( pVosPkt, Buff, Written );
@@ -1481,7 +1493,11 @@ static VOS_STATUS WLANBAP_EventCB
 
     //JEZ100922: We are free to return the enclosing VOSS packet.
     VosStatus = vos_pkt_return_packet( pVosPkt );
-    VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ));
+    if(VOS_STATUS_SUCCESS != VosStatus)
+    {
+       // just print no action required
+       VOS_ASSERT(0);
+    }
 
     //JEZ100809: While an skb is being handled by the kernel, is "skb->dev" de-ref'd?
     skb->dev = (struct net_device *) gpBslctx->hdev;
@@ -1498,9 +1514,9 @@ static VOS_STATUS WLANBAP_EventCB
     return(VOS_STATUS_SUCCESS);
 } // WLANBAP_EventCB()
 
-static VOS_STATUS  
+static VOS_STATUS
 WLANBAP_PhyLinkFailure
-( 
+(
     BslClientCtxType* pctx,
     v_U8_t       phy_link_handle
 )
@@ -1508,13 +1524,13 @@ WLANBAP_PhyLinkFailure
     VOS_STATUS  vosStatus;
     tBtampHCI_Event bapHCIEvent;
 
-    /* Format the Physical Link Complete event to return... */ 
+    /* Format the Physical Link Complete event to return... */
     bapHCIEvent.bapHCIEventCode = BTAMP_TLV_HCI_PHYSICAL_LINK_COMPLETE_EVENT;
     bapHCIEvent.u.btampPhysicalLinkCompleteEvent.present = 1;
     bapHCIEvent.u.btampPhysicalLinkCompleteEvent.status = WLANBAP_ERROR_UNSPECIFIED_ERROR;
-    bapHCIEvent.u.btampPhysicalLinkCompleteEvent.phy_link_handle 
+    bapHCIEvent.u.btampPhysicalLinkCompleteEvent.phy_link_handle
         = phy_link_handle;
-    bapHCIEvent.u.btampPhysicalLinkCompleteEvent.ch_number 
+    bapHCIEvent.u.btampPhysicalLinkCompleteEvent.ch_number
         = 0;
     //TBD: Could be a cleaner way to get the PhyLinkCtx handle; For now works
     BslPhyLinkCtx[0].pClientCtx = pctx;
@@ -1600,7 +1616,12 @@ static BOOL BslFindAndInitClientCtx
 
     // init the PhyLinks queue to keep track of the assoc's of this client
     VosStatus = vos_list_init( &pctx->PhyLinks );
-    VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
+    if (VOS_STATUS_SUCCESS != VosStatus)
+    {
+       pctx->used = FALSE;
+       VOS_ASSERT(0);
+       return(FALSE);
+    }
 
     *pctx_ = pctx;
 
@@ -1636,8 +1657,11 @@ static void BslReleaseClientCtx
     // consume resulting HCI events, so after this we will not get any HCI events. we will also
     // not see any FetchPktCB and RxPktCB. We can still expect TxCompletePktCB
     VosStatus = WLANBAP_ReleaseHndl( pctx->bapHdl );
-    VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
-
+    if (VOS_STATUS_SUCCESS != VosStatus)
+    {
+       // just print no action required
+       VOS_ASSERT(0);
+    }
 
     // find and free all of the association contexts belonging to this app
     while ( VOS_IS_STATUS_SUCCESS( VosStatus = vos_list_remove_front( &pctx->PhyLinks, &pLink ) ) )
@@ -1655,7 +1679,11 @@ static void BslReleaseClientCtx
 
     // destroy the PhyLinks queue
     VosStatus = vos_list_destroy( &pctx->PhyLinks );
-    VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
+    if (VOS_STATUS_SUCCESS != VosStatus)
+    {
+       // just print no action required
+       VOS_ASSERT(0);
+    }
 
     pctx->used = FALSE;
 
@@ -1744,9 +1772,6 @@ static BOOL BslFindAndInitPhyCtx
         for ( j=0; j<WLANTL_MAX_AC; j++ )
         {
             hdd_list_init( &BslPhyLinkCtx[i].ACLTxQueue[j], HDD_TX_QUEUE_MAX_LEN );
-            //VosStatus = vos_list_init( &BslPhyLinkCtx[i].ACLTxQueue[j] );
-            //VosStatus = vos_list_init( &(BslPhyLinkCtx+i)->ACLTxQueue );
-            VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
         }
 
         // need to add this Phy context to the client list of associations,
@@ -3903,7 +3928,11 @@ static int BSL_Open( struct hci_dev *hdev )
     for ( i=0; i<BSL_MAX_PHY_LINKS; i++ )
     {
         VosStatus = vos_list_insert_front( &BslPhyLinksDescPool, &BslPhyLinksDesc[i].node );
-        VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
+        if (VOS_STATUS_SUCCESS != VosStatus)
+        {
+           VOS_ASSERT(0);
+           return 0;
+        }
     }
 
     // This is redundent.  See the check above on (fp->private_data != NULL)
@@ -3985,8 +4014,11 @@ static int BSL_Close ( struct hci_dev *hdev )
     }
     VosStatus = vos_list_destroy( &BslPhyLinksDescPool );
 
-    VOS_ASSERT(VOS_IS_STATUS_SUCCESS( VosStatus ) );
-
+    if (VOS_STATUS_SUCCESS != VosStatus)
+    {
+       VOS_ASSERT(0);
+       return FALSE;
+    }
 
     bBslInited = FALSE;
 

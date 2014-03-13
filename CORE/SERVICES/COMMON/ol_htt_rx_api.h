@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_htt_rx_api.h
  * @brief Specify the rx HTT API functions called by the host data SW.
@@ -71,7 +72,7 @@
  * @param rx_ind_msg - the netbuf containing the rx indication message
  * @return
  *      1 - the message's rx flush command is valid and should be processed
- *          before processing new rx MPDUs, 
+ *          before processing new rx MPDUs,
  *      -OR-
  *      0 - the message's rx flush command is invalid and should be ignored
  */
@@ -333,7 +334,7 @@ htt_rx_mpdu_desc_tsf32(
  */
 char *
 htt_rx_mpdu_wifi_hdr_retrieve(
-    htt_pdev_handle pdev, 
+    htt_pdev_handle pdev,
     void *mpdu_desc);
 
 /**
@@ -533,6 +534,25 @@ htt_rx_msdu_actions(
     int *forward,
     int *inspect);
 
+/**
+ * @brief Get the key id sent in IV of the frame
+ * @details
+ *  Provide the key index octet which is taken from IV.
+ *  This is valid only for the first MSDU.
+ *
+ * @param pdev - the HTT instance the rx data was received on
+ * @param msdu_desc - the abstract descriptor for the MSDU in question
+ * @key_id - Key id octet
+ * @return indication of whether key id access is successful
+ *   A_TRUE - Success
+ *   A_FALSE - if this is not first msdu
+ */
+extern a_bool_t
+(*htt_rx_msdu_desc_key_id)(
+    htt_pdev_handle pdev,
+    void *mpdu_desc,
+    u_int8_t *key_id);
+
 /*====================== rx MSDU + descriptor delivery ======================*/
 
 /**
@@ -570,7 +590,7 @@ htt_rx_msdu_actions(
  * 0 - no buffer chaining
  * 1 - buffers are chained
  */
-extern int 
+extern int
 (*htt_rx_amsdu_pop)(
     htt_pdev_handle pdev,
     adf_nbuf_t rx_ind_msg,
@@ -716,16 +736,16 @@ htt_rx_msdu_buff_replenish(htt_pdev_handle pdev);
  *  a separate wbuf for delivery to the network stack. For delivery to the
  *  monitor mode interface they need to be restitched into an MPDU. This
  *  function does this. Also updates the RX status if the MPDU starts
- *  a new PPDU 
+ *  a new PPDU
  *
  * @param pdev - the HTT instance the rx data was received on
  * @param head_msdu - network buffer handle, which points to the first MSDU
  *      in the list. This is a NULL terminated list
  * @param rx_staus - pointer to the status associated with this MPDU.
- *      Updated only if there is a new PPDU and new status associated with it 
+ *      Updated only if there is a new PPDU and new status associated with it
  * @param clone_not_reqd - If set the MPDU linking destroys the passed in
- *      list, else operates on a cloned nbuf 
- * @return network buffer handle to the MPDU  
+ *      list, else operates on a cloned nbuf
+ * @return network buffer handle to the MPDU
  */
 adf_nbuf_t
 htt_rx_restitch_mpdu_from_msdus(
@@ -762,7 +782,7 @@ htt_rx_msdu_rx_desc_size_hl(
 
 /**
  * @brief populates vowext stats by processing RX desc.
- * @param msdu - network buffer handle 
+ * @param msdu - network buffer handle
  * @param vowstats - handle to vow ext stats.
  */
 void htt_rx_get_vowext_stats(adf_nbuf_t msdu,struct vow_extstats *vowstats);
