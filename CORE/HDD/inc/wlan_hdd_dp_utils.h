@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( __WLAN_HDD_DP_UTILS_H )
 #define __WLAN_HDD_DP_UTILS_H
 
@@ -33,6 +34,7 @@
   \brief      Utility functions for data path module
 
   Description...
+
   ==============================================================================**/
 /* $HEADER$ */
 
@@ -63,7 +65,7 @@ typedef struct hdd_list_s
    hdd_list_node_t anchor;
    v_SIZE_t count;
    v_SIZE_t max_size;
-   spinlock_t lock; 
+   spinlock_t lock;
 } hdd_list_t;
 
 typedef struct
@@ -74,7 +76,7 @@ typedef struct
 } skb_list_node_t;
 
 //FIXME Need a helper function to cleanup skbs in a queue. Required for cleanup/shutdown
-  
+
 /**-----------------------------------------------------------------------------
   Function declarations and documenation
  ----------------------------------------------------------------------------*/

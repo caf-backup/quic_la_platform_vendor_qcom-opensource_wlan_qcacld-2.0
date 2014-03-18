@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -343,7 +343,5 @@ unsigned char *gCfgParamName[] = {
     (unsigned char *)"GO_LINK_MONITOR_TIMEOUT",
     (unsigned char *)"RMC_ACTION_PERIOD_FREQUENCY",
     (unsigned char *)"CURRENT_RSSI",
+    (unsigned char *)"RTT3_ENABLE",
 };
-
-
-

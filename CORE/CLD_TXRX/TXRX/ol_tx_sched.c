@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #include <adf_nbuf.h>         /* adf_nbuf_t, etc. */
 #include <htt.h>              /* HTT_TX_EXT_TID_MGMT */
 #include <ol_htt_tx_api.h>    /* htt_tx_desc_tid */
@@ -34,7 +35,7 @@
 #include <ol_tx_desc.h>       /* ol_tx_desc */
 #include <ol_tx_send.h>       /* ol_tx_send */
 #include <ol_tx_sched.h>      /* OL_TX_SCHED, etc. */
-#include <ol_tx_queue.h>      
+#include <ol_tx_queue.h>
 #include <ol_txrx.h>
 #include <adf_os_types.h>     /* a_bool_t */
 
@@ -184,7 +185,7 @@ struct ol_tx_sched_rr_t {
 /*--- functions ---*/
 
 /*
- * The scheduler sync spinlock has been acquired outside this function, 
+ * The scheduler sync spinlock has been acquired outside this function,
  * so there is no need to worry about mutex within this function.
  */
 static int
@@ -716,7 +717,7 @@ ol_tx_sched_wrr_adv_credit_sanity_check(struct ol_txrx_pdev_t *pdev, u_int32_t c
 }
 
 /*
- * The scheduler sync spinlock has been acquired outside this function, 
+ * The scheduler sync spinlock has been acquired outside this function,
  * so there is no need to worry about mutex within this function.
  */
 static int
@@ -756,7 +757,7 @@ ol_tx_sched_select_batch_wrr_adv(
         if (!category->state.active) {
             /* move on to the next category */
             index++;
-            continue;        
+            continue;
         }
         if (++category->state.wrr_count < category->specs.wrr_skip_weight) {
             /* skip this cateogry (move it to the back) */
@@ -972,7 +973,7 @@ ol_tx_sched_init_wrr_adv(
         //scheduler->categories[i].state.bytes = 0;
         TAILQ_INIT(&scheduler->categories[i].state.head);
         /* init categories to not be skipped before their initial selection */
-        scheduler->categories[i].state.wrr_count = 
+        scheduler->categories[i].state.wrr_count =
             scheduler->categories[i].specs.wrr_skip_weight - 1;
     }
 
@@ -1094,7 +1095,7 @@ ol_tx_sched_discard_select(
 /*--- scheduler framework ---------------------------------------------------*/
 
 /*
- * The scheduler mutex spinlock has been acquired outside this function, 
+ * The scheduler mutex spinlock has been acquired outside this function,
  * so there is need to take locks inside this function.
  */
 void
@@ -1117,7 +1118,7 @@ ol_tx_sched_notify(
     case OL_TX_DELETE_QUEUE:
         tid = ctx->info.ext_tid;
         if (txq->flag == ol_tx_queue_active) {
-            ol_tx_sched_txq_deactivate(pdev, txq, tid); 
+            ol_tx_sched_txq_deactivate(pdev, txq, tid);
         }
         break;
     case OL_TX_PAUSE_QUEUE:
@@ -1156,7 +1157,7 @@ ol_tx_sched_dispatch(
 {
     adf_nbuf_t msdu, prev = NULL, head_msdu = NULL;
     struct ol_tx_desc_t *tx_desc;
-    
+
     u_int16_t *msdu_id_storage;
     u_int16_t msdu_id;
     int num_msdus = 0;
@@ -1243,7 +1244,7 @@ ol_tx_sched(struct ol_txrx_pdev_t *pdev)
 {
     struct ol_tx_sched_ctx sctx;
     u_int32_t credit;
-    
+
     TX_SCHED_DEBUG_PRINT("Enter %s\n", __func__);
     adf_os_spin_lock(&pdev->tx_queue_spinlock);
     if (pdev->tx_sched.tx_sched_status != ol_tx_scheduler_idle) {

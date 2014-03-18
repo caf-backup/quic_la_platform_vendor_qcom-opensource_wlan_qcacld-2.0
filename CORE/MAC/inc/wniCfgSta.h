@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * DO NOT EDIT - This file is generated automatically
  */
@@ -345,9 +346,10 @@
 #define WNI_CFG_GO_LINK_MONITOR_TIMEOUT    305
 #define WNI_CFG_RMC_ACTION_PERIOD_FREQUENCY    306
 #define WNI_CFG_CURRENT_RSSI    307
+#define WNI_CFG_RTT3_ENABLE    308
 
 /*
- * String parameter lengths 
+ * String parameter lengths
  */
 
 #define WNI_CFG_STA_ID_LEN    6
@@ -412,7 +414,7 @@
 #define WNI_CFG_WPS_UUID_LEN    16
 
 /*
- * Integer parameter min/max/default values 
+ * Integer parameter min/max/default values
  */
 
 #define WNI_CFG_CFP_PERIOD_STAMIN    0
@@ -452,7 +454,7 @@
 #define WNI_CFG_EXCLUDE_UNENCRYPTED_STADEF    0
 
 #define WNI_CFG_RTS_THRESHOLD_STAMIN    0
-#define WNI_CFG_RTS_THRESHOLD_STAMAX    192000
+#define WNI_CFG_RTS_THRESHOLD_STAMAX    1048576
 #define WNI_CFG_RTS_THRESHOLD_STADEF    2347
 
 #define WNI_CFG_SHORT_RETRY_LIMIT_STAMIN    0
@@ -1659,8 +1661,12 @@
 #define WNI_CFG_CURRENT_RSSI_STAMAX    127
 #define WNI_CFG_CURRENT_RSSI_STADEF    0
 
-#define CFG_PARAM_MAX_NUM        308
-#define CFG_STA_IBUF_MAX_SIZE    242
+#define WNI_CFG_RTT3_ENABLE_STAMIN    0
+#define WNI_CFG_RTT3_ENABLE_STAMAX    1
+#define WNI_CFG_RTT3_ENABLE_STADEF    1
+
+#define CFG_PARAM_MAX_NUM        309
+#define CFG_STA_IBUF_MAX_SIZE    243
 #define CFG_STA_SBUF_MAX_SIZE    3388
 #define CFG_SEM_MAX_NUM          19
 

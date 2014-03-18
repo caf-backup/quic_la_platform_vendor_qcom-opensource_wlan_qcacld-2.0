@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_tx_queue.h
  * @brief API definitions for the tx frame queue module within the data SW.
@@ -49,9 +50,9 @@
  */
 void
 ol_tx_enqueue(
-    struct ol_txrx_pdev_t *pdev, 
-    struct ol_tx_frms_queue_t *txq, 
-    struct ol_tx_desc_t *tx_desc, 
+    struct ol_txrx_pdev_t *pdev,
+    struct ol_tx_frms_queue_t *txq,
+    struct ol_tx_desc_t *tx_desc,
     struct ol_txrx_msdu_info_t *tx_msdu_info);
 
 /**
@@ -76,9 +77,9 @@ ol_tx_enqueue(
 */
 u_int16_t
 ol_tx_dequeue(
-	struct ol_txrx_pdev_t *pdev, 
-	struct ol_tx_frms_queue_t *txq, 
-	ol_tx_desc_list *head, 
+	struct ol_txrx_pdev_t *pdev,
+	struct ol_tx_frms_queue_t *txq,
+	ol_tx_desc_list *head,
 	u_int16_t num_frames,
     u_int32_t *credit,
     int *bytes);
@@ -97,7 +98,7 @@ ol_tx_dequeue(
  */
 void
 ol_tx_queue_free(
-    struct ol_txrx_pdev_t *pdev, 
+    struct ol_txrx_pdev_t *pdev,
     struct ol_tx_frms_queue_t *txq,
     int tid);
 
@@ -167,5 +168,13 @@ ol_tx_queue_decs_reinit(
 #define ol_tx_queue_decs_reinit(peer, peer_id) /* no-op */
 #endif /* CONFIG_HL_SUPPORT */
 
+#if defined(QCA_SUPPORT_TXRX_VDEV_LL_TXQ)
+/**
+ * @brief - initialize the throttle context
+ * @param pdev - the physical device object, which stores the txqs
+ */
+void ol_tx_throttle_init(struct ol_txrx_pdev_t *pdev);
+#else
+#define ol_tx_throttle_init(pdev) /*no op*/
+#endif
 #endif /* _OL_TX_QUEUE__H_ */
-

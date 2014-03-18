@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*===========================================================================
 
                        wlan_qct_wda_legacy.c
@@ -39,7 +40,6 @@
   DEPENDENCIES:
 
   Are listed for each API below.
-
 ===========================================================================*/
 
 /* Standard include files */
@@ -151,7 +151,7 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb)
    msg.type = pMb->type;
    msg.bodyval = 0;
 
-   WDALOG3(wdaLog(pMac, LOG3, FL("msgType %d, msgLen %d\n" ),
+   WDALOG3(wdaLog(pMac, LOG3, FL("msgType %d, msgLen %d" ),
         pMb->type, pMb->msgLen));
 
    // copy the message from host buffer to firmware buffer
@@ -163,7 +163,7 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb)
    pMbLocal = vos_mem_malloc(pMb->msgLen);
    if ( NULL == pMbLocal )
    {
-      WDALOGE( wdaLog(pMac, LOGE, FL("Buffer Allocation failed!\n")));
+      WDALOGE( wdaLog(pMac, LOGE, FL("Buffer Allocation failed!")));
       return eSIR_FAILURE;
    }
 
@@ -194,7 +194,7 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb)
 
    default:
       WDALOGW( wdaLog(pMac, LOGW, FL("Unknown message type = "
-             "0x%X\n"),
+             "0x%X"),
              msg.type));
 
       // Release the memory.
@@ -210,23 +210,22 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb)
 /* ---------------------------------------------------------
  * FUNCTION:  wdaGetGlobalSystemRole()
  *
- * Get the global HAL system role. 
+ * Get the global HAL system role.
  * ---------------------------------------------------------
  */
 tBssSystemRole wdaGetGlobalSystemRole(tpAniSirGlobal pMac)
 {
    v_VOID_t * pVosContext = vos_get_global_context(VOS_MODULE_ID_WDA, NULL);
-   tWDA_CbContext *wdaContext = 
+   tWDA_CbContext *wdaContext =
                        vos_get_context(VOS_MODULE_ID_WDA, pVosContext);
    if(NULL == wdaContext)
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                           "%s:WDA context is NULL", __func__); 
+                           "%s:WDA context is NULL", __func__);
       VOS_ASSERT(0);
       return eSYSTEM_UNKNOWN_ROLE;
    }
-   WDALOG1( wdaLog(pMac, LOG1, FL(" returning  %d role\n"),
+   WDALOG1( wdaLog(pMac, LOG1, FL(" returning  %d role"),
              wdaContext->wdaGlobalSystemRole));
    return  wdaContext->wdaGlobalSystemRole;
 }
-

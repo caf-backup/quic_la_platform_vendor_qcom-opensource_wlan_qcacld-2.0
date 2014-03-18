@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _HTC_INTERNAL_H_
 #define _HTC_INTERNAL_H_
 
@@ -160,6 +161,7 @@ typedef struct _HTC_TARGET {
 #endif
     HTC_SERVICE_TX_CREDIT_ALLOCATION ServiceTxAllocTable[HTC_MAX_SERVICE_ALLOC_ENTRIES];
     int                         TargetCreditSize;
+    int                         TotalHostCredits;
 #ifdef RX_SG_SUPPORT
     adf_nbuf_queue_t            RxSgQueue;
     A_BOOL                      IsRxSgInprogress;
@@ -169,6 +171,8 @@ typedef struct _HTC_TARGET {
     adf_os_device_t             osdev;
     struct ol_ath_htc_stats     htc_pkt_stats;
     HTC_PACKET                  *pBundleFreeList;
+    A_UINT32                    CE_send_cnt;
+    A_UINT32                    TX_comp_cnt;
 } HTC_TARGET;
 
 #ifdef RX_SG_SUPPORT
@@ -191,7 +195,7 @@ typedef struct _HTC_TARGET {
 
 #define IS_TX_CREDIT_FLOW_ENABLED(ep)  ((ep)->TxCreditFlowEnabled)
 
-#define HTC_POLL_CLEANUP_PERIOD_MS 10 /* milliseconds */ 
+#define HTC_POLL_CLEANUP_PERIOD_MS 10 /* milliseconds */
 
 
 /* Macro to Increment the  HTC_PACKET_ERRORS for Tx.*/
@@ -283,4 +287,3 @@ HTCSendCompleteCheck(HTC_ENDPOINT *pEndpoint, int force)
 
 
 #endif	/* !_HTC_HOST_INTERNAL_H_ */
-

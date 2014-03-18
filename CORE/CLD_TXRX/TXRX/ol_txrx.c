@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*=== includes ===*/
 /* header files for OS primitives */
 #include <osdep.h>         /* u_int32_t, etc. */
@@ -62,6 +63,7 @@
 #include <ol_rx_pn.h>              /* ol_rx_pn_check, etc. */
 #include <ol_rx_fwd.h>             /* ol_rx_fwd_check, etc. */
 #include <ol_rx_reorder_timeout.h> /* OL_RX_REORDER_TIMEOUT_INIT, etc. */
+#include <ol_rx_reorder.h>
 #include <ol_tx_send.h>            /* ol_tx_discard_target_frms */
 #include <ol_tx_desc.h>            /* ol_tx_desc_frame_free */
 #include <ol_tx_queue.h>
@@ -154,7 +156,8 @@ ol_txrx_peer_find_by_local_id(
     struct ol_txrx_pdev_t *pdev,
     u_int8_t local_peer_id)
 {
-    if (local_peer_id == OL_TXRX_INVALID_LOCAL_PEER_ID) {
+    if ((local_peer_id == OL_TXRX_INVALID_LOCAL_PEER_ID) ||
+        (local_peer_id >= OL_TXRX_NUM_LOCAL_PEER_IDS)) {
         return NULL;
     }
     return pdev->local_peer_ids.map[local_peer_id];
@@ -342,11 +345,21 @@ ol_txrx_pdev_attach(
         }
         pdev->tx_desc.array[i].tx_desc.htt_tx_desc = htt_tx_desc;
 	pdev->tx_desc.array[i].tx_desc.htt_tx_desc_paddr = paddr_lo;
+#ifdef QCA_SUPPORT_TXDESC_SANITY_CHECKS
+        pdev->tx_desc.array[i].tx_desc.pkt_type = 0xff;
+#ifdef QCA_COMPUTE_TX_DELAY
+        pdev->tx_desc.array[i].tx_desc.entry_timestamp_ticks = 0xffffffff;
+#endif
+#endif
     }
 
     /* link SW tx descs into a freelist */
     pdev->tx_desc.num_free = desc_pool_size;
     pdev->tx_desc.freelist = &pdev->tx_desc.array[0];
+    TXRX_PRINT(TXRX_PRINT_LEVEL_INFO1,
+               "%s first tx_desc:0x%p Last tx desc:0x%p\n", __func__,
+               (u_int32_t *) pdev->tx_desc.freelist,
+               (u_int32_t *) (pdev->tx_desc.freelist + desc_pool_size));
     for (i = 0; i < desc_pool_size-1; i++) {
         pdev->tx_desc.array[i].next = &pdev->tx_desc.array[i+1];
     }
@@ -499,7 +512,7 @@ ol_txrx_pdev_attach(
         goto fail8;
     }
 
-#ifdef PERE_IP_HDR_ALIGNMENT_WAR 
+#ifdef PERE_IP_HDR_ALIGNMENT_WAR
     pdev->host_80211_enable = ol_scn_host_80211_enable_get(pdev->ctrl_pdev);
 #endif
 
@@ -603,6 +616,12 @@ ol_txrx_pdev_attach(
     }
 #endif /* QCA_COMPUTE_TX_DELAY */
 
+#ifdef QCA_SUPPORT_TXRX_VDEV_LL_TXQ
+    /* Thermal Mitigation */
+    if (!pdev->cfg.is_high_latency) {
+        ol_tx_throttle_init(pdev);
+    }
+#endif
     return pdev; /* success */
 
 fail8:
@@ -658,12 +677,21 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
 
     /* check that the pdev has no vdevs allocated */
     TXRX_ASSERT1(TAILQ_EMPTY(&pdev->vdev_list));
-	
+
     OL_RX_REORDER_TIMEOUT_CLEANUP(pdev);
 
     if (ol_cfg_is_high_latency(pdev->ctrl_pdev)) {
         ol_tx_sched_detach(pdev);
     }
+#ifdef QCA_SUPPORT_TXRX_VDEV_LL_TXQ
+    /* Thermal Mitigation */
+    if (!pdev->cfg.is_high_latency) {
+        adf_os_timer_cancel(&pdev->tx_throttle_ll.phase_timer);
+        adf_os_timer_free(&pdev->tx_throttle_ll.phase_timer);
+        adf_os_timer_cancel(&pdev->tx_throttle_ll.tx_timer);
+        adf_os_timer_free(&pdev->tx_throttle_ll.tx_timer);
+    }
+#endif
     if (force) {
         /*
          * The assertion above confirms that all vdevs within this pdev
@@ -714,6 +742,12 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
     adf_os_spinlock_destroy(&pdev->peer_ref_mutex);
     adf_os_spinlock_destroy(&pdev->last_real_peer_mutex);
     adf_os_spinlock_destroy(&pdev->rx.mutex);
+#ifdef QCA_SUPPORT_TXRX_VDEV_LL_TXQ
+    /* Thermal Mitigation */
+    if (!pdev->cfg.is_high_latency) {
+        adf_os_spinlock_destroy(&pdev->tx_throttle_ll.mutex);
+    }
+#endif
     OL_TXRX_PEER_STATS_MUTEX_DESTROY(pdev);
 
     OL_RX_REORDER_TRACE_DETACH(pdev);
@@ -766,10 +800,17 @@ ol_txrx_vdev_attach(
     vdev->num_filters = 0;
 
     adf_os_mem_copy(
-        &vdev->mac_addr.raw[0], vdev_mac_addr, sizeof(vdev->mac_addr));
+        &vdev->mac_addr.raw[0], vdev_mac_addr, OL_TXRX_MAC_ADDR_LEN);
 
     TAILQ_INIT(&vdev->peer_list);
     vdev->last_real_peer = NULL;
+
+    #ifndef CONFIG_QCA_WIFI_ISOC
+    #ifdef  QCA_IBSS_SUPPORT
+    vdev->ibss_peer_num = 0;
+    vdev->ibss_peer_heart_beat_timer = 0;
+    #endif
+    #endif
 
     #if defined(CONFIG_HL_SUPPORT)
     if (ol_cfg_is_high_latency(pdev->ctrl_pdev)) {
@@ -787,6 +828,7 @@ ol_txrx_vdev_attach(
     }
     #endif /* defined(CONFIG_HL_SUPPORT) */
 
+    adf_os_spinlock_init(&vdev->ll_pause.mutex);
     vdev->ll_pause.is_paused = A_FALSE;
     vdev->ll_pause.txq.head = vdev->ll_pause.txq.tail = NULL;
     vdev->ll_pause.txq.depth = 0;
@@ -875,7 +917,7 @@ ol_txrx_vdev_detach(
 
     /* preconditions */
     TXRX_ASSERT2(vdev);
-    	
+
 #if defined(CONFIG_HL_SUPPORT)
     if (ol_cfg_is_high_latency(pdev->ctrl_pdev)) {
         struct ol_tx_frms_queue_t *txq;
@@ -888,13 +930,19 @@ ol_txrx_vdev_detach(
     }
     #endif /* defined(CONFIG_HL_SUPPORT) */
 
+    adf_os_spin_lock_bh(&vdev->ll_pause.mutex);
     adf_os_timer_cancel(&vdev->ll_pause.timer);
     adf_os_timer_free(&vdev->ll_pause.timer);
     while (vdev->ll_pause.txq.head) {
         adf_nbuf_t next = adf_nbuf_next(vdev->ll_pause.txq.head);
+        adf_nbuf_set_next(vdev->ll_pause.txq.head, NULL);
+        adf_nbuf_unmap(pdev->osdev, vdev->ll_pause.txq.head,
+                       ADF_OS_DMA_TO_DEVICE);
         adf_nbuf_tx_free(vdev->ll_pause.txq.head, 1 /* error */);
         vdev->ll_pause.txq.head = next;
     }
+    adf_os_spin_unlock_bh(&vdev->ll_pause.mutex);
+    adf_os_spinlock_destroy(&vdev->ll_pause.mutex);
 
     /* remove the vdev from its parent pdev's list */
     TAILQ_REMOVE(&pdev->vdev_list, vdev, vdev_list_elem);
@@ -966,7 +1014,7 @@ ol_txrx_peer_attach(
     /* store provided params */
     peer->vdev = vdev;
     adf_os_mem_copy(
-        &peer->mac_addr.raw[0], peer_mac_addr, sizeof(peer->mac_addr));
+        &peer->mac_addr.raw[0], peer_mac_addr, OL_TXRX_MAC_ADDR_LEN);
 
     #if defined(CONFIG_HL_SUPPORT)
     if (ol_cfg_is_high_latency(pdev->ctrl_pdev)) {
@@ -1085,6 +1133,17 @@ ol_txrx_peer_state_update(ol_txrx_pdev_handle pdev, u_int8_t *peer_mac,
 	struct ol_txrx_peer_t *peer;
 
 	peer =  ol_txrx_peer_find_hash_find(pdev, peer_mac, 0, 1);
+
+        if (NULL == peer)
+        {
+           TXRX_PRINT(TXRX_PRINT_LEVEL_INFO2, "%s: peer is null for peer_mac"
+             " 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n", __FUNCTION__,
+             peer_mac[0], peer_mac[1], peer_mac[2], peer_mac[3],
+             peer_mac[4], peer_mac[5]);
+             return;
+        }
+
+
 	/* TODO: Should we send WMI command of the connection state? */
     /* avoid multiple auth state change. */
     if (peer->state == state) {
@@ -1142,6 +1201,12 @@ ol_txrx_peer_update(ol_txrx_vdev_handle vdev,
 	struct ol_txrx_peer_t *peer;
 
 	peer =  ol_txrx_peer_find_hash_find(vdev->pdev, peer_mac, 0, 1);
+	if (!peer)
+	{
+		TXRX_PRINT(TXRX_PRINT_LEVEL_INFO2, "%s: peer is null", __FUNCTION__);
+		return;
+	}
+
 	switch (select) {
 	case ol_txrx_peer_update_qos_capable:
 		{
@@ -1223,7 +1288,7 @@ ol_txrx_peer_uapsdmask_get(struct ol_txrx_pdev_t *txrx_pdev, u_int16_t peer_id)
 
     struct ol_txrx_peer_t *peer;
     peer = ol_txrx_peer_find_by_id(txrx_pdev, peer_id);
-    if (peer != NULL) {
+    if (!peer) {
         return peer->uapsd_mask;
     }
 
@@ -1248,6 +1313,7 @@ ol_txrx_peer_unref_delete(ol_txrx_peer_handle peer)
 {
     struct ol_txrx_vdev_t *vdev;
     struct ol_txrx_pdev_t *pdev;
+    int i;
 
     /* preconditions */
     TXRX_ASSERT2(peer);
@@ -1286,7 +1352,7 @@ ol_txrx_peer_unref_delete(ol_txrx_peer_handle peer)
             peer->mac_addr.raw[0], peer->mac_addr.raw[1],
             peer->mac_addr.raw[2], peer->mac_addr.raw[3],
             peer->mac_addr.raw[4], peer->mac_addr.raw[5]);
-		
+
         /* remove the reference to the peer from the hash table */
         ol_txrx_peer_find_hash_remove(pdev, peer);
 
@@ -1332,7 +1398,6 @@ ol_txrx_peer_unref_delete(ol_txrx_peer_handle peer)
         #if defined(CONFIG_HL_SUPPORT)
         if (ol_cfg_is_high_latency(pdev->ctrl_pdev)) {
             struct ol_tx_frms_queue_t *txq;
-            int i;
 
             for (i = 0; i < OL_TX_NUM_TIDS; i++) {
                 txq = &peer->txqs[i];
@@ -1340,6 +1405,23 @@ ol_txrx_peer_unref_delete(ol_txrx_peer_handle peer)
             }
         }
         #endif /* defined(CONFIG_HL_SUPPORT) */
+        /*
+         * 'array' is allocated in addba handler and is supposed to be freed
+         * in delba handler. There is the case (for example, in SSR) where
+         * delba handler is not called. Because array points to address of
+         * 'base' by default and is reallocated in addba handler later, only
+         * free the memory when the array does not point to base.
+         */
+        for (i = 0; i < OL_TXRX_NUM_EXT_TIDS; i++) {
+            if (peer->tids_rx_reorder[i].array !=
+                &peer->tids_rx_reorder[i].base) {
+                    TXRX_PRINT(TXRX_PRINT_LEVEL_INFO1,
+                               "%s, delete reorder array, tid:%d\n",
+                               __func__, i);
+                    adf_os_mem_free(peer->tids_rx_reorder[i].array);
+                    ol_rx_reorder_init(&peer->tids_rx_reorder[i], (u_int8_t)i);
+            }
+        }
 
         adf_os_mem_free(peer);
     } else {
@@ -1724,7 +1806,6 @@ int ol_txrx_debug(ol_txrx_vdev_handle vdev, int debug_specs)
 }
 #endif
 
-#if defined(TEMP_AGGR_CFG)
 int ol_txrx_aggr_cfg(ol_txrx_vdev_handle vdev,
                      int max_subfrms_ampdu,
                      int max_subfrms_amsdu)
@@ -1733,7 +1814,6 @@ int ol_txrx_aggr_cfg(ol_txrx_vdev_handle vdev,
                                 max_subfrms_ampdu,
                                 max_subfrms_amsdu);
 }
-#endif
 
 #if defined(TXRX_DEBUG_LEVEL) && TXRX_DEBUG_LEVEL > 5
 void
@@ -1878,3 +1958,12 @@ ol_txrx_peer_stats_copy(
     return A_OK;
 }
 #endif /* QCA_ENABLE_OL_TXRX_PEER_STATS */
+
+void
+ol_vdev_rx_set_intrabss_fwd(
+    ol_txrx_vdev_handle vdev,
+    a_bool_t val)
+{
+    vdev->disable_intrabss_fwd = val;
+}
+

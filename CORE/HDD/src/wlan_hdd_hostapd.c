@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,11 +24,12 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file  wlan_hdd_hostapd.c
   \brief WLAN Host Device Driver implementation
-               
+
   ========================================================================*/
 /**=========================================================================
                        EDIT HISTORY FOR FILE
@@ -77,6 +78,7 @@
 #endif
 #include "cfgApi.h"
 #include "wniCfgAp.h"
+#include "wlan_hdd_misc.h"
 
 #ifdef QCA_WIFI_2_0
 #include "wma.h"
@@ -92,12 +94,16 @@ extern int process_wma_set_command(int sessid, int paramid,
 #define    IS_UP_AUTO(_ic) \
     (IS_UP((_ic)->ic_dev) && (_ic)->ic_roaming == IEEE80211_ROAMING_AUTO)
 #define WE_WLAN_VERSION     1
-#define STATS_CONTEXT_MAGIC 0x53544154
 #define WE_GET_STA_INFO_SIZE 30
 /* WEXT limition: MAX allowed buf len for any *
  * IW_PRIV_TYPE_CHAR is 2Kbytes *
  */
 #define WE_SAP_MAX_STA_INFO 0x7FF
+
+#define RC_2_RATE_IDX(_rc)        ((_rc) & 0x7)
+#define HT_RC_2_STREAMS(_rc)    ((((_rc) & 0x78) >> 3) + 1)
+#define RC_2_RATE_IDX_11AC(_rc)        ((_rc) & 0xf)
+#define HT_RC_2_STREAMS_11AC(_rc)    ((((_rc) & 0x30) >> 4) + 1)
 
 #define SAP_24GHZ_CH_COUNT (14)
 
@@ -229,13 +235,13 @@ int hdd_hostapd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
     }
 
     if (priv_data.total_len <= 0 ||
-        priv_data.total_len == INT_MAX)
+        priv_data.total_len > HOSTAPD_IOCTL_COMMAND_STRLEN_MAX)
     {
         /* below we allocate one more byte for command buffer.
          * To avoid addition overflow total_len should be
          * smaller than INT_MAX. */
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-           "%s: integer out of range\n", __func__);
+           "%s: integer out of range len %d", __func__, priv_data.total_len);
         ret = -EFAULT;
         goto exit;
     }
@@ -270,6 +276,12 @@ int hdd_hostapd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
         {
             hdd_setP2pOpps(dev, command);
         }
+#ifdef FEATURE_WLAN_BATCH_SCAN
+        else if( strncmp(command, "WLS_BATCHING", 12) == 0 )
+        {
+           ret = hdd_handle_batch_scan_ioctl(pAdapter, &priv_data, command);
+        }
+#endif
 
         /*
            command should be a string having format
@@ -282,6 +294,7 @@ int hdd_hostapd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 
             ret = sapSetPreferredChannel(command);
         }
+
     }
 exit:
    if (command)
@@ -463,6 +476,13 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
     struct iw_michaelmicfailure msg;
 
     dev = (struct net_device *)usrDataForCallback;
+    if (!dev)
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                "%s: usrDataForCallback is null", __func__);
+        return eHAL_STATUS_FAILURE;
+    }
+
     pHostapdAdapter = netdev_priv(dev);
 
     if ((NULL == pHostapdAdapter) ||
@@ -475,6 +495,14 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
 
     pHostapdState = WLAN_HDD_GET_HOSTAP_STATE_PTR(pHostapdAdapter);
     pHddApCtx = WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter);
+
+    if (!pSapEvent)
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                "%s: pSapEvent is null", __func__);
+        return eHAL_STATUS_FAILURE;
+    }
+
     sapEvent = pSapEvent->sapHddEventCode;
     memset(&wrqu, '\0', sizeof(wrqu));
     pHddCtx = (hdd_context_t*)(pHostapdAdapter->pHddCtx);
@@ -503,8 +531,8 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             }
 #ifdef IPA_OFFLOAD
             if (hdd_ipa_is_enabled(pHddCtx))
-               hdd_ipa_wlan_evt(pHostapdAdapter, WLAN_RX_SAP_SELF_STA_ID,
-                  WLAN_AP_CONNECT, pHostapdAdapter->dev->dev_addr);
+                hdd_ipa_wlan_evt(pHostapdAdapter, pHddApCtx->uBCStaId,
+                        WLAN_AP_CONNECT, pHostapdAdapter->dev->dev_addr);
 #endif
 
             if (0 != (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->nAPAutoShutOff)
@@ -555,6 +583,18 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                     pHddApCtx->wepKey[i].keyLength = 0;
                 }
            }
+
+            // We should restart OS transmit queues if we came here after
+            // radar detection and channel change
+            if (VOS_TRUE == pHddCtx->dfs_radar_found)
+            {
+               pHddCtx->dfs_radar_found = VOS_FALSE;
+               if (WLAN_HDD_SOFTAP == pHostapdAdapter->device_mode)
+               {
+                  netif_tx_start_all_queues(dev);
+               }
+            }
+
             //Fill the params for sending IWEVCUSTOM Event with SOFTAP.enabled
             startBssEvent = "SOFTAP.enabled";
             memset(&we_custom_start_event, '\0', sizeof(we_custom_start_event));
@@ -576,8 +616,8 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             pHddApCtx->operatingChannel = 0; //Invalidate the channel info.
 #ifdef IPA_OFFLOAD
             if (hdd_ipa_is_enabled(pHddCtx))
-               hdd_ipa_wlan_evt(pHostapdAdapter, WLAN_RX_SAP_SELF_STA_ID,
-                            WLAN_AP_DISCONNECT, pHostapdAdapter->dev->dev_addr);
+                hdd_ipa_wlan_evt(pHostapdAdapter, pHddApCtx->uBCStaId,
+                        WLAN_AP_DISCONNECT, pHostapdAdapter->dev->dev_addr);
 #endif
             goto stopbss;
         case eSAP_STA_SET_KEY_EVENT:
@@ -662,7 +702,13 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                    WLAN_CLIENT_CONNECT_EX,
                    pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.staMac.bytes);
 #endif
-
+#ifdef QCA_PKT_PROTO_TRACE
+            /* Peer associated, update into trace buffer */
+            if (pHddCtx->cfg_ini->gEnableDebugLog)
+            {
+               vos_pkt_trace_buf_update("HA:ASSOC");
+            }
+#endif /* QCA_PKT_PROTO_TRACE */
             // Stop AP inactivity timer
             if (pHddApCtx->hdd_ap_inactivity_timer.state == VOS_TIMER_STATE_RUNNING)
             {
@@ -670,13 +716,8 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                 if (!VOS_IS_STATUS_SUCCESS(vos_status))
                    hddLog(LOGE, FL("Failed to start AP inactivity timer\n"));
             }
-#ifdef WLAN_OPEN_SOURCE
-            if (wake_lock_active(&pHddCtx->sap_wake_lock))
-            {
-               wake_unlock(&pHddCtx->sap_wake_lock);
-            }
-            wake_lock_timeout(&pHddCtx->sap_wake_lock, msecs_to_jiffies(HDD_SAP_WAKE_LOCK_DURATION));
-#endif
+            vos_wake_lock_timeout_acquire(&pHddCtx->sap_wake_lock,
+                                          HDD_SAP_WAKE_LOCK_DURATION);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
             {
                 struct station_info staInfo;
@@ -707,7 +748,17 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             {
                 hdd_abort_mac_scan(pHddCtx, pHostapdAdapter->sessionId);
             }
-
+#ifdef QCA_WIFI_2_0
+            if (pHostapdAdapter->device_mode == WLAN_HDD_P2P_GO)
+            {
+                /* send peer status indication to oem app */
+                hdd_SendPeerStatusIndToOemApp(
+                  &pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.staMac,
+                  ePeerConnected,
+                  pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.timingMeasCap,
+                  pHostapdAdapter->sessionId, pHddApCtx->operatingChannel);
+            }
+#endif
             break;
         case eSAP_STA_DISASSOC_EVENT:
             memcpy(wrqu.addr.sa_data, &pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac,
@@ -729,6 +780,13 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                hdd_ipa_wlan_evt(pHostapdAdapter, staId, WLAN_CLIENT_DISCONNECT,
                   pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac.bytes);
 #endif
+#ifdef QCA_PKT_PROTO_TRACE
+            /* Peer dis-associated, update into trace buffer */
+            if (pHddCtx->cfg_ini->gEnableDebugLog)
+            {
+               vos_pkt_trace_buf_update("HA:DISASC");
+            }
+#endif /* QCA_PKT_PROTO_TRACE */
             hdd_softap_DeregisterSTA(pHostapdAdapter, staId);
 
             if (0 != (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->nAPAutoShutOff)
@@ -764,6 +822,16 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
 #endif
             //Update the beacon Interval if it is P2P GO
             hdd_change_mcc_go_beacon_interval(pHostapdAdapter);
+#ifdef QCA_WIFI_2_0
+            if (pHostapdAdapter->device_mode == WLAN_HDD_P2P_GO)
+            {
+                /* send peer status indication to oem app */
+                hdd_SendPeerStatusIndToOemApp(
+                  &pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac,
+                  ePeerDisconnected, 0,
+                  pHostapdAdapter->sessionId, pHddApCtx->operatingChannel);
+            }
+#endif
             break;
         case eSAP_WPS_PBC_PROBE_REQ_EVENT:
         {
@@ -857,6 +925,11 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
 
         case eSAP_MAC_TRIG_STOP_BSS_EVENT :
             hdd_stop_p2p_link(pHostapdAdapter, usrDataForCallback);
+            return VOS_STATUS_SUCCESS;
+
+        case eSAP_CHANNEL_CHANGE_EVENT:
+            hddLog(LOG1, FL("Received eSAP_CHANNEL_CHANGE_EVENT event\n"));
+            /* TODO Need to indicate operating channel change to hostapd */
             return VOS_STATUS_SUCCESS;
 
         default:
@@ -1024,13 +1097,37 @@ static iw_softap_setparam(struct net_device *dev,
                           union iwreq_data *wrqu, char *extra)
 {
     hdd_adapter_t *pHostapdAdapter = (netdev_priv(dev));
-    tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(pHostapdAdapter);
+    tHalHandle hHal;
     int *value = (int *)extra;
     int sub_cmd = value[0];
     int set_value = value[1];
     eHalStatus status;
     int ret = 0; /* success */
-    v_CONTEXT_t pVosContext = (WLAN_HDD_GET_CTX(pHostapdAdapter))->pvosContext;
+    v_CONTEXT_t pVosContext;
+
+    if (!pHostapdAdapter || !pHostapdAdapter->pHddCtx)
+    {
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                 "%s: either hostapd Adapter is null or HDD ctx is null",
+                 __func__);
+       return -1;
+    }
+
+    hHal = WLAN_HDD_GET_HAL_CTX(pHostapdAdapter);
+    if (!hHal)
+    {
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                 "%s: Hal ctx is null", __func__);
+       return -1;
+    }
+
+    pVosContext = (WLAN_HDD_GET_CTX(pHostapdAdapter))->pvosContext;
+    if (!pVosContext)
+    {
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                 "%s: Vos ctx is null", __func__);
+       return -1;
+    }
 
     switch(sub_cmd)
     {
@@ -1140,6 +1237,14 @@ static iw_softap_setparam(struct net_device *dev,
             }
 
 #ifdef QCA_WIFI_2_0
+         case QCSAP_PARAM_SET_TXRX_FW_STATS:
+             {
+                  hddLog(LOG1, "QCSAP_PARAM_SET_TXRX_FW_STATS val %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                               (int)WMA_VDEV_TXRX_FWSTATS_ENABLE_CMDID,
+                                               set_value, VDEV_CMD);
+                  break;
+             }
          /* Firmware debug log */
          case QCSAP_DBGLOG_LOG_LEVEL:
              {
@@ -1221,6 +1326,179 @@ static iw_softap_setparam(struct net_device *dev,
                   break;
              }
 #endif
+         case QCSAP_PARAM_SET_MCC_CHANNEL_LATENCY:
+             {
+                  tVOS_CONCURRENCY_MODE concurrent_state = 0;
+                  v_U8_t first_adapter_operating_channel = 0;
+                  int ret = 0; /* success */
+                  hddLog(LOG1, "%s: iwpriv cmd to set MCC latency with val: "
+                          "%dms", __func__, set_value);
+                  concurrent_state = hdd_get_concurrency_mode();
+                  /**
+                   * Check if concurrency mode is active.
+                   * Need to modify this code to support MCC modes other than
+                   * STA/P2P GO
+                   */
+                  if (concurrent_state == (VOS_STA | VOS_P2P_GO))
+                  {
+                      hddLog(LOG1, "%s: STA & P2P are both enabled", __func__);
+                      /**
+                       * The channel number and latency are formatted in
+                       * a bit vector then passed on to WMA layer.
+                       +**********************************************+
+                       | bits 31-16 | bits 15-8         |  bits 7-0   |
+                       | Unused     | latency - Chan. 1 |  channel no.|
+                       +**********************************************+
+                       */
+
+                      /* Get the operating channel of the designated vdev */
+                      first_adapter_operating_channel =
+                                    hdd_get_operating_channel
+                                    (
+                                    pHostapdAdapter->pHddCtx,
+                                    pHostapdAdapter->device_mode
+                                    );
+                      /* Move the time latency for the adapter to bits 15-8 */
+                      set_value = set_value << 8;
+                      /* Store the channel number at bits 7-0 of the bit vector
+                       * as per the bit format above.
+                       */
+                      set_value = set_value | first_adapter_operating_channel;
+                      /* Send command to WMA */
+                      ret = process_wma_set_command
+                                        (
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMA_VDEV_MCC_SET_TIME_LATENCY,
+                                        set_value, VDEV_CMD
+                                        );
+                  }
+                  else
+                  {
+                      hddLog(LOG1, "%s: MCC is not active. Exit w/o setting"
+                              " latency", __func__);
+                  }
+                  break;
+             }
+
+         case QCSAP_PARAM_SET_MCC_CHANNEL_QUOTA:
+             {
+                 v_U8_t first_adapter_operating_channel = 0;
+                 v_U8_t second_adapter_opertaing_channel = 0;
+                 tVOS_CONCURRENCY_MODE concurrent_state = 0;
+                 hdd_adapter_t *staAdapter = NULL;
+                 int ret = 0; /* success */
+
+                 hddLog(LOG1, "%s: iwpriv cmd to set MCC quota value %dms",
+                         __func__, set_value);
+                 /**
+                  * Check if concurrency mode is active.
+                  * Need to modify this code to support MCC modes other than
+                  * STA/P2P GO
+                  */
+                 concurrent_state = hdd_get_concurrency_mode();
+                 if (concurrent_state == (VOS_STA | VOS_P2P_GO))
+                 {
+                     hddLog(LOG1, "%s: STA & P2P are both enabled", __func__);
+                     /**
+                      * The channel numbers for both adapters and the time
+                      * quota for the 1st adapter, i.e., one specified in cmd
+                      * are formatted as a bit vector then passed on to WMA
+                      +************************************************+
+                      |bit 31-24 |bit 23-16  |  bits 15-8  |bits 7-0   |
+                      |  Unused  |  Quota for| chan. # for |chan. # for|
+                      |          |  1st chan.| 1st chan.   |2nd chan.  |
+                      +************************************************+
+                      */
+
+                     /* Get the operating channel of the specified vdev */
+                     first_adapter_operating_channel =
+                                         hdd_get_operating_channel
+                                         (
+                                         pHostapdAdapter->pHddCtx,
+                                         pHostapdAdapter->device_mode
+                                         );
+                     hddLog(LOG1, "%s: 1st channel No.:%d and quota:%dms",
+                             __func__, first_adapter_operating_channel,
+                             set_value);
+                     /* Move the time quota for first adapter to bits 15-8 */
+                     set_value = set_value << 8;
+                     /** Store the operating channel number of 1st adapter at
+                      * the lower 8-bits of bit vector.
+                      */
+                     set_value = set_value | first_adapter_operating_channel;
+                     if (pHostapdAdapter->device_mode ==
+                                                      WLAN_HDD_INFRA_STATION)
+                     {
+                         /* iwpriv cmd issued on wlan0; get p2p0 vdev chan. */
+                         if ((concurrent_state & VOS_P2P_CLIENT) != 0)
+                         {
+                             /* The 2nd MCC vdev is P2P client */
+                             staAdapter = hdd_get_adapter
+                                                   (
+                                                   pHostapdAdapter->pHddCtx,
+                                                   WLAN_HDD_P2P_CLIENT
+                                                   );
+                         } else
+                         {
+                             /* The 2nd MCC vdev is P2P GO */
+                             staAdapter = hdd_get_adapter
+                                                    (
+                                                    pHostapdAdapter->pHddCtx,
+                                                    WLAN_HDD_P2P_GO
+                                                    );
+                         }
+                     }
+                     else
+                     {
+                         /* iwpriv cmd issued on p2p0; get channel for wlan0 */
+                         staAdapter = hdd_get_adapter
+                                                  (
+                                                  pHostapdAdapter->pHddCtx,
+                                                  WLAN_HDD_INFRA_STATION
+                                                  );
+                     }
+                     if (staAdapter != NULL)
+                     {
+                         second_adapter_opertaing_channel =
+                                 hdd_get_operating_channel
+                                 (
+                                 staAdapter->pHddCtx,
+                                 staAdapter->device_mode
+                                 );
+                         hddLog(LOG1, "%s: 2nd vdev channel No. is:%d",
+                                 __func__, second_adapter_opertaing_channel);
+                         /* Move the time quota and operating channel number
+                          * for the first adapter to bits 23-16 & bits 15-8
+                          *  of set_value vector, respectively.
+                          */
+                         set_value = set_value << 8;
+                         /* Store the channel number for 2nd MCC vdev at bits
+                          * 7-0 of set_value vector as per the bit format above.
+                          */
+                         set_value = set_value |
+                                             second_adapter_opertaing_channel;
+                         ret = process_wma_set_command
+                                              (
+                                              (int)pHostapdAdapter->sessionId,
+                                              (int)WMA_VDEV_MCC_SET_TIME_QUOTA,
+                                              set_value,
+                                              VDEV_CMD
+                                              );
+                     }
+                     else
+                     {
+                         hddLog(LOGE, "%s: NULL adapter handle. Exit",
+                                 __func__);
+                     }
+                 }
+                 else
+                 {
+                     hddLog(LOG1, "%s: MCC is not active. "
+                             "Exit w/o setting latency", __func__);
+                 }
+                 break;
+             }
+
          case QCASAP_SET_TXRX_FWSTATS:
              {
                   hddLog(LOG1, "WE_SET_TXRX_FWSTATS val %d", set_value);
@@ -1237,6 +1515,7 @@ static iw_softap_setparam(struct net_device *dev,
                                                 set_value, VDEV_CMD);
                   break;
              }
+
          case QCSAP_PARAM_SETRTSCTS:
             {
                 ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
@@ -1256,25 +1535,47 @@ static iw_softap_setparam(struct net_device *dev,
             }
         case QCASAP_SET_11N_RATE:
             {
-                u_int8_t preamble, nss, rix;
+                u_int8_t preamble = 0, nss = 0, rix = 0;
+                tsap_Config_t *pConfig =
+                        &pHostapdAdapter->sessionCtx.ap.sapConfig;
+
                 hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d", set_value);
 
                 rix = RC_2_RATE_IDX(set_value);
                 if (set_value & 0x80) {
+                    if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11b ||
+                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11b_ONLY ||
+                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11g ||
+                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11g_ONLY ||
+                        pConfig->SapHw_mode == eSAP_DOT11_MODE_abg ||
+                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11a) {
+                        hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid mode for HT");
+                        ret = -EIO;
+                        break;
+                    }
                     preamble = WMI_RATE_PREAMBLE_HT;
-                    nss = HT_RC_2_STREAMS(set_value) -1;
+                    nss = HT_RC_2_STREAMS(set_value) - 1;
+                } else if (set_value & 0x10) {
+                    if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11a) {
+                        hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid for cck");
+                        ret = -EIO;
+                        break;
+                    }
+                    preamble = WMI_RATE_PREAMBLE_CCK;
+                    /* Enable Short preamble always for CCK except 1mbps */
+                    if (rix != 0x3)
+                        rix |= 0x4;
                 } else {
-                    nss = 0;
-                    rix = RC_2_RATE_IDX(set_value);
-                    if (set_value & 0x10) {
-                        preamble = WMI_RATE_PREAMBLE_CCK;
-                        rix |= 0x4; /* Enable Short preamble always for CCK */
-                    } else
-                        preamble = WMI_RATE_PREAMBLE_OFDM;
+                    if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11b ||
+                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11b_ONLY) {
+                        hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid for OFDM");
+                        ret = -EIO;
+                        break;
+                    }
+                    preamble = WMI_RATE_PREAMBLE_OFDM;
                 }
-
-                hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d rix %d preamble %x\
-                       nss %d", set_value, rix, preamble, nss);
+                hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d rix %d "
+                    "preamble %x nss %d", set_value, rix, preamble, nss);
 
                 set_value = (preamble << 6) | (nss << 4) | rix;
                 ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
@@ -1286,13 +1587,24 @@ static iw_softap_setparam(struct net_device *dev,
         case QCASAP_SET_VHT_RATE:
             {
                 u_int8_t preamble, nss, rix;
+                tsap_Config_t *pConfig =
+                    &pHostapdAdapter->sessionCtx.ap.sapConfig;
+
+                if (pConfig->SapHw_mode != eSAP_DOT11_MODE_11ac &&
+                    pConfig->SapHw_mode != eSAP_DOT11_MODE_11ac_ONLY) {
+                    hddLog(VOS_TRACE_LEVEL_ERROR,
+                        "%s: SET_VHT_RATE error: SapHw_mode= 0x%x, ch = %d",
+                        __func__, pConfig->SapHw_mode, pConfig->channel);
+                    ret = -EIO;
+                    break;
+                }
 
                 rix = RC_2_RATE_IDX_11AC(set_value);
                 preamble = WMI_RATE_PREAMBLE_VHT;
-                nss = HT_RC_2_STREAMS_11AC(set_value) -1;
+                nss = HT_RC_2_STREAMS_11AC(set_value) - 1;
 
-                hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d rix %d preamble %x\
-                       nss %d", set_value, rix, preamble, nss);
+                hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d rix %d "
+                    "preamble %x nss %d", set_value, rix, preamble, nss);
 
                 set_value = (preamble << 6) | (nss << 4) | rix;
                 ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
@@ -1300,6 +1612,127 @@ static iw_softap_setparam(struct net_device *dev,
                                               set_value, VDEV_CMD);
                 break;
             }
+
+         case QCASAP_SET_SHORT_GI:
+             {
+                  hddLog(LOG1, "QCASAP_SET_SHORT_GI val %d", set_value);
+
+                  ret = sme_UpdateHTConfig(hHal, pHostapdAdapter->sessionId,
+                                           WNI_CFG_HT_CAP_INFO_SHORT_GI_20MHZ, /* same as 40MHZ */
+                                           set_value);
+                  if (ret)
+                      hddLog(LOGE, "Failed to set ShortGI value ret(%d)", ret);
+                  break;
+             }
+
+         case QCSAP_SET_AMPDU:
+             {
+                  hddLog(LOG1, "QCSAP_SET_AMPDU val %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                               (int)GEN_VDEV_PARAM_AMPDU,
+                                               set_value, GEN_CMD);
+                  break;
+             }
+
+         case QCSAP_SET_AMSDU:
+             {
+                  hddLog(LOG1, "QCSAP_SET_AMSDU val %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                               (int)GEN_VDEV_PARAM_AMSDU,
+                                               set_value, GEN_CMD);
+                  break;
+             }
+        case QCSAP_SET_GTX_HT_MCS:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_HT_MCS %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_HT_MCS,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+        case QCSAP_SET_GTX_VHT_MCS:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_VHT_MCS %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_VHT_MCS,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+       case QCSAP_SET_GTX_USRCFG:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_USR_CFG %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_USR_CFG,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+        case QCSAP_SET_GTX_THRE:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_THRE %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_THRE,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+        case QCSAP_SET_GTX_MARGIN:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_MARGIN %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_MARGIN,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+        case QCSAP_SET_GTX_STEP:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_STEP %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_STEP,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+        case QCSAP_SET_GTX_MINTPC:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_MINTPC %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_MINTPC,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+        case QCSAP_SET_GTX_BWMASK:
+             {
+                  hddLog(LOG1, "WMI_VDEV_PARAM_GTX_BWMASK %d", set_value);
+                  ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
+                                         (int)WMI_VDEV_PARAM_GTX_BW_MASK,
+                                         set_value, GTX_CMD);
+                  break;
+             }
+
+
+
+#ifdef QCA_PKT_PROTO_TRACE
+         case QCASAP_SET_DEBUG_LOG:
+             {
+                  hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pHostapdAdapter);
+
+                  hddLog(LOG1, "QCASAP_SET_DEBUG_LOG val %d", set_value);
+                  /* Trace buffer dump only */
+                  if (VOS_PKT_TRAC_DUMP_CMD == set_value)
+                  {
+                      vos_pkt_trace_buf_dump();
+                      break;
+                  }
+                  pHddCtx->cfg_ini->gEnableDebugLog = set_value;
+                  break;
+             }
+#endif /* QCA_PKT_PROTO_TRACE */
+
 #endif /* QCA_WIFI_2_0 */
         default:
             hddLog(LOGE, FL("Invalid setparam command %d value %d"),
@@ -1369,6 +1802,7 @@ static iw_softap_getparam(struct net_device *dev,
             *value = (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->apAutoChannelSelection;
              break;
         }
+
     case QCSAP_PARAM_GETRTSCTS:
         {
             hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
@@ -1379,6 +1813,103 @@ static iw_softap_getparam(struct net_device *dev,
                                              VDEV_CMD);
             break;
         }
+
+    case QCASAP_GET_SHORT_GI:
+        {
+            *value = (int)sme_GetHTConfig(hHal,
+                                          pHostapdAdapter->sessionId,
+                                          WNI_CFG_HT_CAP_INFO_SHORT_GI_20MHZ);
+            break;
+        }
+
+    case QCSAP_GET_GTX_HT_MCS:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_HT_MCS");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_HT_MCS,
+                                        GTX_CMD);
+            break;
+        }
+
+    case QCSAP_GET_GTX_VHT_MCS:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_VHT_MCS");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_VHT_MCS,
+                                        GTX_CMD);
+            break;
+        }
+
+    case QCSAP_GET_GTX_USRCFG:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_USR_CFG");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_USR_CFG,
+                                        GTX_CMD);
+            break;
+        }
+
+    case QCSAP_GET_GTX_THRE:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_THRE");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_THRE,
+                                        GTX_CMD);
+            break;
+        }
+
+    case QCSAP_GET_GTX_MARGIN:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_MARGIN");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_MARGIN,
+                                        GTX_CMD);
+            break;
+        }
+
+    case QCSAP_GET_GTX_STEP:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_STEP");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_STEP,
+                                        GTX_CMD);
+            break;
+        }
+
+    case QCSAP_GET_GTX_MINTPC:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_MINTPC");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_MINTPC,
+                                        GTX_CMD);
+            break;
+        }
+
+    case QCSAP_GET_GTX_BWMASK:
+        {
+            hdd_context_t *wmahddCtxt = WLAN_HDD_GET_CTX(pHostapdAdapter);
+            hddLog(LOG1, "GET WMI_VDEV_PARAM_GTX_BW_MASK");
+            *value = wma_cli_get_command(wmahddCtxt->pvosContext,
+                                        (int)pHostapdAdapter->sessionId,
+                                        (int)WMI_VDEV_PARAM_GTX_BW_MASK,
+                                        GTX_CMD);
+            break;
+        }
+
     default:
         hddLog(LOGE, FL("Invalid getparam command %d"), sub_cmd);
         ret = -EINVAL;
@@ -1428,9 +1959,8 @@ int iw_softap_modify_acl(struct net_device *dev, struct iw_request_info *info,
     i++;
     cmd = (int)(*(value+i));
 
-    hddLog(LOG1, "%s: SAP Modify ACL arg0 %02x:%02x:%02x:%02x:%02x:%02x arg1 %d arg2 %d\n",
-            __func__, pPeerStaMac[0], pPeerStaMac[1], pPeerStaMac[2],
-            pPeerStaMac[3], pPeerStaMac[4], pPeerStaMac[5], listType, cmd);
+    hddLog(LOG1, "%s: SAP Modify ACL arg0 " MAC_ADDRESS_STR " arg1 %d arg2 %d",
+            __func__, MAC_ADDR_ARRAY(pPeerStaMac), listType, cmd);
 
     if (WLANSAP_ModifyACL(pVosContext, pPeerStaMac,(eSapACLType)listType,(eSapACLCmdType)cmd)
             != VOS_STATUS_SUCCESS)
@@ -1516,6 +2046,7 @@ static iw_softap_set_tx_power(struct net_device *dev,
     int *value = (int *)extra;
     int set_value;
     ptSapContext  pSapCtx = NULL;
+    tSirMacAddr bssid;
 
     if (NULL == value)
         return -ENOMEM;
@@ -1527,9 +2058,13 @@ static iw_softap_set_tx_power(struct net_device *dev,
                    "%s: Invalid SAP pointer from pvosGCtx", __func__);
         return VOS_STATUS_E_FAULT;
     }
+    vos_mem_copy(bssid, pHostapdAdapter->macAddressCurrent.bytes,
+           VOS_MAC_ADDR_SIZE);
 
     set_value = value[0];
-    if (eHAL_STATUS_SUCCESS != sme_SetTxPower(hHal, pSapCtx->sessionId, set_value))
+    if (eHAL_STATUS_SUCCESS != sme_SetTxPower(hHal, pSapCtx->sessionId, bssid,
+                                              pHostapdAdapter->device_mode,
+                                              set_value))
     {
         hddLog(VOS_TRACE_LEVEL_ERROR, "%s: Setting tx power failed",
                 __func__);
@@ -1689,9 +2224,8 @@ static iw_softap_disassoc_sta(struct net_device *dev,
      */
     peerMacAddr = (v_U8_t *)(extra);
 
-    hddLog(LOG1, "data %02x:%02x:%02x:%02x:%02x:%02x",
-            peerMacAddr[0], peerMacAddr[1], peerMacAddr[2],
-            peerMacAddr[3], peerMacAddr[4], peerMacAddr[5]);
+    hddLog(LOG1, "%s data "  MAC_ADDRESS_STR,
+           __func__, MAC_ADDR_ARRAY(peerMacAddr));
     hdd_softap_sta_disassoc(pHostapdAdapter, peerMacAddr);
     EXIT();
     return 0;
@@ -1708,6 +2242,7 @@ static iw_softap_ap_stats(struct net_device *dev,
     int len = wrqu->data.length;
     pstatbuf = wrqu->data.pointer;
 
+    memset(&statBuffer, 0, sizeof(statBuffer));
     WLANSAP_GetStatistics((WLAN_HDD_GET_CTX(pHostapdAdapter))->pvosContext,
                            &statBuffer, (v_BOOL_t)wrqu->data.flags);
 
@@ -3005,7 +3540,8 @@ static VOS_STATUS  wlan_hdd_get_classAstats_for_station(hdd_adapter_t *pAdapter,
                                   0, // not periodic
                                   FALSE, //non-cached results
                                   staid,
-                                  &context);
+                                  &context,
+                                  pAdapter->sessionId );
    if (eHAL_STATUS_SUCCESS != hstatus)
    {
       hddLog(VOS_TRACE_LEVEL_ERROR,
@@ -3016,15 +3552,29 @@ static VOS_STATUS  wlan_hdd_get_classAstats_for_station(hdd_adapter_t *pAdapter,
    {
       lrc = wait_for_completion_interruptible_timeout(&context.completion,
             msecs_to_jiffies(WLAN_WAIT_TIME_STATS));
-      context.magic = 0;
       if (lrc <= 0)
       {
          hddLog(VOS_TRACE_LEVEL_ERROR,
                "%s: SME %s while retrieving link speed",
               __func__, (0 == lrc) ? "timeout" : "interrupt");
-         msleep(50);
       }
    }
+
+   /* either we never sent a request, we sent a request and received a
+      response or we sent a request and timed out.  if we never sent a
+      request or if we sent a request and got a response, we want to
+      clear the magic out of paranoia.  if we timed out there is a
+      race condition such that the callback function could be
+      executing at the same time we are. of primary concern is if the
+      callback function had already verified the "magic" but had not
+      yet set the completion variable when a timeout occurred. we
+      serialize these activities by invalidating the magic while
+      holding a shared spinlock which will cause us to block if the
+      callback is currently executing */
+   spin_lock(&hdd_context_lock);
+   context.magic = 0;
+   spin_unlock(&hdd_context_lock);
+
    return VOS_STATUS_SUCCESS;
 }
 
@@ -3213,6 +3763,13 @@ static const struct iw_priv_args hostapd_private_args[] = {
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "hideSSID" },
    { QCSAP_PARAM_SET_MC_RATE,
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "setMcRate" },
+   { QCSAP_PARAM_SET_TXRX_FW_STATS,
+      IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "txrx_fw_stats" },
+   { QCSAP_PARAM_SET_MCC_CHANNEL_LATENCY,
+      IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "setMccLatency" },
+   { QCSAP_PARAM_SET_MCC_CHANNEL_QUOTA,
+      IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "setMccQuota" },
+
 
 #ifdef QCA_WIFI_2_0
  /* Sub-cmds DBGLOG specific commands */
@@ -3284,6 +3841,112 @@ static const struct iw_priv_args hostapd_private_args[] = {
         IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
         0,
         "set11ACRates" },
+
+    {   QCASAP_SET_SHORT_GI,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "enable_short_gi" },
+
+    {   QCASAP_GET_SHORT_GI, 0,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_short_gi" },
+
+    {   QCSAP_SET_AMPDU,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "ampdu" },
+
+    {   QCSAP_SET_AMSDU,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "amsdu" },
+
+    {  QCSAP_SET_GTX_HT_MCS,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxHTMcs" },
+
+    {  QCSAP_SET_GTX_VHT_MCS,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxVHTMcs" },
+
+    {  QCSAP_SET_GTX_USRCFG,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxUsrCfg" },
+
+    {  QCSAP_SET_GTX_THRE,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxThre" },
+
+    {  QCSAP_SET_GTX_MARGIN,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxMargin" },
+
+    {  QCSAP_SET_GTX_STEP,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxStep" },
+
+    {  QCSAP_SET_GTX_MINTPC,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxMinTpc" },
+
+    {  QCSAP_SET_GTX_BWMASK,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "gtxBWMask" },
+
+    {  QCSAP_GET_GTX_HT_MCS,
+       0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxHTMcs" },
+
+    {  QCSAP_GET_GTX_VHT_MCS,
+       0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxVHTMcs" },
+
+    {  QCSAP_GET_GTX_USRCFG,
+        0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxUsrCfg" },
+
+    {  QCSAP_GET_GTX_THRE,
+        0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxThre" },
+
+    {  QCSAP_GET_GTX_MARGIN,
+        0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxMargin" },
+
+    {  QCSAP_GET_GTX_STEP,
+        0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxStep" },
+
+    {  QCSAP_GET_GTX_MINTPC,
+        0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxMinTpc" },
+
+    {  QCSAP_GET_GTX_BWMASK,
+        0,
+       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        "get_gtxBWMask" },
+
+#ifdef QCA_PKT_PROTO_TRACE
+    {   QCASAP_SET_DEBUG_LOG,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "setDbgLvl" },
+#endif /* QCA_PKT_PROTO_TRACE */
 
 #endif /* QCA_WIFI_2_0 */
 

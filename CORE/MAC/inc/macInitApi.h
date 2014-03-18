@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * macInitApi.c - Header file for mac level init functions
@@ -47,4 +48,3 @@ tSirRetStatus macClose(tHalHandle hHal);
 tSirRetStatus macPreStart(tHalHandle hHal);
 
 #endif //__MAC_INIT_API_H
-

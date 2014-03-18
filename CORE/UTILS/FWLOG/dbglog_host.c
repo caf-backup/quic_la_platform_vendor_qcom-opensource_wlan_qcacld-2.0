@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -23,21 +23,6 @@
  * This file was originally distributed by Qualcomm Atheros, Inc.
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
- */
-/*
- * Copyright (c) 2013, Qualcomm Atheros, Inc.
- *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
 /* Host Debug log implementation */
@@ -513,8 +498,24 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "COEX_MWS_REMOTE_EVENT",
         "COEX_MWS_OTHER",
         "COEX_MWS_ERROR",
-        "COEX_MWS_ANT_DIVERSITY",
-        "COEX_DEBUG_ID_END"
+        "COEX_MWS_ANT_DIVERSITY",   //237
+        "COEX_P2P_GO",
+        "COEX_P2P_CLIENT",
+        "COEX_SCC_1",
+        "COEX_SCC_2",
+        "COEX_MCC_1",
+        "COEX_MCC_2",
+        "COEX_TRF_SHAPE_NOA",
+        "COEX_NOA_ONESHOT",
+        "COEX_NOA_PERIODIC",
+        "COEX_LE_1",
+        "COEX_LE_2",
+        "COEX_ANT_1",
+        "COEX_ANT_2",
+        "COEX_ENTER_NOA",
+        "COEX_EXIT_NOA",
+        "COEX_BT_SCAN_PROTECT", // 253
+        "COEX_DEBUG_ID_END" // 254
     },
     {
         "ROAM_DBGID_DEFINITION_START",
@@ -645,6 +646,7 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "VDEV_MGR_VDEV_PAUSE_DELAY_UPDATE",
         "VDEV_MGR_VDEV_PAUSE_FAIL",
         "VDEV_MGR_GEN_PERIODIC_NOA",
+        "VDEV_MGR_OFF_CHAN_GO_CH_REQ_SETUP",
         "VDEV_MGR_DEFINITION_END",
     },
     {
@@ -717,6 +719,7 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "BEACON_EVENT_EARLY_RX_SLEEP_SLOP",
         "BEACON_EVENT_EARLY_RX_CONT_BMISS_TIMEOUT",
         "BEACON_EVENT_EARLY_RX_PAUSE_SKIP_BCN_NUM",
+        "BEACON_EVENT_EARLY_RX_BCN_TYPE",
     },
     { /* Offload Mgr */
         "OFFLOAD_MGR_DBGID_DEFINITION_START",
@@ -787,6 +790,12 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "WAL_DBGID_BRSSI_CONFIG",
         "WAL_DBGID_CURRENT_BRSSI_AVE",
         "WAL_DBGID_BCN_TX_COMP",
+        "WAL_DBGID_SET_HW_CHAINMASK",
+        "WAL_DBGID_SET_HW_CHAINMASK_TXRX_STOP_FAIL",
+        "WAL_DBGID_GET_HW_CHAINMASK",
+        "WAL_DBGID_SMPS_DISABLE",
+        "WAL_DBGID_SMPS_ENABLE_HW_CNTRL",
+        "WAL_DBGID_SMPS_SWSEL_CHAINMASK",
         "WAL_DBGID_DEFINITION_END",
     },
     {
@@ -896,6 +905,7 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "P2P_GO_GET_NOA_INFO",
         "P2P_GO_ADD_ONE_SHOT_NOA",
         "P2P_GO_GET_NOA_IE",
+        "P2P_GO_BCN_TX_COMP",
         "P2P_DBGID_DEFINITION_END",
     },
     {
@@ -963,6 +973,16 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "STA_SMPS_DBGID_VIRTUAL_CHAN_SMPS_START",
         "STA_SMPS_DBGID_VIRTUAL_CHAN_SMPS_STOP",
         "STA_SMPS_DBGID_SEND_SMPS_ACTION_FRAME",
+        "STA_SMPS_DBGID_HOST_FORCED_MODE",
+        "STA_SMPS_DBGID_FW_FORCED_MODE",
+        "STA_SMPS_DBGID_RSSI_THRESHOLD_CROSSED",
+        "STA_SMPS_DBGID_SMPS_ACTION_FRAME_COMPLETION",
+        "STA_SMPS_DBGID_DTIM_EBT_EVENT_CHMASK_UPDATE",
+        "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE",
+        "STA_SMPS_DBGID_DTIM_BEACON_EVENT_CHMASK_UPDATE",
+        "STA_SMPS_DBGID_DTIM_POWER_STATE_CHANGE",
+        "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_SLEEP",
+        "STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_AWAKE",
         "SMPS_DBGID_DEFINITION_END",
     },
     {   /* SWBMISS */
@@ -1034,6 +1054,34 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "TXBFEE_DBGID_PACKET_IS_STEERED",
         "TXBFEE_UPLOADH_EVENT_ALLOC_MEM_FAIL",
         "TXBFEE_DBGID_END",
+    },
+    { /*BATCH SCAN*/
+    },
+    { /*THERMAL MGR*/
+        "THERMAL_MGR_DBGID_DEFINITION_START",
+        "THERMAL_MGR_NEW_THRESH",
+        "THERMAL_MGR_THRESH_CROSSED",
+        "THERMAL_MGR_DBGID_DEFINITION END",
+    },
+    {   /* WLAN_MODULE_PHYERR_DFS */
+        ""
+    },
+    {
+        /* WLAN_MODULE_RMC */
+        "RMC_DBGID_DEFINITION_START",
+        "RMC_CREATE_INSTANCE",
+        "RMC_DELETE_INSTANCE",
+        "RMC_LDR_SEL",
+        "RMC_NO_LDR",
+        "RMC_LDR_NOT_SEL",
+        "RMC_LDR_INF_SENT",
+        "RMC_PEER_ADD",
+        "RMC_PEER_DELETE",
+        "RMC_PEER_UNKNOWN",
+        "RMC_SET_MODE",
+        "RMC_SET_ACTION_PERIOD",
+        "RMC_ACRION_FRAME_RX",
+        "RMC_DBGID_DEFINITION_END",
     },
 };
 
@@ -1374,6 +1422,7 @@ dbglog_debugfs_raw_data(wmi_unified_t wmi_handle, const u_int8_t *buf, A_UINT32 
         return -ENOMEM;
 
     slot = (struct dbglog_slot *) skb_put(skb, slot_len);
+    slot->diag_type = (A_UINT32)DIAG_TYPE_FW_DEBUG_MSG;
     slot->timestamp = cpu_to_le32(jiffies);
     slot->length = cpu_to_le32(length);
     slot->dropped = cpu_to_le32(dropped);
@@ -1401,8 +1450,45 @@ dbglog_debugfs_raw_data(wmi_unified_t wmi_handle, const u_int8_t *buf, A_UINT32 
 }
 #endif /* WLAN_OPEN_SOURCE */
 
+/*
+ * Package the data from the fw diag WMI event handler.
+ * Pass this data to cnss-diag service
+ */
 int
-dbglog_process_netlink_data(wmi_unified_t wmi_handle, const u_int8_t *buffer, A_UINT32 len, A_UINT32 dropped)
+send_fw_diag_nl_data(wmi_unified_t wmi_handle, const u_int8_t *buffer,
+                           A_UINT32 len, A_UINT32 event_type)
+{
+    struct sk_buff *skb_out;
+    struct nlmsghdr *nlh;
+    int res = 0;
+
+    if (WARN_ON(len > ATH6KL_FWLOG_PAYLOAD_SIZE))
+        return -ENODEV;
+
+
+    skb_out = nlmsg_new(len, 0);
+    if (!skb_out)
+    {
+        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("Failed to allocate new skb\n"));
+        return -1;
+    }
+    nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, len, 0);
+    memcpy(nlmsg_data(nlh), buffer, len);
+    NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
+
+    res = nlmsg_unicast(nl_sk, skb_out, g_pid);
+    if (res < 0)
+    {
+        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("nlmsg_unicast failed 0x%x \n", res));
+        return res;
+    }
+    return res;
+}
+
+
+int
+dbglog_process_netlink_data(wmi_unified_t wmi_handle, const u_int8_t *buffer,
+                           A_UINT32 len, A_UINT32 dropped)
 {
     struct sk_buff *skb_out;
     struct nlmsghdr *nlh;
@@ -1424,17 +1510,88 @@ dbglog_process_netlink_data(wmi_unified_t wmi_handle, const u_int8_t *buffer, A_
 
     nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, slot_len, 0);
     slot = (struct dbglog_slot *) nlmsg_data(nlh);
+    slot->diag_type = (A_UINT32)DIAG_TYPE_FW_DEBUG_MSG;
     slot->timestamp = cpu_to_le32(jiffies);
     slot->length = cpu_to_le32(len);
     slot->dropped = cpu_to_le32(dropped);
     memcpy(slot->payload, buffer, len);
     NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
 
-    nlmsg_unicast(nl_sk,
-		        skb_out,
-			g_pid);
+    res = nlmsg_unicast(nl_sk, skb_out, g_pid);
+    if (res < 0)
+    {
+        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("nlmsg_unicast failed 0x%x \n", res));
+        return res;
+    }
     return res;
 }
+
+/*
+ * WMI diag data event handler, this function invoked as a CB
+ * when there DIAG_DATA to be forwarded from the FW.
+ */
+
+int
+fw_diag_data_event_handler(ol_scn_t scn, u_int8_t *data, u_int32_t datalen)
+{
+
+    tp_wma_handle wma = (tp_wma_handle)scn;
+    struct wlan_diag_data *diag_data;
+    WMI_DIAG_DATA_CONTAINER_EVENTID_param_tlvs *param_buf;
+    wmi_diag_data_container_event_fixed_param *fixed_param;
+    u_int8_t *datap;
+    u_int32_t num_data=0; /* Total events */
+    u_int32_t diag_data_len=0; /* each fw diag payload */
+    u_int32_t diag_type=0;
+    u_int32_t i=0;
+    u_int32_t nl_data_len=0; /* diag hdr + payload */
+
+    param_buf = (WMI_DIAG_DATA_CONTAINER_EVENTID_param_tlvs *) data;
+    if (!param_buf) {
+        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("Got NULL point message from FW\n"));
+        return -1;
+    }
+
+    if (!wma) {
+        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NULL Pointer assigned\n"));
+        return -1;
+    }
+
+    fixed_param = param_buf->fixed_param;
+    num_data = param_buf->num_bufp;
+
+    datap = (u_int8_t *)param_buf->bufp;
+
+    /* If cnss-diag service started triggered during the init of services */
+    if (appstarted) {
+        for (i = 0; i < num_data; i++) {
+            diag_data = (struct wlan_diag_data *)datap;
+            diag_type = WLAN_DIAG_0_TYPE_GET(diag_data->word0);
+            diag_data_len = WLAN_DIAG_0_LEN_GET(diag_data->word0);
+
+           /* Length of diag struct and len of payload */
+            nl_data_len = sizeof(struct wlan_diag_data) + diag_data_len;
+#if 0
+            print_hex_dump_bytes("payload: ", DUMP_PREFIX_ADDRESS,
+                                 diag_data->payload, diag_data_len);
+#endif
+            switch (diag_type) {
+                case DIAG_TYPE_FW_EVENT:
+                return send_fw_diag_nl_data((wmi_unified_t)wma->wmi_handle,
+                                           datap, nl_data_len, diag_type);
+                break;
+                case DIAG_TYPE_FW_LOG:
+                return send_fw_diag_nl_data((wmi_unified_t)wma->wmi_handle,
+                                            datap, nl_data_len, diag_type);
+                break;
+            }
+            /* Move to the next event and send to cnss-diag */
+            datap += nl_data_len;
+        }
+    }
+    return 0;
+}
+
 
 int
 dbglog_parse_debug_logs(ol_scn_t scn, u_int8_t *data, u_int32_t datalen)
@@ -1453,11 +1610,15 @@ dbglog_parse_debug_logs(ol_scn_t scn, u_int8_t *data, u_int32_t datalen)
     u_int8_t *datap;
     u_int32_t len;
 
+    if (!wma) {
+        AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("NULL Pointer assigned\n"));
+        return -1;
+    }
     /*when fw asser occurs,host can't use TLV format.*/
     if (wma->is_fw_assert) {
-	datap = data;
-	len = datalen;
-	wma->is_fw_assert = 0;
+        datap = data;
+        len = datalen;
+        wma->is_fw_assert = 0;
     } else {
         param_buf = (WMI_DEBUG_MESG_EVENTID_param_tlvs *) data;
         if (!param_buf) {
@@ -2156,6 +2317,31 @@ dbglog_wal_print_handler(
     case WAL_DBGID_TX_DISCARD:
         dbglog_printf(timestamp, vap_id, "WAL Tx enqueue discard msdu_id=0x%x", args[0]);
         break;
+    case WAL_DBGID_SET_HW_CHAINMASK:
+        dbglog_printf(timestamp, vap_id, "WAL set hw chainmask "
+                                         "pdev=%d, txchain=0x%x, rxchain=0x%x",
+                args[0], args[1], args[2]);
+        break;
+    case WAL_DBGID_SET_HW_CHAINMASK_TXRX_STOP_FAIL:
+        dbglog_printf(timestamp, vap_id, "WAL hw chainmask tx stop fail rxstop=%d, txstop=%d",
+                args[0], args[1]);
+        break;
+    case WAL_DBGID_GET_HW_CHAINMASK:
+        dbglog_printf(timestamp, vap_id, "WAL get hw chainmask "
+                                         "txchain=0x%x, rxchain=0x%x",
+                args[0], args[1]);
+        break;
+    case WAL_DBGID_SMPS_DISABLE:
+        dbglog_printf(timestamp, vap_id, "WAL smps disable");
+        break;
+    case WAL_DBGID_SMPS_ENABLE_HW_CNTRL:
+        dbglog_printf(timestamp, vap_id, "WAL enable hw ctrl low_pwr_mask=0x%x, high_pwr_mask=0x%x",
+                args[0], args[1]);
+        break;
+    case WAL_DBGID_SMPS_SWSEL_CHAINMASK:
+        dbglog_printf(timestamp, vap_id, "WAL smps swsel chainmask low_pwr=0x%x, chain_mask=0x%x",
+                args[0], args[1]);
+    break;
     default:
         return FALSE;
     }
@@ -2633,6 +2819,13 @@ dbglog_beacon_print_handler(
                     args[0]);
         }
         break;
+    case BEACON_EVENT_EARLY_RX_BCN_TYPE:
+        if (numargs == 1) {
+            dbglog_printf(timestamp, vap_id,
+                    "early_rx bcn type:%d",
+                    args[0]);
+        }
+        break;
     default:
         return FALSE;
     }
@@ -2727,6 +2920,36 @@ A_BOOL dbglog_smps_print_handler(A_UINT32 mod_id,
                  (args[1] == 0x1 ? "STATIC" :
                   (args[1] == 0x3 ? "DYNAMIC" : "UNKNOWN"))),
                 args[2]);
+        break;
+    case STA_SMPS_DBGID_DTIM_EBT_EVENT_CHMASK_UPDATE:
+        dbglog_printf(timestamp, vap_id, "STA_SMPS ebt event chmask update");
+        break;
+    case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE:
+        dbglog_printf(timestamp, vap_id, "STA_SMPS dtim chmask update "
+                                         "tx_mask %#x rx_mask %#x arb_dtim_mask %#x",
+                args[0], args[1], args[2]);
+        break;
+    case STA_SMPS_DBGID_DTIM_BEACON_EVENT_CHMASK_UPDATE:
+        dbglog_printf(timestamp, vap_id, "STA_SMPS beacon event chmask update");
+        break;
+    case STA_SMPS_DBGID_DTIM_POWER_STATE_CHANGE:
+        dbglog_printf(timestamp, vap_id, "STA_SMPS cur_pwr_state %s new_pwr_state %d",
+                (args[0] == 0x1 ? "SLEEP":
+                 (args[0] == 0x2 ? "AWAKE":
+                  (args[0] == 0x3 ? "FULL_SLEEP" : "UNKNOWN"))),
+                (args[1] == 0x1 ? "SLEEP":
+                 (args[1] == 0x2 ? "AWAKE":
+                  (args[1] == 0x3 ? "FULL_SLEEP" : "UNKNOWN"))));
+        break;
+    case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_SLEEP:
+        dbglog_printf(timestamp, vap_id, "STA_SMPS chmask update sleep "
+                                         "tx_mask %#x rx_mask %#x orig_rx %#x dtim_rx %#x",
+                args[0], args[1], args[2], args[3]);
+        break;
+    case STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_AWAKE:
+        dbglog_printf(timestamp, vap_id, "STA_SMPS chmask update awake "
+                                         "tx_mask %#x rx_mask %#x orig_rx %#x",
+                args[0], args[1], args[2]);
         break;
     default:
         dbglog_printf(
@@ -3013,8 +3236,16 @@ dbglog_init(wmi_unified_t wmi_handle)
     dbglog_reg_modprint(WLAN_MODULE_P2P, dbglog_p2p_print_handler);
     dbglog_reg_modprint(WLAN_MODULE_PCIELP, dbglog_pcielp_print_handler);
 
+    /* Register handler for F3 or debug messages */
     res = wmi_unified_register_event_handler(wmi_handle, WMI_DEBUG_MESG_EVENTID,
                        dbglog_parse_debug_logs);
+    if(res != 0)
+        return res;
+
+    /* Register handler for FW diag events */
+    res = wmi_unified_register_event_handler(wmi_handle,
+                     WMI_DIAG_DATA_CONTAINER_EVENTID,
+                     fw_diag_data_event_handler);
     if(res != 0)
         return res;
 

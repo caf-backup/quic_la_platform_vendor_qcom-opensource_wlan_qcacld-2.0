@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef __WLAN_TGT_DEF_CONFIG_H__
 #define __WLAN_TGT_DEF_CONFIG_H__
 
@@ -60,7 +61,7 @@
  * probably always be appropriate; it is probably not necessary to
  * determine this value dynamically.
  */
-#define CFG_TGT_AST_SKID_LIMIT          16 
+#define CFG_TGT_AST_SKID_LIMIT          16
 
 /*
  * total number of peers per device.
@@ -100,9 +101,9 @@
 /*
  * keys per peer node
  */
-#define CFG_TGT_NUM_PEER_KEYS           2
+#define CFG_TGT_NUM_PEER_KEYS           3
 /*
- * total number of data TX and RX TIDs 
+ * total number of data TX and RX TIDs
  */
 #define CFG_TGT_NUM_TIDS       (2 * (CFG_TGT_NUM_PEERS + CFG_TGT_NUM_VDEV + 2))
 /*
@@ -196,5 +197,38 @@
  * number of peers that each Tdls vdev can track
  */
 #define CFG_TGT_NUM_TDLS_CONN_TABLE_ENTRIES    32
+
+/*
+ * ht enable highest MCS by default
+ */
+#define CFG_TGT_DEFAULT_GTX_HT_MASK		0x8080
+/*
+ * vht enable highest MCS by default
+ */
+#define CFG_TGT_DEFAULT_GTX_VHT_MASK		0x80200
+/*
+ * resv for furture use, bit 30 is used for fix tpc, bit0-3 for Power save balance
+ */
+#define CFG_TGT_DEFAULT_GTX_USR_CFG		0xa
+/*
+ * threshold to enable GTX
+ */
+#define CFG_TGT_DEFAULT_GTX_PER_THRESHOLD	3
+/*
+ * margin to move back when per > margin + threshold
+ */
+#define CFG_TGT_DEFAULT_GTX_PER_MARGIN		2
+/*
+ * step for every move
+ */
+#define CFG_TGT_DEFAULT_GTX_TPC_STEP		1
+/*
+ * lowest TPC
+ */
+#define CFG_TGT_DEFAULT_GTX_TPC_MIN		0
+/*
+ * enable all BW 20/40/80/160
+ */
+#define CFG_TGT_DEFAULT_GTX_BW_MASK		0xf
 
 #endif  /*__WLAN_TGT_DEF_CONFIG_H__ */

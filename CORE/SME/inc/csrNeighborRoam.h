@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,15 +24,15 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/** ------------------------------------------------------------------------- * 
-    ------------------------------------------------------------------------- *  
 
-  
+/** ------------------------------------------------------------------------- *
+    ------------------------------------------------------------------------- *
+
+
     \file csrNeighborRoam.h
-  
-    Exports and types for the neighbor roaming algorithm which is sepcifically 
+
+    Exports and types for the neighbor roaming algorithm which is sepcifically
     designed for Android.
-  
 ========================================================================== */
 #ifndef CSR_NEIGHBOR_ROAM_H
 #define CSR_NEIGHBOR_ROAM_H
@@ -53,7 +53,7 @@ typedef enum
     eCSR_NEIGHBOR_ROAM_STATE_REPORT_SCAN,
     eCSR_NEIGHBOR_ROAM_STATE_PREAUTHENTICATING,
     eCSR_NEIGHBOR_ROAM_STATE_PREAUTH_DONE,
-#endif /* WLAN_FEATURE_VOWIFI_11R */    
+#endif /* WLAN_FEATURE_VOWIFI_11R */
     eNEIGHBOR_STATE_MAX
 } eCsrNeighborRoamState;
 
@@ -69,6 +69,8 @@ typedef struct sCsrNeighborRoamCfgParams
     tANI_U32        maxChannelScanTime;
     tANI_U16        neighborResultsRefreshPeriod;
     tANI_U16        emptyScanRefreshPeriod;
+    tANI_U8         nOpportunisticThresholdDiff;
+    tANI_U8         nRoamRescanRssiDiff;
 } tCsrNeighborRoamCfgParams, *tpCsrNeighborRoamCfgParams;
 
 #define CSR_NEIGHBOR_ROAM_INVALID_CHANNEL_INDEX    255
@@ -124,9 +126,9 @@ typedef struct sCsr11rAssocNeighborInfo
 } tCsr11rAssocNeighborInfo, *tpCsr11rAssocNeighborInfo;
 #endif /* WLAN_FEATURE_VOWIFI_11R */
 
-/* Below macros are used to increase the registered neighbor Lookup threshold with TL when 
- * we dont see any AP during back ground scanning. The values are incremented from neighborLookupThreshold 
- * from CFG, incremented by 5,10,15...50(LOOKUP_THRESHOLD_INCREMENT_MULTIPLIER_MAX * 
+/* Below macros are used to increase the registered neighbor Lookup threshold with TL when
+ * we dont see any AP during back ground scanning. The values are incremented from neighborLookupThreshold
+ * from CFG, incremented by 5,10,15...50(LOOKUP_THRESHOLD_INCREMENT_MULTIPLIER_MAX *
  * NEIGHBOR_LOOKUP_THRESHOLD_INCREMENT_CONSTANT) */
 #define NEIGHBOR_LOOKUP_THRESHOLD_INCREMENT_CONSTANT    5
 #define LOOKUP_THRESHOLD_INCREMENT_MULTIPLIER_MAX       4
@@ -169,16 +171,18 @@ typedef struct sCsrNeighborRoamControlInfo
     tCsrTimerInfo               neighborScanTimerInfo;
     tCsrNeighborRoamChannelInfo roamChannelInfo;
     tANI_U8                     currentNeighborLookupThreshold;
+    tANI_U8                     currentOpportunisticThresholdDiff;
+    tANI_U8                     currentRoamRescanRssiDiff;
     tANI_BOOLEAN                scanRspPending;
     tANI_TIMESTAMP              scanRequestTimeStamp;
     tDblLinkList                roamableAPList;    // List of current FT candidates
     tANI_U32                    csrSessionId;
     tCsrRoamProfile             csrNeighborRoamProfile;
-#ifdef WLAN_FEATURE_VOWIFI_11R    
+#ifdef WLAN_FEATURE_VOWIFI_11R
     tANI_BOOLEAN                is11rAssoc;
     tCsr11rAssocNeighborInfo    FTRoamInfo;
 #endif /* WLAN_FEATURE_VOWIFI_11R */
-#ifdef FEATURE_WLAN_CCX    
+#ifdef FEATURE_WLAN_CCX
     tANI_BOOLEAN                isCCXAssoc;
     tANI_BOOLEAN                isVOAdmitted;
     tANI_U32                    MinQBssLoadRequired;
@@ -226,6 +230,12 @@ tANI_BOOLEAN csrNeighborRoamStatePreauthDone(tpAniSirGlobal pMac);
 tANI_BOOLEAN csrNeighborRoamScanRspPending(tHalHandle hHal);
 tANI_BOOLEAN csrNeighborMiddleOfRoaming(tHalHandle hHal);
 VOS_STATUS csrNeighborRoamSetLookupRssiThreshold(tpAniSirGlobal pMac, v_U8_t neighborLookupRssiThreshold);
+VOS_STATUS
+csrNeighborRoamSetOpportunisticScanThresholdDiff(tpAniSirGlobal pMac,
+                                        v_U8_t nOpportunisticThresholdDiff);
+VOS_STATUS
+csrNeighborRoamSetRoamRescanRssiDiff(tpAniSirGlobal pMac,
+                                     v_U8_t nRoamRescanRssiDiff);
 VOS_STATUS csrNeighborRoamUpdateFastRoamingEnabled(tpAniSirGlobal pMac, const v_BOOL_t fastRoamEnabled);
 VOS_STATUS csrNeighborRoamUpdateCcxModeEnabled(tpAniSirGlobal pMac, const v_BOOL_t ccxMode);
 VOS_STATUS csrNeighborRoamChannelsFilterByCurrentBand(
@@ -268,6 +278,8 @@ VOS_STATUS csrNeighborRoamMergeChannelLists(tpAniSirGlobal pMac,
 #define REASON_OS_REQUESTED_ROAMING_NOW             15
 #define REASON_SCAN_CH_TIME_CHANGED                 16
 #define REASON_SCAN_HOME_TIME_CHANGED               17
+#define REASON_OPPORTUNISTIC_THRESH_DIFF_CHANGED    18
+#define REASON_ROAM_RESCAN_RSSI_DIFF_CHANGED        19
 eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 command, tANI_U8 reason);
 eHalStatus csrNeighborRoamCandidateFoundIndHdlr(tpAniSirGlobal pMac, void* pMsg);
 eHalStatus csrNeighborRoamHandoffReqHdlr(tpAniSirGlobal pMac, void* pMsg);
@@ -286,4 +298,3 @@ VOS_STATUS csrRoamReadTSF(tpAniSirGlobal pMac, tANI_U8 *pTimestamp);
 #endif /* WLAN_FEATURE_NEIGHBOR_ROAMING */
 
 #endif /* CSR_NEIGHBOR_ROAM_H */
-

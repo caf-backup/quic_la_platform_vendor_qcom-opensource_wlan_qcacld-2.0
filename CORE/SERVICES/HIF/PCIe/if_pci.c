@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -26,13 +26,17 @@
  */
 
 
+
 #include <osdep.h>
 #include <linux/pci.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/if_arp.h>
 #include "if_pci.h"
+#include "hif_msg_based.h"
+#include "hif_pci.h"
 #include "copy_engine_api.h"
+#include "copy_engine_internal.h"
 #include "bmi_msg.h" /* TARGET_TYPE_ */
 #include "regtable.h"
 #include "ol_fw.h"
@@ -43,6 +47,7 @@
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
 #include "wlan_hdd_power.h"
 #endif
+#include "wlan_hdd_main.h"
 #ifdef CONFIG_CNSS
 #include <net/cnss.h>
 #endif
@@ -60,8 +65,13 @@
 
 #define AR9888_DEVICE_ID (0x003c)
 #define AR6320_DEVICE_ID (0x003e)
+#define AR6320_FW_1_1  (0x11)
+#define AR6320_FW_1_3  (0x13)
+#define AR6320_FW_2_0  (0x20)
 
 #define MAX_NUM_OF_RECEIVES 1000 /* Maximum number of Rx buf to process before break out */
+#define PCIE_WAKE_TIMEOUT 1000 /* Maximum ms timeout for host to wake up target */
+#define RAMDUMP_EVENT_TIMEOUT 2500
 
 unsigned int msienable = 0;
 module_param(msienable, int, 0644);
@@ -80,7 +90,7 @@ struct ol_pl_os_dep_funcs *g_ol_pl_os_dep_funcs = NULL;
 #endif
 
 /* Setting SOC_GLOBAL_RESET during driver unload causes intermittent PCIe data bus error
- * As workaround for this issue - changing the reset sequence to use TargetCPU warm reset 
+ * As workaround for this issue - changing the reset sequence to use TargetCPU warm reset
  * instead of SOC_GLOBAL_RESET
  */
 #define CPU_WARM_RESET_WAR
@@ -94,9 +104,14 @@ static irqreturn_t
 hif_pci_interrupt_handler(int irq, void *arg)
 {
     struct hif_pci_softc *sc = (struct hif_pci_softc *) arg;
+    struct HIF_CE_state *hif_state = (struct HIF_CE_state *)sc->hif_device;
     volatile int tmp;
 
     if (LEGACY_INTERRUPTS(sc)) {
+
+        if (sc->hif_init_done == TRUE)
+           A_TARGET_ACCESS_BEGIN(hif_state->targid);
+
         /* Clear Legacy PCI line interrupts */
         /* IMPORTANT: INTR_CLR regiser has to be set after INTR_ENABLE is set to 0, */
         /*            otherwise interrupt can not be really cleared */
@@ -104,6 +119,13 @@ hif_pci_interrupt_handler(int irq, void *arg)
         A_PCI_WRITE32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_CLR_ADDRESS), PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL);
         /* IMPORTANT: this extra read transaction is required to flush the posted write buffer */
         tmp = A_PCI_READ32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS));
+
+        if (tmp == 0xdeadbeef) {
+            printk(KERN_ERR "BUG(%s): SoC returns 0xdeadbeef!!\n", __func__);
+            VOS_BUG(0);
+        }
+        if (sc->hif_init_done == TRUE)
+          A_TARGET_ACCESS_END(hif_state->targid);
     }
     /* TBDXXX: Add support for WMAC */
 
@@ -221,10 +243,10 @@ hif_pci_device_reset(struct hif_pci_softc *sc)
 }
 
 
-/* CPU warm reset function 
+/* CPU warm reset function
  * Steps:
- * 	1. Disable all pending interrupts - so no pending interrupts on WARM reset
- * 	2. Clear the FW_INDICATOR_ADDRESS -so Traget CPU intializes FW correctly on WARM reset 
+ *	1. Disable all pending interrupts - so no pending interrupts on WARM reset
+ *	2. Clear the FW_INDICATOR_ADDRESS -so Traget CPU intializes FW correctly on WARM reset
  *      3. Clear TARGET CPU LF timer interrupt
  *      4. Reset all CEs to clear any pending CE tarnsactions
  *      5. Warm reset CPU
@@ -311,6 +333,161 @@ hif_pci_device_warm_reset(struct hif_pci_softc *sc)
 
 }
 
+
+int hif_pci_check_soc_status(struct hif_pci_softc *sc)
+{
+    u_int16_t device_id;
+    u_int32_t val;
+    u_int16_t timeout_count = 0;
+
+    /* Check device ID from PCIe configuration space for link status */
+    pci_read_config_word(sc->pdev, PCI_DEVICE_ID, &device_id);
+    if(device_id != sc->devid) {
+        printk(KERN_ERR "PCIe link is down!\n");
+        return -EACCES;
+    }
+
+    /* Check PCIe local register for bar/memory access */
+    val = A_PCI_READ32(sc->mem + PCIE_LOCAL_BASE_ADDRESS +
+                       RTC_STATE_ADDRESS);
+    printk("RTC_STATE_ADDRESS is %08x\n", val);
+
+    /* Try to wake up taget if it sleeps */
+    A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS +
+                  PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
+    printk("PCIE_SOC_WAKE_ADDRESS is %08x\n",
+           A_PCI_READ32(sc->mem + PCIE_LOCAL_BASE_ADDRESS +
+                        PCIE_SOC_WAKE_ADDRESS));
+
+    /* Check if taget can be woken up */
+    while(!hif_pci_targ_is_awake(sc, sc->mem)) {
+        if(timeout_count >= PCIE_WAKE_TIMEOUT) {
+            printk(KERN_ERR "Target cannot be woken up! "
+                "RTC_STATE_ADDRESS is %08x, PCIE_SOC_WAKE_ADDRESS is %08x\n",
+                A_PCI_READ32(sc->mem + PCIE_LOCAL_BASE_ADDRESS +
+                RTC_STATE_ADDRESS), A_PCI_READ32(sc->mem +
+                PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS));
+            return -EACCES;
+        }
+
+        A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS +
+                      PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
+
+        A_MDELAY(100);
+        timeout_count += 100;
+    }
+
+    /* Check Power register for SoC internal bus issues */
+    val = A_PCI_READ32(sc->mem + RTC_SOC_BASE_ADDRESS + SOC_POWER_REG_OFFSET);
+    printk("Power register is %08x\n", val);
+
+    return EOK;
+}
+
+void dump_CE_debug_register(struct hif_pci_softc *sc)
+{
+    struct HIF_CE_state *hif_state = (struct HIF_CE_state *)sc->hif_device;
+    A_target_id_t targid = hif_state->targid;
+    void __iomem *mem = sc->mem;
+    u_int32_t val, i, j;
+    u_int32_t wrapper_idx[] = {1, 2, 3, 4, 5, 6, 8, 9};
+    u_int32_t ce_base;
+
+    A_TARGET_ACCESS_BEGIN(targid);
+
+    /* DEBUG_INPUT_SEL_SRC = 0x6 */
+    val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_INPUT_SEL_OFFSET);
+    val &= ~WLAN_DEBUG_INPUT_SEL_SRC_MASK;
+    val |= WLAN_DEBUG_INPUT_SEL_SRC_SET(0x6);
+    A_PCI_WRITE32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_INPUT_SEL_OFFSET, val);
+
+    /* DEBUG_CONTROL_ENABLE = 0x1 */
+    val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_CONTROL_OFFSET);
+    val &= ~WLAN_DEBUG_CONTROL_ENABLE_MASK;
+    val |= WLAN_DEBUG_CONTROL_ENABLE_SET(0x1);
+    A_PCI_WRITE32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_CONTROL_OFFSET, val);
+
+    printk("Debug: inputsel: %x dbgctrl: %x\n",
+        A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_INPUT_SEL_OFFSET),
+        A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_CONTROL_OFFSET));
+
+    printk("Debug CE: \n");
+    /* Loop CE debug output */
+    /* AMBA_DEBUG_BUS_SEL = 0xc */
+    val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS + AMBA_DEBUG_BUS_OFFSET);
+    val &= ~AMBA_DEBUG_BUS_SEL_MASK;
+    val |= AMBA_DEBUG_BUS_SEL_SET(0xc);
+    A_PCI_WRITE32(mem + GPIO_BASE_ADDRESS + AMBA_DEBUG_BUS_OFFSET, val);
+
+    for (i = 0; i < sizeof(wrapper_idx)/sizeof(A_UINT32); i++) {
+        /* For (i=1,2,3,4,8,9) write CE_WRAPPER_DEBUG_SEL = i */
+        val = A_PCI_READ32(mem + CE_WRAPPER_BASE_ADDRESS +
+                           CE_WRAPPER_DEBUG_OFFSET);
+        val &= ~CE_WRAPPER_DEBUG_SEL_MASK;
+        val |= CE_WRAPPER_DEBUG_SEL_SET(wrapper_idx[i]);
+        A_PCI_WRITE32(mem + CE_WRAPPER_BASE_ADDRESS +
+                      CE_WRAPPER_DEBUG_OFFSET, val);
+
+        printk("ce wrapper: %d amdbg: %x cewdbg: %x\n", wrapper_idx[i],
+            A_PCI_READ32(mem + GPIO_BASE_ADDRESS + AMBA_DEBUG_BUS_OFFSET),
+            A_PCI_READ32(mem + CE_WRAPPER_BASE_ADDRESS +
+                         CE_WRAPPER_DEBUG_OFFSET));
+
+        if (wrapper_idx[i] <= 7) {
+            for (j = 0; j <= 5; j++) {
+                ce_base = CE_BASE_ADDRESS(wrapper_idx[i]);
+                /* For (j=0~5) write CE_DEBUG_SEL = j */
+                val = A_PCI_READ32(mem + ce_base + CE_DEBUG_OFFSET);
+                val &= ~CE_DEBUG_SEL_MASK;
+                val |= CE_DEBUG_SEL_SET(j);
+                A_PCI_WRITE32(mem + ce_base + CE_DEBUG_OFFSET, val);
+
+                /* read (@gpio_athr_wlan_reg) WLAN_DEBUG_OUT_DATA */
+                val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS +
+                                   WLAN_DEBUG_OUT_OFFSET);
+                val = WLAN_DEBUG_OUT_DATA_GET(val);
+
+                printk("    module%d: cedbg: %x out: %x\n", j,
+                    A_PCI_READ32(mem + ce_base + CE_DEBUG_OFFSET), val);
+            }
+        } else {
+            /* read (@gpio_athr_wlan_reg) WLAN_DEBUG_OUT_DATA */
+            val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_OUT_OFFSET);
+            val = WLAN_DEBUG_OUT_DATA_GET(val);
+
+            printk("    out: %x\n", val);
+        }
+
+        msleep(1);
+    }
+
+    printk("Debug PCIe: \n");
+    /* Loop PCIe debug output */
+    /* Write AMBA_DEBUG_BUS_SEL = 0x1c */
+    val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS + AMBA_DEBUG_BUS_OFFSET);
+    val &= ~AMBA_DEBUG_BUS_SEL_MASK;
+    val |= AMBA_DEBUG_BUS_SEL_SET(0x1c);
+    A_PCI_WRITE32(mem + GPIO_BASE_ADDRESS + AMBA_DEBUG_BUS_OFFSET, val);
+
+    for (i = 0; i <= 8; i++) {
+        /* For (i=1~8) write AMBA_DEBUG_BUS_PCIE_DEBUG_SEL = i */
+        val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS + AMBA_DEBUG_BUS_OFFSET);
+        val &= ~AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_MASK;
+        val |= AMBA_DEBUG_BUS_PCIE_DEBUG_SEL_SET(i);
+        A_PCI_WRITE32(mem + GPIO_BASE_ADDRESS + AMBA_DEBUG_BUS_OFFSET, val);
+
+        /* read (@gpio_athr_wlan_reg) WLAN_DEBUG_OUT_DATA */
+        val = A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_OUT_OFFSET);
+        val = WLAN_DEBUG_OUT_DATA_GET(val);
+
+        printk("amdbg: %x out: %x %x\n",
+            A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_OUT_OFFSET), val,
+            A_PCI_READ32(mem + GPIO_BASE_ADDRESS + WLAN_DEBUG_OUT_OFFSET));
+    }
+
+    A_TARGET_ACCESS_END(targid);
+}
+
 /*
  * Handler for a per-engine interrupt on a PARTICULAR CE.
  * This is used in cases where each CE has a private
@@ -340,7 +517,12 @@ static void
 wlan_tasklet(unsigned long data)
 {
     struct hif_pci_softc *sc = (struct hif_pci_softc *) data;
+    struct HIF_CE_state *hif_state = (struct HIF_CE_state *)sc->hif_device;
     volatile int tmp;
+
+    if (sc->hif_init_done == FALSE) {
+       goto irq_handled;
+    }
 
     (irqreturn_t)HIF_fw_interrupt_handler(sc->irq_event, sc);
     CE_per_engine_service_any(sc->irq_event, sc);
@@ -354,12 +536,20 @@ wlan_tasklet(unsigned long data)
         tasklet_schedule(&sc->intr_tq);
         return;
     }
+irq_handled:
     if (LEGACY_INTERRUPTS(sc)) {
+
+        if (sc->hif_init_done == TRUE)
+            A_TARGET_ACCESS_BEGIN(hif_state->targid);
+
         /* Enable Legacy PCI line interrupts */
-        A_PCI_WRITE32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS), 
-		    PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL); 
+        A_PCI_WRITE32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS),
+		    PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL);
         /* IMPORTANT: this extra read transaction is required to flush the posted write buffer */
         tmp = A_PCI_READ32(sc->mem+(SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS));
+
+        if (sc->hif_init_done == TRUE)
+           A_TARGET_ACCESS_END(hif_state->targid);
     }
 }
 
@@ -375,6 +565,7 @@ hif_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
     struct ol_softc *ol_sc;
     int probe_again = 0;
     u_int16_t device_id;
+    u_int16_t revision_id;
 
     u_int32_t lcr_val;
 
@@ -400,9 +591,9 @@ again:
 	return -EIO;
      }
 
-    /* FIXME: temp. commenting out assign_resource 
+    /* FIXME: temp. commenting out assign_resource
      * call for dev_attach to work on 2.6.38 kernel
-     */ 
+     */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0) && !defined(__LINUX_ARM_ARCH__)
     if (pci_assign_resource(pdev, BAR_NUM)) {
         printk(KERN_ERR "ath: cannot assign PCI space\n");
@@ -423,27 +614,32 @@ again:
         ret = -EIO;
         goto err_region;
     }
-
+#ifdef CONFIG_ARM_LPAE
+    /* if CONFIG_ARM_LPAE is enabled, we have to set 64 bits mask
+     * for 32 bits device also. */
     ret =  pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
-    if (!ret) {
-        ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
-
-        if (ret) {
-            printk(KERN_ERR "ath: Cannot enable 64-bit consistent DMA\n");
-            goto err_dma;
-        }
-    } else {
-        ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
-
-        if (!ret) {
-            ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
-            if (ret) {
-                printk(KERN_ERR "ath: Cannot enable 32-bit consistent DMA\n");
-                goto err_dma;
-            }
-        }
+    if (ret) {
+        printk(KERN_ERR "ath: Cannot enable 64-bit pci DMA\n");
+        goto err_dma;
     }
-
+    ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
+    if (ret) {
+        printk(KERN_ERR "ath: Cannot enable 64-bit consistent DMA\n");
+        goto err_dma;
+    }
+#else
+    ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
+    if (ret) {
+        printk(KERN_ERR "ath: Cannot enable 32-bit pci DMA\n");
+        goto err_dma;
+    }
+    ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
+    if (ret) {
+        printk(KERN_ERR "%s: Cannot enable 32-bit consistent DMA!\n",
+               __func__);
+        goto err_dma;
+    }
+#endif
 
     /* Set bus master bit in PCI_COMMAND to enable DMA */
     pci_set_master(pdev);
@@ -459,6 +655,10 @@ again:
         ret = -EIO;
         goto err_iomap;
     }
+
+    /* Disable asynchronous suspend */
+    device_disable_async_suspend(&pdev->dev);
+
     sc = A_MALLOC(sizeof(*sc));
     if (!sc) {
         ret = -ENOMEM;
@@ -480,19 +680,38 @@ again:
 
     sc->cacheline_sz = dma_get_cache_alignment();
 
+    pci_read_config_word(pdev, 0x08, &revision_id);
+
     switch (id->device) {
     case AR9888_DEVICE_ID:
-	    hif_type = HIF_TYPE_AR9888;
-	    target_type = TARGET_TYPE_AR9888;
-	    break;
+        hif_type = HIF_TYPE_AR9888;
+        target_type = TARGET_TYPE_AR9888;
+        break;
+
     case AR6320_DEVICE_ID:
-	    hif_type = HIF_TYPE_AR6320;
-	    target_type = TARGET_TYPE_AR6320;
-	    break;
+        switch(revision_id) {
+        case AR6320_FW_1_1:
+        case AR6320_FW_1_3:
+            hif_type = HIF_TYPE_AR6320;
+            target_type = TARGET_TYPE_AR6320;
+            break;
+
+        case AR6320_FW_2_0:
+            hif_type = HIF_TYPE_AR6320V2;
+            target_type = TARGET_TYPE_AR6320V2;
+            break;
+
+        default:
+            printk(KERN_ERR "unsupported revision id\n");
+            ret = -ENODEV;
+            goto err_tgtstate;
+        }
+        break;
+
     default:
-	    printk(KERN_ERR "unsupported device id\n");
-	    ret = -ENODEV;
-	    goto err_tgtstate;
+        printk(KERN_ERR "unsupported device id\n");
+        ret = -ENODEV;
+        goto err_tgtstate;
     }
     /*
      * Attach Target register table.  This is needed early on --
@@ -521,7 +740,7 @@ again:
          */
         A_PCI_WRITE32(mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
         while (!hif_pci_targ_is_awake(sc, mem)) {
-		 ;
+            ;
         }
 
 #if PCIE_BAR0_READY_CHECKING
@@ -563,17 +782,23 @@ again:
 
     ol_sc->enableuartprint = 0;
     ol_sc->enablefwlog = 0;
+#ifdef QCA_SINGLE_BINARY_SUPPORT
+    ol_sc->enablesinglebinary = TRUE;
+#else
     ol_sc->enablesinglebinary = FALSE;
+#endif
     ol_sc->max_no_of_peers = 1;
 
     adf_os_atomic_init(&sc->tasklet_from_intr);
     init_waitqueue_head(&ol_sc->sc_osdev->event_queue);
+    init_completion(&ol_sc->ramdump_event);
 
     ret = hdd_wlan_startup(&pdev->dev, ol_sc);
 
     if (ret) {
         hif_nointrs(sc);
-	goto err_config;
+        HIFShutDownDevice(ol_sc->hif_hdl);
+        goto err_config;
     }
 
     /* Re-enable ASPM after firmware/OTP download is complete */
@@ -653,6 +878,7 @@ int hif_pci_reinit(struct pci_dev *pdev, const struct pci_device_id *id)
     u_int32_t hif_type;
     u_int32_t target_type;
     u_int32_t lcr_val;
+    u_int16_t revision_id;
 
 again:
     ret = 0;
@@ -697,26 +923,32 @@ again:
         goto err_region;
     }
 
+#ifdef CONFIG_ARM_LPAE
+    /* if CONFIG_ARM_LPAE is enabled, we have to set 64 bits mask
+     * for 32 bits device also. */
     ret =  pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
-    if (!ret) {
-        ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
-
-        if (ret) {
-            printk(KERN_ERR "%s: Cannot enable 64-bit consistent DMA!\n",
-                   __func__);
-            goto err_dma;
-        }
-    } else {
-        ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
-        if (!ret) {
-            ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
-            if (ret) {
-                printk(KERN_ERR "%s: Cannot enable 32-bit consistent DMA!\n",
-                       __func__);
-                goto err_dma;
-            }
-        }
+    if (ret) {
+        printk(KERN_ERR "ath: Cannot enable 64-bit pci DMA\n");
+        goto err_dma;
     }
+    ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
+    if (ret) {
+        printk(KERN_ERR "ath: Cannot enable 64-bit consistent DMA\n");
+        goto err_dma;
+    }
+#else
+    ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
+    if (ret) {
+        printk(KERN_ERR "ath: Cannot enable 32-bit pci DMA\n");
+        goto err_dma;
+    }
+    ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
+    if (ret) {
+        printk(KERN_ERR "%s: Cannot enable 32-bit consistent DMA!\n",
+               __func__);
+        goto err_dma;
+    }
+#endif
 
     /* Set bus master bit in PCI_COMMAND to enable DMA */
     pci_set_master(pdev);
@@ -753,16 +985,34 @@ again:
     adf_os_spinlock_init(&sc->target_lock);
 
     sc->cacheline_sz = dma_get_cache_alignment();
+    pci_read_config_word(pdev, 0x08, &revision_id);
 
     switch (id->device) {
     case AR9888_DEVICE_ID:
         hif_type = HIF_TYPE_AR9888;
         target_type = TARGET_TYPE_AR9888;
         break;
+
     case AR6320_DEVICE_ID:
-        hif_type = HIF_TYPE_AR6320;
-        target_type = TARGET_TYPE_AR6320;
+        switch(revision_id) {
+        case AR6320_FW_1_1:
+        case AR6320_FW_1_3:
+            hif_type = HIF_TYPE_AR6320;
+            target_type = TARGET_TYPE_AR6320;
+            break;
+
+        case AR6320_FW_2_0:
+            hif_type = HIF_TYPE_AR6320V2;
+            target_type = TARGET_TYPE_AR6320V2;
+            break;
+
+        default:
+            printk(KERN_ERR "unsupported revision id\n");
+            ret = -ENODEV;
+            goto err_tgtstate;
+        }
         break;
+
     default:
         printk(KERN_ERR "%s: Unsupported device ID!\n", __func__);
         ret = -ENODEV;
@@ -843,10 +1093,16 @@ again:
 
     ol_sc->enableuartprint = 0;
     ol_sc->enablefwlog = 0;
+#ifdef QCA_SINGLE_BINARY_SUPPORT
+    ol_sc->enablesinglebinary = TRUE;
+#else
     ol_sc->enablesinglebinary = FALSE;
+#endif
     ol_sc->max_no_of_peers = 1;
 
+    adf_os_atomic_init(&sc->tasklet_from_intr);
     init_waitqueue_head(&ol_sc->sc_osdev->event_queue);
+    init_completion(&ol_sc->ramdump_event);
 
     if (VOS_STATUS_SUCCESS == hdd_wlan_re_init(ol_sc)) {
         ret = 0;
@@ -919,6 +1175,14 @@ err_region:
 }
 #endif
 
+void hif_pci_notify_handler(struct pci_dev *pdev, int state)
+{
+   int ret = 0;
+   ret = hdd_wlan_notify_modem_power_state(state);
+   if (ret < 0)
+      printk(KERN_ERR "%s: Fail to send notify\n", __func__);
+}
+
 void
 hif_nointrs(struct hif_pci_softc *sc)
 {
@@ -950,12 +1214,12 @@ hif_pci_configure(struct hif_pci_softc *sc, hif_handle_t *hif_hdl)
 
 	/*
 	 * Interrupt Management is divided into these scenarios :
-	 * A) We wish to use MSI and Multiple MSI is supported and we 
+	 * A) We wish to use MSI and Multiple MSI is supported and we
 	 *    are able to obtain the number of MSI interrupts desired
 	 *    (best performance)
 	 * B) We wish to use MSI and Single MSI is supported and we are
 	 *    able to obtain a single MSI interrupt
-	 * C) We don't want to use MSI or MSI is not supported and we 
+	 * C) We don't want to use MSI or MSI is not supported and we
 	 *    are able to obtain a legacy interrupt
 	 * D) Failure
 	 */
@@ -1008,7 +1272,7 @@ hif_pci_configure(struct hif_pci_softc *sc, hif_handle_t *hif_hdl)
             }
         }
     }
-    
+
     if (num_msi_desired == 1) {
         /*
          * We are here because either the platform only supports
@@ -1026,7 +1290,7 @@ hif_pci_configure(struct hif_pci_softc *sc, hif_handle_t *hif_hdl)
     }
 
     if ( num_msi_desired <= 1) {
-	    /* We are here because we want to multiplex a single host interrupt among all 
+	    /* We are here because we want to multiplex a single host interrupt among all
 	     * Target interrupt sources
 	     */
 	    ret = request_irq(sc->pdev->irq, hif_pci_interrupt_handler, IRQF_SHARED,
@@ -1065,43 +1329,6 @@ hif_pci_configure(struct hif_pci_softc *sc, hif_handle_t *hif_hdl)
     }
 #endif
 
-    sc->num_msi_intrs = num_msi_desired;
-    sc->ce_count = CE_COUNT;
-
-    { /* Synchronization point: Wait for Target to finish initialization before we proceed. */
-        int wait_limit = 1000; /* 10 sec */
-
-        /* Make sure to wake Target before accessing Target memory */
-        A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
-        while (!hif_pci_targ_is_awake(sc, sc->mem)) {
-                ;
-        }
-        while (wait_limit-- && !(A_PCI_READ32(sc->mem + FW_INDICATOR_ADDRESS) & FW_IND_INITIALIZED)) {
-            if (num_msi_desired == 0) {
-                /* Fix potential race by repeating CORE_BASE writes */
-                A_PCI_WRITE32(sc->mem + (SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS),
-                      PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL); 
-            }
-            A_MDELAY(10);
-        }
-
-        if (wait_limit < 0) {
-            printk(KERN_ERR "ath: %s: TARGET STALLED: .\n", __FUNCTION__);
-            A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
-            ret = -EIO;
-            goto err_stalled;
-        }
-        A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
-    }
-
-    if (HIF_PCIDeviceProbed(sc)) {
-            printk(KERN_ERR "ath: %s: Target probe failed.\n", __FUNCTION__);
-            ret = -EIO;
-            goto err_stalled;
-    }
-
-    *hif_hdl = sc->hif_device;
-
     if(num_msi_desired == 0) {
         printk("\n Using PCI Legacy Interrupt\n");
 
@@ -1126,6 +1353,51 @@ hif_pci_configure(struct hif_pci_softc *sc, hif_handle_t *hif_hdl)
                       PCIE_SOC_WAKE_RESET);
     }
 
+    sc->num_msi_intrs = num_msi_desired;
+    sc->ce_count = CE_COUNT;
+
+    { /* Synchronization point: Wait for Target to finish initialization before we proceed. */
+        int wait_limit = 1000; /* 10 sec */
+
+        /* Make sure to wake Target before accessing Target memory */
+        A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
+        while (!hif_pci_targ_is_awake(sc, sc->mem)) {
+                ;
+        }
+        while (wait_limit-- && !(A_PCI_READ32(sc->mem + FW_INDICATOR_ADDRESS) & FW_IND_INITIALIZED)) {
+            if (num_msi_desired == 0) {
+                /* Fix potential race by repeating CORE_BASE writes */
+                A_PCI_WRITE32(sc->mem + (SOC_CORE_BASE_ADDRESS | PCIE_INTR_ENABLE_ADDRESS),
+                      PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL);
+            }
+            A_MDELAY(10);
+        }
+
+        if (wait_limit < 0) {
+            printk(KERN_ERR "ath: %s: TARGET STALLED: .\n", __FUNCTION__);
+            A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
+            ret = -EIO;
+            goto err_stalled;
+        }
+        A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
+    }
+
+    if (HIF_PCIDeviceProbed(sc)) {
+            printk(KERN_ERR "ath: %s: Target probe failed.\n", __FUNCTION__);
+            ret = -EIO;
+            goto err_stalled;
+    }
+
+    *hif_hdl = sc->hif_device;
+
+    /*
+     * Flag to avoid potential unallocated memory access from MSI
+     * interrupt handler which could get scheduled as soon as MSI
+     * is enabled, i.e to take care of the race due to the order
+     * in where MSI is enabled before the memory, that will be
+     * in interrupt handlers, is allocated.
+     */
+    sc->hif_init_done = TRUE;
     return 0;
 
 err_stalled:
@@ -1168,7 +1440,7 @@ hif_pci_remove(struct pci_dev *pdev)
 
 #if defined(CPU_WARM_RESET_WAR)
     /* Currently CPU warm reset sequence is tested only for AR9888_REV2
-     * Need to enable for AR9888_REV1 once CPU warm reset sequence is 
+     * Need to enable for AR9888_REV1 once CPU warm reset sequence is
      * verified for AR9888_REV1
      */
     if (scn->target_version == AR9888_REV2_VERSION) {
@@ -1247,14 +1519,41 @@ void hif_pci_shutdown(struct pci_dev *pdev)
 
     printk("%s: WLAN host driver shutting down completed!\n", __func__);
 }
+
+void hif_pci_crash_shutdown(struct pci_dev *pdev)
+{
+    struct hif_pci_softc *sc;
+    struct ol_softc *scn;
+    int status;
+
+    sc = pci_get_drvdata(pdev);
+    if (!sc)
+        return;
+
+    scn = sc->ol_sc;
+    if (!scn)
+        return;
+
+    if (OL_TRGET_STATUS_RESET == scn->target_status) {
+        printk("%s: Target is already asserted, ignore!\n", __func__);
+        return;
+    }
+
+    scn->crash_shutdown = true;
+    process_wma_set_command(0,(int)GEN_PARAM_CRASH_INJECT,
+                            0, GEN_CMD);
+
+    status = wait_for_completion_interruptible_timeout(
+             &scn->ramdump_event,
+             msecs_to_jiffies(RAMDUMP_EVENT_TIMEOUT));
+    if (!status) {
+        printk("%s: RAM dump collecting timeout!\n", __func__);
+        return;
+    }
+}
 #endif
 
 #define OL_ATH_PCI_PM_CONTROL 0x44
-
-#ifdef WLAN_LINK_UMAC_SUSPEND_WITH_BUS_SUSPEND
-void hdd_suspend_wlan(void (*callback)(void *callbackContext),
-                      void *callbackContext);
-#endif
 
 static int
 hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
@@ -1262,43 +1561,40 @@ hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
     struct hif_pci_softc *sc = pci_get_drvdata(pdev);
     void *vos = vos_get_global_context(VOS_MODULE_ID_HIF, NULL);
     ol_txrx_pdev_handle txrx_pdev = vos_get_context(VOS_MODULE_ID_TXRX, vos);
+    struct HIF_CE_state *hif_state = (struct HIF_CE_state *)sc->hif_device;
+    A_target_id_t targid = hif_state->targid;
     u32 tx_drain_wait_cnt = 0;
     u32 val;
+    v_VOID_t * temp_module;
 
-#ifdef WLAN_LINK_UMAC_SUSPEND_WITH_BUS_SUSPEND
-    hdd_suspend_wlan(NULL, NULL);
-    /* TODO: Wait until tx queue drains. Remove this hard coded delay */
-    msleep(3*1000); /* 3 sec */
-#endif
-
-#if CONFIG_ATH_PCIE_MAX_PERF
-    /* Max performance path so no need to wake/poll target */
+    A_TARGET_ACCESS_BEGIN(targid);
     A_PCI_WRITE32(sc->mem + FW_INDICATOR_ADDRESS, (state.event << 16));
-#else
-    /* Make sure to wake Target before accessing Target memory */
-    A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
-    while (!hif_pci_targ_is_awake(sc, sc->mem)) {
-        ;
+    A_TARGET_ACCESS_END(targid);
+
+    if (!txrx_pdev) {
+        printk("%s: txrx_pdev is NULL\n", __func__);
+        return (-1);
     }
-    A_PCI_WRITE32(sc->mem + FW_INDICATOR_ADDRESS, (state.event << 16));
-    A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
-#endif
-
     /* Wait for pending tx completion */
     while (ol_txrx_get_tx_pending(txrx_pdev)) {
-	    msleep(OL_ATH_TX_DRAIN_WAIT_DELAY);
-	    if (++tx_drain_wait_cnt > OL_ATH_TX_DRAIN_WAIT_CNT) {
-		    printk("%s: tx frames are pending\n", __func__);
-		    return (-1);
-	    }
+        msleep(OL_ATH_TX_DRAIN_WAIT_DELAY);
+        if (++tx_drain_wait_cnt > OL_ATH_TX_DRAIN_WAIT_CNT) {
+            printk("%s: tx frames are pending\n", __func__);
+            return (-1);
+        }
     }
 
     /* No need to send WMI_PDEV_SUSPEND_CMDID to FW if WOW is enabled */
-    if (wma_is_wow_mode_selected(vos_get_context(VOS_MODULE_ID_WDA, vos))) {
-          if(wma_enable_wow_in_fw(vos_get_context(VOS_MODULE_ID_WDA, vos)))
+    temp_module = vos_get_context(VOS_MODULE_ID_WDA, vos);
+    if (!temp_module) {
+        printk("%s: WDA module is NULL\n", __func__);
+        return (-1);
+    }
+    if (wma_is_wow_mode_selected(temp_module)) {
+          if(wma_enable_wow_in_fw(temp_module))
                 return (-1);
     } else if (state.event == PM_EVENT_FREEZE || state.event == PM_EVENT_SUSPEND) {
-          if (wma_suspend_target(vos_get_context(VOS_MODULE_ID_WDA, vos), 0))
+          if (wma_suspend_target(temp_module, 0))
                 return (-1);
     }
 
@@ -1311,17 +1607,16 @@ hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
     return 0;
 }
 
-#ifdef WLAN_LINK_UMAC_SUSPEND_WITH_BUS_SUSPEND
-void hdd_resume_wlan(void);
-#endif
-
 static int
 hif_pci_resume(struct pci_dev *pdev)
 {
     struct hif_pci_softc *sc = pci_get_drvdata(pdev);
     void *vos_context = vos_get_global_context(VOS_MODULE_ID_HIF, NULL);
+    struct HIF_CE_state *hif_state = (struct HIF_CE_state *)sc->hif_device;
+    A_target_id_t targid = hif_state->targid;
     u32 val;
     int err;
+    v_VOID_t * temp_module;
 
     err = pci_enable_device(pdev);
     if (err)
@@ -1344,28 +1639,20 @@ hif_pci_resume(struct pci_dev *pdev)
             pci_write_config_dword(pdev, 0x40, val & 0xffff00ff);
     }
 
-#if CONFIG_ATH_PCIE_MAX_PERF
-    /* Max performance patch so no need to wake/poll target */
+    A_TARGET_ACCESS_BEGIN(targid);
     val = A_PCI_READ32(sc->mem + FW_INDICATOR_ADDRESS) >> 16;
-#else
-    /* Make sure to wake Target before accessing Target memory */
-    A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
-    while (!hif_pci_targ_is_awake(sc, sc->mem)) {
-        ;
-    }
-    val = A_PCI_READ32(sc->mem + FW_INDICATOR_ADDRESS) >> 16;
-    A_PCI_WRITE32(sc->mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_RESET);
-#endif
+    A_TARGET_ACCESS_END(targid);
 
     /* No need to send WMI_PDEV_RESUME_CMDID to FW if WOW is enabled */
-    if (!wma_is_wow_mode_selected(vos_get_context(VOS_MODULE_ID_WDA, vos_context)) &&
-        (val == PM_EVENT_HIBERNATE || val == PM_EVENT_SUSPEND)) {
-	    return wma_resume_target(vos_get_context(VOS_MODULE_ID_WDA, vos_context));
+    temp_module = vos_get_context(VOS_MODULE_ID_WDA, vos_context);
+    if (!temp_module) {
+        printk("%s: WDA module is NULL\n", __func__);
+        return (-1);
     }
-
-#ifdef WLAN_LINK_UMAC_SUSPEND_WITH_BUS_SUSPEND
-    hdd_resume_wlan();
-#endif
+    if (!wma_is_wow_mode_selected(temp_module) &&
+        (val == PM_EVENT_HIBERNATE || val == PM_EVENT_SUSPEND)) {
+        return wma_resume_target(temp_module);
+    }
 
     return 0;
 }
@@ -1380,27 +1667,29 @@ adf_os_size_t initBufferCount(adf_os_size_t maxSize)
 
 #ifdef CONFIG_CNSS
 struct cnss_wlan_driver cnss_wlan_drv_id = {
-	.name       = "hif_pci",
-	.id_table   = hif_pci_id_table,
-	.probe      = hif_pci_probe,
-	.remove     = hif_pci_remove,
-	.reinit     = hif_pci_reinit,
-	.shutdown   = hif_pci_shutdown,
+    .name       = "hif_pci",
+    .id_table   = hif_pci_id_table,
+    .probe      = hif_pci_probe,
+    .remove     = hif_pci_remove,
+    .reinit     = hif_pci_reinit,
+    .shutdown   = hif_pci_shutdown,
+    .crash_shutdown = hif_pci_crash_shutdown,
+    .modem_status   = hif_pci_notify_handler,
 #ifdef ATH_BUS_PM
-	.suspend    = hif_pci_suspend,
-	.resume     = hif_pci_resume,
+    .suspend    = hif_pci_suspend,
+    .resume     = hif_pci_resume,
 #endif
 };
 #else
 MODULE_DEVICE_TABLE(pci, hif_pci_id_table);
 struct pci_driver hif_pci_drv_id = {
-	.name       = "hif_pci",
-	.id_table   = hif_pci_id_table,
-	.probe      = hif_pci_probe,
-	.remove     = hif_pci_remove,
+    .name       = "hif_pci",
+    .id_table   = hif_pci_id_table,
+    .probe      = hif_pci_probe,
+    .remove     = hif_pci_remove,
 #ifdef ATH_BUS_PM
-	.suspend    = hif_pci_suspend,
-	.resume     = hif_pci_resume,
+    .suspend    = hif_pci_suspend,
+    .resume     = hif_pci_resume,
 #endif
 };
 #endif
@@ -1408,9 +1697,9 @@ struct pci_driver hif_pci_drv_id = {
 int hif_register_driver(void)
 {
 #ifdef CONFIG_CNSS
-	return cnss_wlan_register_driver(&cnss_wlan_drv_id);
+    return cnss_wlan_register_driver(&cnss_wlan_drv_id);
 #else
-	return pci_register_driver(&hif_pci_drv_id);
+    return pci_register_driver(&hif_pci_drv_id);
 #endif
 }
 

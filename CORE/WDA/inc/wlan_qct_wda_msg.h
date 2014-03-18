@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,18 +24,18 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef WLAN_QCT_MSG_MAP_H
 #define WLAN_QCT_MSG_MAP_H
 
 /*===========================================================================
 
-               W L A N   DEVICE ADAPTATION   L A Y E R 
-                       MSG MAPPING  
-                
-                   
+               W L A N   DEVICE ADAPTATION   L A Y E R
+                       MSG MAPPING
+
+
 DESCRIPTION
-  This file contains the external API exposed by the wlan adaptation layer 
-  
+  This file contains the external API exposed by the wlan adaptation layer
 ===========================================================================*/
 
 
@@ -72,7 +72,7 @@ typedef WPT_PACK_PRE struct
     * in shared header file between UMAC and HAL.*/
    tANI_U16   type;
 
-   /* Length of the Cfg. This parameter is used to go to next cfg 
+   /* Length of the Cfg. This parameter is used to go to next cfg
     * in the TLV format.*/
    tANI_U16   length;
 

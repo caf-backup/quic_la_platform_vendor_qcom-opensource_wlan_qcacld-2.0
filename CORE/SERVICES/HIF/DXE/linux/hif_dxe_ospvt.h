@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file     hif_dxe_ospvt.h
@@ -76,7 +77,7 @@ typedef struct _S_HIF_DXE_OSCONTEXT
 	unsigned char   bTxRegistered;
 
 	/* Tasklet to do the Tx Processing */
-	struct tasklet_struct hif_dxe_tx_tasklet;  
+	struct tasklet_struct hif_dxe_tx_tasklet;
 
 
 	/***************************************/
@@ -91,7 +92,7 @@ typedef struct _S_HIF_DXE_OSCONTEXT
 	/* Tasklet to do the Rx Processing */
 	struct tasklet_struct hif_dxe_rx_tasklet;
 
-	unsigned char      bTxIntEnabled , bRxIntEnabled; 
+	unsigned char      bTxIntEnabled , bRxIntEnabled;
 	S_HIF_DXE_OS_PARAMS dxe_hif_params;
 	adf_os_atomic_t ref_count;
 
@@ -99,4 +100,3 @@ typedef struct _S_HIF_DXE_OSCONTEXT
 	unsigned long        dxe_unloaded;
 }S_HIF_DXE_OSCONTEXT;
 #endif
-

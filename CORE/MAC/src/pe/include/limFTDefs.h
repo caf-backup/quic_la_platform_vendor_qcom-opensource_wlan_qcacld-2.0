@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,10 +24,11 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if defined WLAN_FEATURE_VOWIFI_11R
 /**=========================================================================
-  
-   Macros and Function prototypes FT and 802.11R purposes 
+
+   Macros and Function prototypes FT and 802.11R purposes
 
   ========================================================================*/
 
@@ -38,7 +39,7 @@
 #include <palTypes.h>
 #include "halMsgApi.h"
 
-/*-------------------------------------------------------------------------- 
+/*--------------------------------------------------------------------------
   Preprocessor definitions and constants
   ------------------------------------------------------------------------*/
 #define SIR_MDIE_SIZE               3 // MD ID(2 bytes), Capability(1 byte)
@@ -46,7 +47,7 @@
 #define MAX_FTIE_SIZE             256 // Max size limited to 256, on acct. of IW custom events
 
 
-/*-------------------------------------------------------------------------- 
+/*--------------------------------------------------------------------------
   Type declarations
   ------------------------------------------------------------------------*/
 /*--------------------------------------------------------------------------
@@ -118,9 +119,9 @@ typedef struct sFTPEContext
     void              *pAddBssReq;                        // Save add bss req.
     void              *pAddStaReq;                        // Save add sta req.
 
-} tftPEContext, *tpftPEContext; 
+} tftPEContext, *tpftPEContext;
 
 
-#endif /* __LIMFTDEFS_H__ */ 
+#endif /* __LIMFTDEFS_H__ */
 
 #endif /* WLAN_FEATURE_VOWIFI_11R */

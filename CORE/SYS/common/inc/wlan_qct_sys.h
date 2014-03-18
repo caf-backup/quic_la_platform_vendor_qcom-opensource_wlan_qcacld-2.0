@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #if !defined( WLAN_QCT_SYS_H__ )
 #define WLAN_QCT_SYS_H__
 
@@ -422,4 +423,3 @@ void wlan_sys_probe(void);
 
 
 #endif  // WLAN_QCT_SYS_H__
-

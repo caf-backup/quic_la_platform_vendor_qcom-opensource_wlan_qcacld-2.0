@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,10 +24,10 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*===========================================================================
   @file vos_sched.c
   @brief VOS Scheduler Implementation
-
 ===========================================================================*/
 /*===========================================================================
                        EDIT HISTORY FOR FILE
@@ -58,9 +58,13 @@
 #include "wlan_qct_pal_msg.h"
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
+#include <linux/cpu.h>
 #ifdef QCA_WIFI_2_0
 #ifdef QCA_WIFI_ISOC
 #include  "htc_api.h"
+#endif
+#if defined(QCA_CONFIG_SMP) && defined(CONFIG_CNSS)
+#include <net/cnss.h>
 #endif
 #endif
 /*---------------------------------------------------------------------------
@@ -83,8 +87,83 @@ static int VosMCThread(void *Arg);
 static int VosWDThread(void *Arg);
 static int VosTXThread(void *Arg);
 static int VosRXThread(void *Arg);
+#ifdef QCA_CONFIG_SMP
+static int VosTlshimRxThread(void *arg);
+static unsigned long affine_cpu = 0;
+static VOS_STATUS vos_alloc_tlshim_pkt_freeq(pVosSchedContext pSchedContext);
+#endif
 void vos_sched_flush_rx_mqs(pVosSchedContext SchedContext);
 extern v_VOID_t vos_core_return_msg(v_PVOID_t pVContext, pVosMsgWrapper pMsgWrapper);
+
+
+#ifdef QCA_CONFIG_SMP
+static int vos_set_cpus_allowed_ptr(struct task_struct *task,
+                                    unsigned long cpu)
+{
+#ifdef WLAN_OPEN_SOURCE
+   return set_cpus_allowed_ptr(task, cpumask_of(cpu));
+#elif defined(CONFIG_CNSS)
+   return cnss_set_cpus_allowed_ptr(task, cpu);
+#else
+   return 0;
+#endif
+}
+
+static int vos_cpu_hotplug_notify(struct notifier_block *block,
+                                  unsigned long state, void *hcpu)
+{
+   unsigned long cpu = (unsigned long) hcpu;
+   unsigned long pref_cpu = 0;
+   pVosSchedContext pSchedContext = get_vos_sched_ctxt();
+   int i;
+
+   if ((NULL == pSchedContext) || (NULL == pSchedContext->TlshimRxThread))
+       return NOTIFY_OK;
+
+   if (vos_is_load_unload_in_progress(VOS_MODULE_ID_VOSS, NULL))
+   {
+       return NOTIFY_OK;
+   }
+
+   switch (state) {
+   case CPU_ONLINE:
+       if (affine_cpu != 0)
+           return NOTIFY_OK;
+
+       for_each_online_cpu(i) {
+           if (i == 0)
+               continue;
+           pref_cpu = i;
+           break;
+       }
+       break;
+   case CPU_DEAD:
+       if (cpu != affine_cpu)
+           return NOTIFY_OK;
+
+       affine_cpu = 0;
+       for_each_online_cpu(i) {
+           if (i == 0)
+               continue;
+           pref_cpu = i;
+           break;
+       }
+   }
+
+   if (pref_cpu == 0)
+       return NOTIFY_OK;
+
+   if (!vos_set_cpus_allowed_ptr(pSchedContext->TlshimRxThread, pref_cpu))
+       affine_cpu = pref_cpu;
+
+   return NOTIFY_OK;
+}
+
+static struct notifier_block vos_cpu_hotplug_notifier = {
+   .notifier_call = vos_cpu_hotplug_notify,
+};
+#endif
+
 /*---------------------------------------------------------------------------
  * External Function implementation
  * ------------------------------------------------------------------------*/
@@ -166,6 +245,30 @@ vos_sched_open
   pSchedContext->txEventFlag= 0;
   init_waitqueue_head(&pSchedContext->rxWaitQueue);
   pSchedContext->rxEventFlag= 0;
+
+#ifdef QCA_CONFIG_SMP
+  init_waitqueue_head(&pSchedContext->tlshimRxWaitQueue);
+  init_completion(&pSchedContext->TlshimRxStartEvent);
+  init_completion(&pSchedContext->SuspndTlshimRxEvent);
+  init_completion(&pSchedContext->ResumeTlshimRxEvent);
+  init_completion(&pSchedContext->TlshimRxShutdown);
+  pSchedContext->tlshimRxEvtFlg = 0;
+  spin_lock_init(&pSchedContext->TlshimRxQLock);
+  spin_lock_init(&pSchedContext->VosTlshimPktFreeQLock);
+  INIT_LIST_HEAD(&pSchedContext->tlshimRxQueue);
+  spin_lock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+  INIT_LIST_HEAD(&pSchedContext->VosTlshimPktFreeQ);
+  if (vos_alloc_tlshim_pkt_freeq(pSchedContext) !=  VOS_STATUS_SUCCESS)
+  {
+       spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+       return VOS_STATUS_E_FAILURE;
+  }
+  spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+  register_hotcpu_notifier(&vos_cpu_hotplug_notifier);
+  pSchedContext->cpuHotPlugNotifier = &vos_cpu_hotplug_notifier;
+#endif
+
+
   /*
   ** This initialization is critical as the threads will later access the
   ** global contexts normally,
@@ -178,7 +281,7 @@ vos_sched_open
   //Create the VOSS Main Controller thread
   pSchedContext->McThread = kthread_create(VosMCThread, pSchedContext,
                                            "VosMCThread");
-  if (IS_ERR(pSchedContext->McThread)) 
+  if (IS_ERR(pSchedContext->McThread))
   {
      VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                "%s: Could not Create VOSS Main Thread Controller",__func__);
@@ -190,7 +293,7 @@ vos_sched_open
 
   pSchedContext->TxThread = kthread_create(VosTXThread, pSchedContext,
                                            "VosTXThread");
-  if (IS_ERR(pSchedContext->TxThread)) 
+  if (IS_ERR(pSchedContext->TxThread))
   {
      VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                "%s: Could not Create VOSS TX Thread",__func__);
@@ -198,11 +301,11 @@ vos_sched_open
   }
   wake_up_process(pSchedContext->TxThread);
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-             ("VOSS TX thread Created\n"));
+             ("VOSS TX thread Created"));
 
   pSchedContext->RxThread = kthread_create(VosRXThread, pSchedContext,
                                            "VosRXThread");
-  if (IS_ERR(pSchedContext->RxThread)) 
+  if (IS_ERR(pSchedContext->RxThread))
   {
 
      VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
@@ -212,8 +315,24 @@ vos_sched_open
   }
   wake_up_process(pSchedContext->RxThread);
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
-             ("VOSS RX thread Created\n"));
+             ("VOSS RX thread Created"));
 
+#ifdef QCA_CONFIG_SMP
+  pSchedContext->TlshimRxThread = kthread_create(VosTlshimRxThread,
+                                                 pSchedContext,
+                                                 "VosTlshimRxThread");
+  if (IS_ERR(pSchedContext->TlshimRxThread))
+  {
+
+     VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+               "%s: Could not Create VOSS Tlshim RX Thread", __func__);
+     goto TLSHIM_RX_THREAD_START_FAILURE;
+
+  }
+  wake_up_process(pSchedContext->TlshimRxThread);
+  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
+             ("VOSS Tlshim RX thread Created"));
+#endif
   /*
   ** Now make sure all threads have started before we exit.
   ** Each thread should normally ACK back when it starts.
@@ -227,7 +346,11 @@ vos_sched_open
   wait_for_completion_interruptible(&pSchedContext->RxStartEvent);
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
                "%s: VOSS Rx Thread has started",__func__);
-
+#ifdef QCA_CONFIG_SMP
+  wait_for_completion_interruptible(&pSchedContext->TlshimRxStartEvent);
+  VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO_HIGH,
+               "%s: VOSS Tlshim Rx Thread has started", __func__);
+#endif
   /*
   ** We're good now: Let's get the ball rolling!!!
   */
@@ -236,6 +359,15 @@ vos_sched_open
   return VOS_STATUS_SUCCESS;
 
 
+#ifdef QCA_CONFIG_SMP
+TLSHIM_RX_THREAD_START_FAILURE:
+    //Try and force the Rx thread controller to exit
+    set_bit(RX_SHUTDOWN_EVENT_MASK, &pSchedContext->rxEventFlag);
+    set_bit(RX_POST_EVENT_MASK, &pSchedContext->rxEventFlag);
+    wake_up_interruptible(&pSchedContext->rxWaitQueue);
+     //Wait for RX to exit
+    wait_for_completion_interruptible(&pSchedContext->RxShutdown);
+#endif
 RX_THREAD_START_FAILURE:
     //Try and force the Tx thread controller to exit
     set_bit(MC_SHUTDOWN_EVENT_MASK, &pSchedContext->txEventFlag);
@@ -296,13 +428,13 @@ VOS_STATUS vos_watchdog_open
 
   //Create the Watchdog thread
   pWdContext->WdThread = kthread_create(VosWDThread, pWdContext,"VosWDThread");
-  
-  if (IS_ERR(pWdContext->WdThread)) 
+
+  if (IS_ERR(pWdContext->WdThread))
   {
      VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                "%s: Could not Create Watchdog thread",__func__);
      return VOS_STATUS_E_RESOURCES;
-  }  
+  }
   else
   {
      wake_up_process(pWdContext->WdThread);
@@ -377,7 +509,7 @@ VosMCThread
   {
     // This implements the execution model algorithm
     retWaitStatus = wait_event_interruptible(pSchedContext->mcWaitQueue,
-       test_bit(MC_POST_EVENT_MASK, &pSchedContext->mcEventFlag) || 
+       test_bit(MC_POST_EVENT_MASK, &pSchedContext->mcEventFlag) ||
        test_bit(MC_SUSPEND_EVENT_MASK, &pSchedContext->mcEventFlag));
 
     if(retWaitStatus == -ERESTARTSYS)
@@ -400,7 +532,7 @@ VosMCThread
         if(test_bit(MC_SUSPEND_EVENT_MASK, &pSchedContext->mcEventFlag))
         {
            clear_bit(MC_SUSPEND_EVENT_MASK, &pSchedContext->mcEventFlag);
-        
+
            /* Unblock anyone waiting on suspend */
            complete(&pHddCtx->mc_sus_event_var);
         }
@@ -441,7 +573,7 @@ VosMCThread
 
         pWdiMsg->callback(pWdiMsg);
 
-        /* 
+        /*
         ** return message to the Core
         */
         vos_core_return_msg(pSchedContext->pVContext, pMsgWrapper);
@@ -811,7 +943,7 @@ static int VosTXThread ( void * Arg )
   v_CONTEXT_t pVosContext        = NULL;
 
   set_user_nice(current, -1);
-  
+
 #ifdef WLAN_FEATURE_11AC_HIGH_TP
   set_wake_up_idle(true);
 #endif
@@ -854,7 +986,7 @@ static int VosTXThread ( void * Arg )
   {
     // This implements the execution model algorithm
     retWaitStatus = wait_event_interruptible(pSchedContext->txWaitQueue,
-        test_bit(TX_POST_EVENT_MASK, &pSchedContext->txEventFlag) || 
+        test_bit(TX_POST_EVENT_MASK, &pSchedContext->txEventFlag) ||
         test_bit(TX_SUSPEND_EVENT_MASK, &pSchedContext->txEventFlag));
 
 
@@ -877,7 +1009,7 @@ static int VosTXThread ( void * Arg )
         if(test_bit(TX_SUSPEND_EVENT_MASK, &pSchedContext->txEventFlag))
         {
            clear_bit(TX_SUSPEND_EVENT_MASK, &pSchedContext->txEventFlag);
-        
+
            /* Unblock anyone waiting on suspend */
            complete(&pHddCtx->tx_sus_event_var);
         }
@@ -959,7 +1091,7 @@ static int VosTXThread ( void * Arg )
            VOS_ASSERT(0);
            break;
         }
-        
+
         pWdiMsg->callback(pWdiMsg);
 
         // return message to the Core
@@ -1012,7 +1144,7 @@ static int VosRXThread ( void * Arg )
   VOS_STATUS       vStatus       = VOS_STATUS_SUCCESS;
 
   set_user_nice(current, -1);
-  
+
 #ifdef WLAN_FEATURE_11AC_HIGH_TP
   set_wake_up_idle(true);
 #endif
@@ -1054,7 +1186,7 @@ static int VosRXThread ( void * Arg )
   {
     // This implements the execution model algorithm
     retWaitStatus = wait_event_interruptible(pSchedContext->rxWaitQueue,
-        test_bit(RX_POST_EVENT_MASK, &pSchedContext->rxEventFlag) || 
+        test_bit(RX_POST_EVENT_MASK, &pSchedContext->rxEventFlag) ||
         test_bit(RX_SUSPEND_EVENT_MASK, &pSchedContext->rxEventFlag));
 
 
@@ -1077,7 +1209,7 @@ static int VosRXThread ( void * Arg )
         if(test_bit(RX_SUSPEND_EVENT_MASK, &pSchedContext->rxEventFlag))
         {
            clear_bit(RX_SUSPEND_EVENT_MASK, &pSchedContext->rxEventFlag);
-        
+
            /* Unblock anyone waiting on suspend */
            complete(&pHddCtx->rx_sus_event_var);
         }
@@ -1172,6 +1304,286 @@ static int VosRXThread ( void * Arg )
   complete_and_exit(&pSchedContext->RxShutdown, 0);
 } /* VosRxThread() */
 
+#ifdef QCA_CONFIG_SMP
+/*---------------------------------------------------------------------------
+  \brief vos_free_tlshim_pkt_freeq() - Free voss buffer free queue
+  The \a vos_free_tlshim_pkt_freeq() does mem free of the buffers
+  available in free vos buffer queue which is used for Data rx processing
+  from Tlshim.
+  \param pSchedContext - pointer to the global vOSS Sched Context
+
+  \return Nothing
+  \sa vos_free_tlshim_pkt_freeq()
+  -------------------------------------------------------------------------*/
+void vos_free_tlshim_pkt_freeq(pVosSchedContext pSchedContext)
+{
+   struct VosTlshimPkt *pkt, *tmp;
+
+   spin_lock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+   list_for_each_entry_safe(pkt, tmp, &pSchedContext->VosTlshimPktFreeQ, list) {
+       list_del(&pkt->list);
+       spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+       vos_mem_free(pkt);
+       spin_lock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+   }
+   spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+}
+
+/*---------------------------------------------------------------------------
+  \brief vos_alloc_tlshim_pkt_freeq() - Function to allocate free buffer queue
+  The \a vos_alloc_tlshim_pkt_freeq() allocates VOSS_MAX_TLSHIM_PKT
+  number of vos message buffers which are used for Rx data processing
+  from Tlshim.
+  \param  pSchedContext - pointer to the global vOSS Sched Context
+
+  \return status of memory allocation
+  \sa vos_alloc_tlshim_pkt_freeq()
+  -------------------------------------------------------------------------*/
+static VOS_STATUS vos_alloc_tlshim_pkt_freeq(pVosSchedContext pSchedContext)
+{
+   struct VosTlshimPkt *pkt, *tmp;
+   int i;
+
+   for (i = 0; i < VOSS_MAX_TLSHIM_PKT; i++) {
+       pkt = vos_mem_malloc(sizeof(*pkt));
+       if (!pkt) {
+           VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+                      "%s Vos packet allocation for tlshim thread failed",
+                      __func__);
+           goto free;
+       }
+       memset(pkt, 0, sizeof(*pkt));
+       list_add_tail(&pkt->list, &pSchedContext->VosTlshimPktFreeQ);
+   }
+
+   return VOS_STATUS_SUCCESS;
+
+free:
+   list_for_each_entry_safe(pkt, tmp, &pSchedContext->VosTlshimPktFreeQ, list) {
+       list_del(&pkt->list);
+       vos_mem_free(pkt);
+   }
+   return VOS_STATUS_E_NOMEM;
+}
+
+/*---------------------------------------------------------------------------
+  \brief vos_free_tlshim_pkt() - API to release vos message to the freeq
+  The \a vos_free_tlshim_pkt() returns the vos message used for Rx data
+  to the free queue.
+  \param  pSchedContext - pointer to the global vOSS Sched Context
+  \param  pkt - Vos message buffer to be returned to free queue.
+
+  \return Nothing
+  \sa vos_free_tlshim_pkt()
+  -------------------------------------------------------------------------*/
+void vos_free_tlshim_pkt(pVosSchedContext pSchedContext,
+                         struct VosTlshimPkt *pkt)
+{
+   memset(pkt, 0, sizeof(*pkt));
+   spin_lock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+   list_add_tail(&pkt->list, &pSchedContext->VosTlshimPktFreeQ);
+   spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+}
+
+/*---------------------------------------------------------------------------
+  \brief vos_alloc_tlshim_pkt() - API to return next available vos message
+  The \a vos_alloc_tlshim_pkt() returns next available vos message buffer
+  used for Rx Data processing.
+  \param pSchedContext - pointer to the global vOSS Sched Context
+
+  \return pointer to vos message buffer
+  \sa vos_alloc_tlshim_pkt()
+  -------------------------------------------------------------------------*/
+struct VosTlshimPkt *vos_alloc_tlshim_pkt(pVosSchedContext pSchedContext)
+{
+   struct VosTlshimPkt *pkt;
+
+   spin_lock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+   if (list_empty(&pSchedContext->VosTlshimPktFreeQ)) {
+       spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+       return NULL;
+   }
+   pkt = list_first_entry(&pSchedContext->VosTlshimPktFreeQ,
+                          struct VosTlshimPkt, list);
+   list_del(&pkt->list);
+   spin_unlock_bh(&pSchedContext->VosTlshimPktFreeQLock);
+   return pkt;
+}
+
+/*---------------------------------------------------------------------------
+  \brief vos_indicate_rxpkt() - API to Indicate rx data packet
+  The \a vos_indicate_rxpkt() enqueues the rx packet onto tlshimRxQueue
+  and notifies VosTlshimRxThread().
+  \param  Arg - pointer to the global vOSS Sched Context
+  \param pkt - Vos data message buffer
+
+  \return Nothing
+  \sa vos_indicate_rxpkt()
+  -------------------------------------------------------------------------*/
+void vos_indicate_rxpkt(pVosSchedContext pSchedContext,
+                        struct VosTlshimPkt *pkt)
+{
+   spin_lock_bh(&pSchedContext->TlshimRxQLock);
+   list_add_tail(&pkt->list, &pSchedContext->tlshimRxQueue);
+   spin_unlock_bh(&pSchedContext->TlshimRxQLock);
+   set_bit(RX_POST_EVENT_MASK, &pSchedContext->tlshimRxEvtFlg);
+   wake_up_interruptible(&pSchedContext->tlshimRxWaitQueue);
+}
+
+/*---------------------------------------------------------------------------
+  \brief vos_drop_rxpkt_by_staid() - API to drop pending Rx packets for a sta
+  The \a vos_drop_rxpkt_by_staid() drops queued packets for a station, to drop
+  all the pending packets the caller has to send WLAN_MAX_STA_COUNT as staId.
+  \param  pSchedContext - pointer to the global vOSS Sched Context
+  \param staId - Station Id
+
+  \return Nothing
+  \sa vos_drop_rxpkt_by_staid()
+  -------------------------------------------------------------------------*/
+void vos_drop_rxpkt_by_staid(pVosSchedContext pSchedContext, u_int16_t staId)
+{
+   struct list_head local_list;
+   struct VosTlshimPkt *pkt, *tmp;
+   adf_nbuf_t buf, next_buf;
+
+   INIT_LIST_HEAD(&local_list);
+   spin_lock_bh(&pSchedContext->TlshimRxQLock);
+   if (list_empty(&pSchedContext->tlshimRxQueue)) {
+       spin_unlock_bh(&pSchedContext->TlshimRxQLock);
+       return;
+   }
+   list_for_each_entry_safe(pkt, tmp, &pSchedContext->tlshimRxQueue, list) {
+       if (pkt->staId == staId || staId == WLAN_MAX_STA_COUNT)
+           list_move_tail(&pkt->list, &local_list);
+   }
+   spin_unlock_bh(&pSchedContext->TlshimRxQLock);
+
+   list_for_each_entry_safe(pkt, tmp, &local_list, list) {
+       list_del(&pkt->list);
+       buf = pkt->Rxpkt;
+       while (buf) {
+           next_buf = adf_nbuf_queue_next(buf);
+           adf_nbuf_free(buf);
+           buf = next_buf;
+       }
+       vos_free_tlshim_pkt(pSchedContext, pkt);
+   }
+}
+
+/*---------------------------------------------------------------------------
+  \brief vos_rx_from_queue() - Function to process pending Rx packets
+  The \a vos_rx_from_queue() traverses the pending buffer list and calling
+  the callback. This callback would essentially send the packet to HDD.
+  \param  pSchedContext - pointer to the global vOSS Sched Context
+
+  \return Nothing
+  \sa vos_rx_from_queue()
+  -------------------------------------------------------------------------*/
+static void vos_rx_from_queue(pVosSchedContext pSchedContext)
+{
+   struct VosTlshimPkt *pkt;
+   u_int16_t sta_id;
+
+   spin_lock_bh(&pSchedContext->TlshimRxQLock);
+   while (!list_empty(&pSchedContext->tlshimRxQueue)) {
+           pkt = list_first_entry(&pSchedContext->tlshimRxQueue,
+                                  struct VosTlshimPkt, list);
+           list_del(&pkt->list);
+           spin_unlock_bh(&pSchedContext->TlshimRxQLock);
+           sta_id = pkt->staId;
+           pkt->callback(pkt->context, pkt->Rxpkt, sta_id);
+           vos_free_tlshim_pkt(pSchedContext, pkt);
+           spin_lock_bh(&pSchedContext->TlshimRxQLock);
+   }
+   spin_unlock_bh(&pSchedContext->TlshimRxQLock);
+}
+
+/*---------------------------------------------------------------------------
+  \brief VosTlshimRxThread() - The VOSS Main Tlshim Rx thread
+  The \a VosTlshimRxThread() is the thread for Tlshim Data packet processing.
+  \param  Arg - pointer to the global vOSS Sched Context
+
+  \return Thread exit code
+  \sa VosTlshimRxThread()
+  -------------------------------------------------------------------------*/
+static int VosTlshimRxThread(void *arg)
+{
+   pVosSchedContext pSchedContext = (pVosSchedContext)arg;
+   unsigned long pref_cpu = 0;
+   bool shutdown = false;
+   int status, i;
+
+   set_user_nice(current, -1);
+#ifdef MSM_PLATFORM
+   set_wake_up_idle(true);
+#endif
+
+   /* Find the available cpu core other than cpu 0 and
+    * bind the thread */
+   for_each_online_cpu(i) {
+       if (i == 0)
+           continue;
+       pref_cpu = i;
+       break;
+   }
+   if (pref_cpu != 0 && (!vos_set_cpus_allowed_ptr(current, pref_cpu)))
+       affine_cpu = pref_cpu;
+
+   if (!arg) {
+       VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+       "%s: Bad Args passed", __func__);
+       return 0;
+   }
+
+   complete(&pSchedContext->TlshimRxStartEvent);
+
+   while (!shutdown) {
+       status = wait_event_interruptible(pSchedContext->tlshimRxWaitQueue,
+                         test_bit(RX_POST_EVENT_MASK,
+                                  &pSchedContext->tlshimRxEvtFlg) ||
+                         test_bit(RX_SUSPEND_EVENT_MASK,
+                                  &pSchedContext->tlshimRxEvtFlg));
+       if (status == -ERESTARTSYS)
+           break;
+
+       clear_bit(RX_POST_EVENT_MASK, &pSchedContext->tlshimRxEvtFlg);
+       while (true) {
+           if (test_bit(RX_SHUTDOWN_EVENT_MASK,
+                      &pSchedContext->tlshimRxEvtFlg)) {
+               clear_bit(RX_SHUTDOWN_EVENT_MASK,
+                         &pSchedContext->tlshimRxEvtFlg);
+               if (test_bit(RX_SUSPEND_EVENT_MASK,
+                            &pSchedContext->tlshimRxEvtFlg)) {
+                   clear_bit(RX_SUSPEND_EVENT_MASK,
+                             &pSchedContext->tlshimRxEvtFlg);
+                   complete(&pSchedContext->SuspndTlshimRxEvent);
+               }
+               VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
+                         "%s: Shutting down tl shim Tlshim rx thread", __func__);
+               shutdown = true;
+               break;
+           }
+           vos_rx_from_queue(pSchedContext);
+
+           if (test_bit(RX_SUSPEND_EVENT_MASK,
+                        &pSchedContext->tlshimRxEvtFlg)) {
+               clear_bit(RX_SUSPEND_EVENT_MASK,
+                         &pSchedContext->tlshimRxEvtFlg);
+               complete(&pSchedContext->SuspndTlshimRxEvent);
+               init_completion(&pSchedContext->ResumeTlshimRxEvent);
+               wait_for_completion_interruptible(
+                              &pSchedContext->ResumeTlshimRxEvent);
+           }
+           break;
+       }
+   }
+
+   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
+             "%s: Exiting VOSS Tlshim rx thread", __func__);
+   complete_and_exit(&pSchedContext->TlshimRxShutdown, 0);
+}
+#endif
+
 /*---------------------------------------------------------------------------
   \brief vos_sched_close() - Close the vOSS Scheduler
   The \a vos_sched_closes() function closes the vOSS Scheduler
@@ -1195,7 +1607,7 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     if (gpVosSchedContext == NULL)
     {
        VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-           "%s: gpVosSchedContext == NULL\n",__func__);
+           "%s: gpVosSchedContext == NULL",__func__);
        return VOS_STATUS_E_FAILURE;
     }
 
@@ -1204,7 +1616,7 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     set_bit(MC_POST_EVENT_MASK, &gpVosSchedContext->mcEventFlag);
     wake_up_interruptible(&gpVosSchedContext->mcWaitQueue);
     //Wait for MC to exit
-    wait_for_completion_interruptible(&gpVosSchedContext->McShutdown);
+    wait_for_completion(&gpVosSchedContext->McShutdown);
     gpVosSchedContext->McThread = 0;
 
     // shut down TX Thread
@@ -1212,7 +1624,7 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     set_bit(TX_POST_EVENT_MASK, &gpVosSchedContext->txEventFlag);
     wake_up_interruptible(&gpVosSchedContext->txWaitQueue);
     //Wait for TX to exit
-    wait_for_completion_interruptible(&gpVosSchedContext->TxShutdown);
+    wait_for_completion(&gpVosSchedContext->TxShutdown);
     gpVosSchedContext->TxThread = 0;
 
     // shut down RX Thread
@@ -1220,7 +1632,7 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     set_bit(RX_POST_EVENT_MASK, &gpVosSchedContext->rxEventFlag);
     wake_up_interruptible(&gpVosSchedContext->rxWaitQueue);
     //Wait for RX to exit
-    wait_for_completion_interruptible(&gpVosSchedContext->RxShutdown);
+    wait_for_completion(&gpVosSchedContext->RxShutdown);
     gpVosSchedContext->RxThread = 0;
 
     //Clean up message queues of TX and MC thread
@@ -1231,6 +1643,17 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     //Deinit all the queues
     vos_sched_deinit_mqs(gpVosSchedContext);
 
+#ifdef QCA_CONFIG_SMP
+    // Shut down Tlshim Rx thread
+    set_bit(RX_SHUTDOWN_EVENT_MASK, &gpVosSchedContext->tlshimRxEvtFlg);
+    set_bit(RX_POST_EVENT_MASK, &gpVosSchedContext->tlshimRxEvtFlg);
+    wake_up_interruptible(&gpVosSchedContext->tlshimRxWaitQueue);
+    wait_for_completion_interruptible(&gpVosSchedContext->TlshimRxShutdown);
+    gpVosSchedContext->TlshimRxThread = NULL;
+    vos_drop_rxpkt_by_staid(gpVosSchedContext, WLAN_MAX_STA_COUNT);
+    vos_free_tlshim_pkt_freeq(gpVosSchedContext);
+    unregister_hotcpu_notifier(&vos_cpu_hotplug_notifier);
+#endif
     return VOS_STATUS_SUCCESS;
 } /* vox_sched_close() */
 
@@ -1241,14 +1664,14 @@ VOS_STATUS vos_watchdog_close ( v_PVOID_t pVosContext )
     if (gpVosWatchdogContext == NULL)
     {
        VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-           "%s: gpVosWatchdogContext is NULL\n",__func__);
+           "%s: gpVosWatchdogContext is NULL",__func__);
        return VOS_STATUS_E_FAILURE;
     }
     set_bit(WD_SHUTDOWN_EVENT_MASK, &gpVosWatchdogContext->wdEventFlag);
     set_bit(WD_POST_EVENT_MASK, &gpVosWatchdogContext->wdEventFlag);
     wake_up_interruptible(&gpVosWatchdogContext->wdWaitQueue);
     //Wait for Watchdog thread to exit
-    wait_for_completion_interruptible(&gpVosWatchdogContext->WdShutdown);
+    wait_for_completion(&gpVosWatchdogContext->WdShutdown);
     return VOS_STATUS_SUCCESS;
 } /* vos_watchdog_close() */
 
@@ -1487,7 +1910,7 @@ void vos_sched_flush_mc_mqs ( pVosSchedContext pSchedContext )
   */
   VOS_TRACE( VOS_MODULE_ID_VOSS,
              VOS_TRACE_LEVEL_INFO,
-             ("Flushing the MC Thread message queue\n") );
+             ("Flushing the MC Thread message queue") );
 
   if (NULL == pSchedContext)
   {
@@ -1517,7 +1940,7 @@ void vos_sched_flush_mc_mqs ( pVosSchedContext pSchedContext )
   /* Flush the WDA Mq */
   while( NULL != (pMsgWrapper = vos_mq_get(&pSchedContext->wdaMcMq) ))
   {
-    if(pMsgWrapper->pVosMsg != NULL) 
+    if(pMsgWrapper->pVosMsg != NULL)
     {
         VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
                    "%s: Freeing MC WDA MSG message type %d",
@@ -1817,7 +2240,7 @@ VOS_STATUS vos_watchdog_wlan_shutdown(void)
         /* Release the lock here */
         spin_unlock(&gpVosWatchdogContext->wdLock);
         return VOS_STATUS_E_FAILURE;
-    } 
+    }
 
     /* Set the flags so that all future CMD53 and Wext commands get blocked right away */
     vos_set_logp_in_progress(VOS_MODULE_ID_VOSS, TRUE);
@@ -1827,7 +2250,8 @@ VOS_STATUS vos_watchdog_wlan_shutdown(void)
     /* Release the lock here */
     spin_unlock(&gpVosWatchdogContext->wdLock);
 
-    if (pHddCtx->isLoadUnloadInProgress)
+    if ((pHddCtx->isLoadInProgress) ||
+        (pHddCtx->isUnloadInProgress))
     {
         VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                 "%s: Load/unload in Progress. Ignoring signaling Watchdog",

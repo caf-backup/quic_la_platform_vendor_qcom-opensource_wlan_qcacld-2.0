@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * Notifications and licenses are retained for attribution purposes only.
  */
@@ -423,7 +424,7 @@ struct {                                \
 /*
  * Tail queue declarations.
  */
-#define  HEADNAME    
+#define  HEADNAME
 #define  COPY_HEADNAME(head)
 
 #define    TAILQ_HEAD(name, type)                        \

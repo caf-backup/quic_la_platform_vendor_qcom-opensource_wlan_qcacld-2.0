@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef __P2P_H
 #define __P2P_H
 /**===========================================================================
@@ -37,6 +38,8 @@
 #define WAIT_CANCEL_REM_CHAN    1000
 #define WAIT_REM_CHAN_READY     1000
 #define WAIT_CHANGE_CHANNEL_FOR_OFFCHANNEL_TX 3000
+#define READY_EVENT_PROPOGATE_TIME 2
+#define ESTIMATED_ROC_DUR_REQD_FOR_ACTION_TX 20
 
 #define ACTION_FRAME_DEFAULT_WAIT 200
 
@@ -107,7 +110,7 @@ int wlan_hdd_cfg80211_cancel_remain_on_channel( struct wiphy *wiphy,
                                        u64 cookie );
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
-int wlan_hdd_cfg80211_mgmt_tx_cancel_wait(struct wiphy *wiphy, 
+int wlan_hdd_cfg80211_mgmt_tx_cancel_wait(struct wiphy *wiphy,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
                                           struct wireless_dev *wdev,
 #else

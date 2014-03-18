@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2004-2010 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 //------------------------------------------------------------------------------
 // Copyright (c) 2004-2010, 2013 Atheros Corporation.  All rights reserved.
 // $ATH_LICENSE_HOSTSDK0_C$
@@ -103,7 +104,7 @@ typedef PREPACK struct {
 #define WMI_CMD_HDR_COMMANDID_MASK          0x00ffffff
 #define WMI_CMD_HDR_COMMANDID_OFFSET        0x00000000
 #define WMI_CMD_HDR_PLT_PRIV_LSB            24
-#define WMI_CMD_HDR_PLT_PRIV_MASK           0xff000000 
+#define WMI_CMD_HDR_PLT_PRIV_MASK           0xff000000
 #define WMI_CMD_HDR_PLT_PRIV_OFFSET         0x00000000
 
 /*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file htt_tx.c
  * @brief Implement transmit aspects of HTT.
@@ -51,6 +52,10 @@
 
 /*--- setup / tear-down functions -------------------------------------------*/
 
+#ifdef QCA_SUPPORT_TXDESC_SANITY_CHECKS
+u_int32_t *g_dbg_htt_desc_end_addr, *g_dbg_htt_desc_start_addr;
+#endif
+
 int
 htt_tx_attach(struct htt_pdev_t *pdev, int desc_pool_elems)
 {
@@ -61,7 +66,7 @@ htt_tx_attach(struct htt_pdev_t *pdev, int desc_pool_elems)
     if (pdev->cfg.is_high_latency) {
         pdev->tx_descs.size = sizeof(struct htt_host_tx_desc_t);
     } else {
-        pdev->tx_descs.size = 
+        pdev->tx_descs.size =
             /*
              * Start with the size of the base struct
              * that actually gets downloaded.
@@ -98,6 +103,16 @@ htt_tx_attach(struct htt_pdev_t *pdev, int desc_pool_elems)
     if (!pdev->tx_descs.pool_vaddr) {
         return 1; /* failure */
     }
+
+    adf_os_print("%s:htt_desc_start:0x%p htt_desc_end:0x%p\n", __func__,
+                 pdev->tx_descs.pool_vaddr,
+                 (u_int32_t *) (pdev->tx_descs.pool_vaddr + pool_size));
+
+#ifdef QCA_SUPPORT_TXDESC_SANITY_CHECKS
+    g_dbg_htt_desc_end_addr = (u_int32_t *)
+                         (pdev->tx_descs.pool_vaddr + pool_size);
+    g_dbg_htt_desc_start_addr = (u_int32_t *) pdev->tx_descs.pool_vaddr;
+#endif
 
     /* link tx descriptors into a freelist */
     pdev->tx_descs.freelist = (u_int32_t *) pdev->tx_descs.pool_vaddr;
@@ -237,7 +252,7 @@ htt_tx_desc_flag_batch_more(htt_pdev_handle pdev, void *desc)
 #if ATH_11AC_TXCOMPACT
 
 /* Scheduling the Queued packets in HTT which could not be sent out because of No CE desc*/
-void 
+void
 htt_tx_sched(htt_pdev_handle pdev)
 {
     adf_nbuf_t msdu;
@@ -303,6 +318,8 @@ htt_tx_send_std(
         htt_tx_sched(pdev);
         return 0;
     }
+
+    adf_nbuf_trace_update(msdu, "HT:T:");
     if (HTCSendDataPkt(pdev->htc_pdev, msdu, pdev->htc_endpoint, download_len)){
         HTT_TX_NBUF_QUEUE_ADD(pdev, msdu);
     }
@@ -474,7 +491,7 @@ htt_tx_desc_display(void *tx_desc)
 {
     struct htt_tx_msdu_desc_t *htt_tx_desc;
 
-    htt_tx_desc = (struct htt_tx_msdu_desc_t *) tx_desc;    
+    htt_tx_desc = (struct htt_tx_msdu_desc_t *) tx_desc;
 
     /* only works for little-endian */
     adf_os_print("HTT tx desc (@ %p):\n", htt_tx_desc);

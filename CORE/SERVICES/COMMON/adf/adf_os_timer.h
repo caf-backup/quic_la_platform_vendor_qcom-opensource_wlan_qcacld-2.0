@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,9 +24,8 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- * 
- */
+
+
 
 /**
  * @ingroup adf_os_public
@@ -49,7 +48,7 @@ typedef __adf_os_timer_t           adf_os_timer_t;
 
 /**
  * @brief Initialize a timer
- * 
+ *
  * @param[in] hdl       OS handle
  * @param[in] timer     timer object pointer
  * @param[in] func      timer function
@@ -66,7 +65,7 @@ adf_os_timer_init(adf_os_handle_t      hdl,
 
 /**
  * @brief Start a one-shot timer
- * 
+ *
  * @param[in] timer     timer object pointer
  * @param[in] msec      expiration period in milliseconds
  */
@@ -78,7 +77,7 @@ adf_os_timer_start(adf_os_timer_t *timer, int msec)
 
 /**
  * @brief Modify existing timer to new timeout value
- * 
+ *
  * @param[in] timer     timer object pointer
  * @param[in] msec      expiration period in milliseconds
  */
@@ -93,7 +92,7 @@ adf_os_timer_mod(adf_os_timer_t *timer, int msec)
  * The function will return after any running timer completes.
  *
  * @param[in] timer     timer object pointer
- * 
+ *
  * @retval    TRUE      timer was cancelled and deactived
  * @retval    FALSE     timer was cancelled but already got fired.
  */
@@ -108,7 +107,7 @@ adf_os_timer_cancel(adf_os_timer_t *timer)
  * The function will return after any running timer completes.
  *
  * @param[in] timer     timer object pointer
- * 
+ *
  */
 static inline void
 adf_os_timer_free(adf_os_timer_t *timer)
@@ -117,4 +116,3 @@ adf_os_timer_free(adf_os_timer_t *timer)
 }
 
 #endif
-

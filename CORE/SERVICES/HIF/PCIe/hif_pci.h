@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * NB: Inappropriate references to "HTC" are used in this (and other)
  * HIF implementations.  HTC is typically the calling layer, but it
@@ -95,7 +96,6 @@ struct HIF_CE_state {
     A_BOOL verified_awake;
     A_BOOL fake_sleep;
     adf_os_timer_t sleep_timer;
-    vos_wake_lock_t hif_wake_lock;
     unsigned long sleep_ticks;
 
     //struct task_struct *pci_dev_inserted_thread;

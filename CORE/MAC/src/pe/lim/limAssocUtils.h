@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  * This file limAssocUtils.h contains the utility definitions
  * LIM uses while processing Re/Association messages.
@@ -116,7 +117,7 @@ tSirRetStatus   limPopulateMatchingRateSet(tpAniSirGlobal,
 
 #ifdef WLAN_FEATURE_11AC
 #define MCSMAPMASK1x1 0x3
-#define MCSMAPMASK2x2 0xF
+#define MCSMAPMASK2x2 0xC
 #endif
 
 tSirRetStatus   limAddSta(tpAniSirGlobal, tpDphHashNode, tANI_U8, tpPESession);
@@ -133,7 +134,7 @@ tStaRateMode limGetStaRateMode(tANI_U8 dot11Mode);
 void            limTeardownInfraBss(tpAniSirGlobal,tpPESession);
 void            limRestorePreReassocState(tpAniSirGlobal,
                                           tSirResultCodes,
-                                          tANI_U16,tpPESession); 
+                                          tANI_U16,tpPESession);
 void            limPostReassocFailure(tpAniSirGlobal,
                                       tSirResultCodes,
                                       tANI_U16,tpPESession);
@@ -150,7 +151,7 @@ void            limCheckAndAnnounceJoinSuccess(tpAniSirGlobal,
 void limUpdateReAssocGlobals(tpAniSirGlobal pMac,
                                     tpSirAssocRsp pAssocRsp,tpPESession psessionEntry);
 
-void limUpdateAssocStaDatas(tpAniSirGlobal pMac, 
+void limUpdateAssocStaDatas(tpAniSirGlobal pMac,
                                 tpDphHashNode pStaDs,tpSirAssocRsp pAssocRsp,tpPESession psessionEntry);
 void
 limFillSupportedRatesInfo(
@@ -194,4 +195,3 @@ void limSendSmeTsmIEInd( tpAniSirGlobal pMac, tpPESession psessionEntry,
 #endif /* FEATURE_WLAN_CCX && FEATURE_WLAN_CCX_UPLOAD */
 
 #endif /* __LIM_ASSOC_UTILS_H */
-

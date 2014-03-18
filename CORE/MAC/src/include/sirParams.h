@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /*
  * This file sirParams.h contains the common parameter definitions, which
  * are not dependent on threadX API. These can be used by all Firmware
@@ -634,6 +637,20 @@ typedef struct sSirMbMsgP2p
 #endif
 #endif
 
+/* Handling of beacon tx indication from FW */
+#define SIR_HAL_BEACON_TX_SUCCESS_IND       (SIR_HAL_ITC_MSG_TYPES_BEGIN + 242)
+#define SIR_HAL_DFS_RADAR_IND               (SIR_HAL_ITC_MSG_TYPES_BEGIN + 243)
+
+#define SIR_HAL_INIT_THERMAL_INFO_CMD       (SIR_HAL_ITC_MSG_TYPES_BEGIN + 248)
+#define SIR_HAL_SET_THERMAL_LEVEL           (SIR_HAL_ITC_MSG_TYPES_BEGIN + 249)
+
+#if defined(FEATURE_WLAN_CCX) && defined(FEATURE_WLAN_CCX_UPLOAD)
+#define SIR_HAL_SET_PLM_REQ                (SIR_HAL_ITC_MSG_TYPES_BEGIN + 250)
+#endif
+
+#define SIR_HAL_SET_TX_POWER_LIMIT         (SIR_HAL_ITC_MSG_TYPES_BEGIN + 251)
+#define SIR_HAL_SET_SAP_INTRABSS_DIS       (SIR_HAL_ITC_MSG_TYPES_BEGIN + 252)
+
 #define SIR_HAL_MSG_TYPES_END              (SIR_HAL_MSG_TYPES_BEGIN + 0x1FF)
 
 // CFG message types
@@ -737,6 +754,7 @@ typedef struct sSirMbMsgP2p
 #define SIR_LIM_TDLS_LINK_SETUP_CNF_TIMEOUT (SIR_LIM_TIMEOUT_MSG_START + 0x2B)
 #endif
 #define SIR_LIM_CONVERT_ACTIVE_CHANNEL_TO_PASSIVE (SIR_LIM_TIMEOUT_MSG_START + 0x2C)
+
 #define SIR_LIM_MSG_TYPES_END            (SIR_LIM_MSG_TYPES_BEGIN+0xFF)
 
 // SCH message types

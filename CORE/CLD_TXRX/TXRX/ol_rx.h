@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _OL_RX__H_
 #define _OL_RX__H_
 
@@ -44,9 +45,9 @@ ol_rx_discard(
     unsigned tid,
     adf_nbuf_t head_msdu);
 
-void 
+void
 ol_rx_frames_free(
-    htt_pdev_handle htt_pdev, 
+    htt_pdev_handle htt_pdev,
     adf_nbuf_t frames);
 
 void

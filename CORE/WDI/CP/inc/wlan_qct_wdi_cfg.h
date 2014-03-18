@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,22 +24,22 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef WLAN_QCT_WDI_CFG_H
 #define WLAN_QCT_WDI_CFG_H
 
 /*===========================================================================
 
-         W L A N   D E V I C E   A B S T R A C T I O N   L A Y E R 
+         W L A N   D E V I C E   A B S T R A C T I O N   L A Y E R
               C O N F I G U R A T I O N   D E F I N E S
-                         E X T E R N A L   A P I                
-                   
+                         E X T E R N A L   A P I
+
 DESCRIPTION
   This file contains the configuration defines to be used by the UMAC for
   setting up the config parameters in DAL.
- 
+
   !! The values in here should be an identical match of the HAL defines
-  by the same name !! 
-  
+  by the same name !!
 ===========================================================================*/
 
 

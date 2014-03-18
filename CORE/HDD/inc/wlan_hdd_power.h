@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef __WLAN_HDD_POWER_H
 #define __WLAN_HDD_POWER_H
 
@@ -50,7 +51,7 @@
  //gEnableSuspend = 2 in INI file implies suspend to deep sleep
  #define WLAN_MAP_SUSPEND_TO_DEEP_SLEEP  2
 
- //gEnableSuspend = 3 in INI file implies suspend to set MCAST/BCAST filter 
+ //gEnableSuspend = 3 in INI file implies suspend to set MCAST/BCAST filter
  #define WLAN_MAP_SUSPEND_TO_MCAST_BCAST_FILTER  3
 
  //gEnableDriverStop = 1 implies map driver stop to standby
@@ -74,10 +75,10 @@
  * Function declarations and documentation
  * ------------------------------------------------------------------------*/
  eHalStatus hdd_exit_standby(hdd_context_t *pHddCtx);
- VOS_STATUS hdd_exit_deep_sleep(hdd_context_t *pHddCtx, 
+ VOS_STATUS hdd_exit_deep_sleep(hdd_context_t *pHddCtx,
                                 hdd_adapter_t* pAdapter);
  VOS_STATUS hdd_enter_standby(hdd_context_t *pHddCtx);
- VOS_STATUS hdd_enter_deep_sleep(hdd_context_t *pHddCtx, 
+ VOS_STATUS hdd_enter_deep_sleep(hdd_context_t *pHddCtx,
                                 hdd_adapter_t* pAdapter);
 #ifdef CONFIG_HAS_EARLYSUSPEND
  VOS_STATUS hdd_wlan_reset(void);

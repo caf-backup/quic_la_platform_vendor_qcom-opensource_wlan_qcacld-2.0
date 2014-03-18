@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,19 +24,6 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- * Copyright (c) 2004-2010, 2013 Qualcomm Atheros, Inc..
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- */
-//------------------------------------------------------------------------------
-// <copyright file="dbglog_id.h" company="Atheros">
-//    Copyright (c) 2004-2010 Atheros Corporation.  All rights reserved.
-// $ATH_LICENSE_HOSTSDK0_C$
-//------------------------------------------------------------------------------
-//==============================================================================
-// Author(s): ="Atheros"
-//==============================================================================
 
 #ifndef _DBGLOG_ID_H_
 #define _DBGLOG_ID_H_
@@ -65,7 +52,7 @@ extern "C" {
 
 /*
 * The target state machine framework will send dbglog messages on behalf on
-* other modules. We do this do avoid each module adding identical dbglog code 
+* other modules. We do this do avoid each module adding identical dbglog code
 * for state transitions and event processing. We also don't want to force each
 * module to define the the same XXX_DBGID_SM_MSG with the same value below.
 * Instead we use a special ID that the host dbglog code recognizes as a
@@ -217,7 +204,8 @@ extern "C" {
 #define RESMGR_DYN_SCH_HOME_CH_QUOTA                57
 #define RESMGR_OCS_REG_RECAL_QUOTA_NOTIF            58
 #define RESMGR_OCS_DEREG_RECAL_QUOTA_NOTIF          59
-#define RESMGR_DEFINITION_END                       60
+#define RESMGR_DYN_SCH_CH_STATS_END                 60
+#define RESMGR_DEFINITION_END                       61
 
 /* RESMGR CHNMGR debug ids */
 #define RESMGR_CHMGR_DEFINITION_START               0
@@ -250,7 +238,8 @@ extern "C" {
 #define VDEV_MGR_VDEV_PAUSE_DELAY_UPDATE            16
 #define VDEV_MGR_VDEV_PAUSE_FAIL                    17
 #define VDEV_MGR_GEN_PERIODIC_NOA                   18
-#define VDEV_MGR_DEFINITION_END                     19
+#define VDEV_MGR_OFF_CHAN_GO_CH_REQ_SETUP           19
+#define VDEV_MGR_DEFINITION_END                     20
 
 /* WHAL debug identifier definitions */
 #define WHAL_DBGID_DEFINITION_START                 0
@@ -296,7 +285,12 @@ extern "C" {
 #define WHAL_ERROR_POWER_RFLP_BIAS2X_CONFIG        40
 #define WHAL_ERROR_POWER_RFLP_PLLBYPASS_CONFIG     41
 #define WHAL_ERROR_POWER_RFLP_OFF1CHAN_CONFIG      42
-#define WHAL_DBGID_DEFINITION_END                  43
+#define WHAL_ERROR_POWER_ANTENNA_LMIT              43
+#define WHAL_ERROR_POWER_REGDMN_TX_LMIT            44
+#define WHAL_ERROR_POWER_MODE_SCALED_PWR           45
+#define WHAL_ERROR_POWER_EDGE_PWR_TPSCALE          46
+#define WHAL_ERROR_POWER_CHAN_REGALLOW             47
+#define WHAL_DBGID_DEFINITION_END                  48
 
 #define COEX_DEBUGID_START              0
 #define BTCOEX_DBG_MCI_1                            1
@@ -539,7 +533,24 @@ extern "C" {
 #define COEX_MWS_ERROR                              236
 #define COEX_MWS_ANT_DIVERSITY                      237
 
-#define COEX_DEBUG_ID_END                           238
+#define COEX_P2P_GO                                 238
+#define COEX_P2P_CLIENT                             239
+#define COEX_SCC_1                                  240
+#define COEX_SCC_2                                  241
+#define COEX_MCC_1                                  242
+#define COEX_MCC_2                                  243
+#define COEX_TRF_SHAPE_NOA                          244
+#define COEX_NOA_ONESHOT                            245
+#define COEX_NOA_PERIODIC                           246
+#define COEX_LE_1                                   247
+#define COEX_LE_2                                   248
+#define COEX_ANT_1                                  249
+#define COEX_ANT_2                                  250
+#define COEX_ENTER_NOA                              251
+#define COEX_EXIT_NOA                               252
+#define COEX_BT_SCAN_PROTECT                        253
+
+#define COEX_DEBUG_ID_END                           254
 
 #define SCAN_START_COMMAND_FAILED                   0
 #define SCAN_STOP_COMMAND_FAILED                    1
@@ -559,6 +570,9 @@ extern "C" {
 #define BEACON_EVENT_EARLY_RX_SLEEP_SLOP            2
 #define BEACON_EVENT_EARLY_RX_CONT_BMISS_TIMEOUT    3
 #define BEACON_EVENT_EARLY_RX_PAUSE_SKIP_BCN_NUM    4
+#define BEACON_EVENT_EARLY_RX_CLK_DRIFT             5
+#define BEACON_EVENT_EARLY_RX_AP_DRIFT              6
+#define BEACON_EVENT_EARLY_RX_BCN_TYPE              7
 
 #define RATECTRL_DBGID_DEFINITION_START             0
 #define RATECTRL_DBGID_ASSOC                        1
@@ -589,6 +603,10 @@ extern "C" {
 #define AP_PS_DBGID_SEND_N_COMPLETE                 16
 #define AP_PS_DBGID_DETECT_OUT_OF_SYNC_STA          17
 #define AP_PS_DBGID_DELIVER_CAB                     18
+#define AP_PS_DBGID_NO_CLIENT                       27
+#define AP_PS_DBGID_CLIENT_IN_PS_ACTIVE             28
+#define AP_PS_DBGID_CLIENT_IN_PS_NON_ACTIVE         29
+#define AP_PS_DBGID_CLIENT_IN_AWAKE                 30
 
 /* WLAN_MODULE_MGMT_TXRX Debugids*/
 #define MGMT_TXRX_DBGID_DEFINITION_START            0
@@ -635,8 +653,8 @@ extern "C" {
 #define WAL_DBGID_TX_BA_SETUP                       36
 #define WAL_DBGID_RX_BA_SETUP                       37
 #define WAL_DBGID_DEV_TX_TIMEOUT                    38
-#define WAL_DBGID_DEV_RX_TIMEOUT                    39 
-#define WAL_DBGID_STA_VDEV_XRETRY                   40  
+#define WAL_DBGID_DEV_RX_TIMEOUT                    39
+#define WAL_DBGID_STA_VDEV_XRETRY                   40
 #define WAL_DBGID_DCS                               41
 #define WAL_DBGID_MGMT_TX_FAIL                      42
 #define WAL_DBGID_SET_M4_SENT_MANUALLY              43
@@ -655,7 +673,14 @@ extern "C" {
 #define WAL_DBGID_BRSSI_CONFIG                      56
 #define WAL_DBGID_CURRENT_BRSSI_AVE                 57
 #define WAL_DBGID_BCN_TX_COMP                       58
-#define WAL_DBGID_DEFINITION_END                    59
+#define WAL_DBGID_RX_REENTRY                        59
+#define WAL_DBGID_SET_HW_CHAINMASK                  60
+#define WAL_DBGID_SET_HW_CHAINMASK_TXRX_STOP_FAIL   61
+#define WAL_DBGID_GET_HW_CHAINMASK                  62
+#define WAL_DBGID_SMPS_DISABLE                      63
+#define WAL_DBGID_SMPS_ENABLE_HW_CNTRL              64
+#define WAL_DBGID_SMPS_SWSEL_CHAINMASK              65
+#define WAL_DBGID_DEFINITION_END                    66
 
 #define ANI_DBGID_POLL                               0
 #define ANI_DBGID_CONTROL                            1
@@ -684,7 +709,10 @@ extern "C" {
 #define OFFLOADMGR_NO_REG_DATA_HANDLERS                3
 #define OFFLOADMGR_NO_REG_EVENT_HANDLERS               4
 #define OFFLOADMGR_REG_OFFLOAD_FAILED                  5
-#define OFFLOADMGR_DBGID_DEFINITION_END                6
+#define OFFLOADMGR_DEREG_OFFLOAD_FAILED                6
+#define OFFLOADMGR_ENTER_FAILED                        7
+#define OFFLOADMGR_EXIT_FAILED                         8
+#define OFFLOADMGR_DBGID_DEFINITION_END                9
 
 /*Resource Debug IDs*/
 #define RESOURCE_DBGID_DEFINITION_START             0
@@ -739,7 +767,8 @@ extern "C" {
 #define P2P_GO_GET_NOA_INFO                                 35
 #define P2P_GO_ADD_ONE_SHOT_NOA                             36
 #define P2P_GO_GET_NOA_IE                                   37
-#define P2P_DBGID_DEFINITION_END                            38
+#define P2P_GO_BCN_TX_COMP                                  38
+#define P2P_DBGID_DEFINITION_END                            39
 
 
 //CSA modules DBGIDs
@@ -772,7 +801,9 @@ extern "C" {
 #define WLAN_CHATTER_MC_FILTER_DEL  10
 #define WLAN_CHATTER_MC_FILTER_ALLOW  11
 #define WLAN_CHATTER_MC_FILTER_DROP  12
-#define WLAN_CHATTER_DBGID_DEFINITION_END 13
+#define WLAN_CHATTER_COALESCING_FILTER_ADD      13
+#define WLAN_CHATTER_COALESCING_FILTER_DEL      14
+#define WLAN_CHATTER_DBGID_DEFINITION_END       15
 
 #define WOW_DBGID_DEFINITION_START 0
 #define WOW_ENABLE_CMDID 1
@@ -781,11 +812,14 @@ extern "C" {
 #define WOW_RECV_MGMT 4
 #define WOW_WAKE_HOST_MGMT 5
 #define WOW_RECV_EVENT 6
-#define WOW_WAKE_HOST_EVENT 7 
+#define WOW_WAKE_HOST_EVENT 7
 #define WOW_INIT 8
 #define WOW_RECV_MAGIC_PKT 9
 #define WOW_RECV_BITMAP_PATTERN 10
-#define WOW_DBGID_DEFINITION_END 11
+#define WOW_AP_VDEV_DISALLOW    11
+#define WOW_STA_VDEV_DISALLOW   12
+#define WOW_P2PGO_VDEV_DISALLOW 13
+#define WOW_DBGID_DEFINITION_END 14
 
 /* SWBMISS module DBGIDs */
 #define SWBMISS_DBGID_DEFINITION_START  0
@@ -887,7 +921,18 @@ extern "C" {
 #define STA_SMPS_DBGID_VIRTUAL_CHAN_SMPS_START          6
 #define STA_SMPS_DBGID_VIRTUAL_CHAN_SMPS_STOP           7
 #define STA_SMPS_DBGID_SEND_SMPS_ACTION_FRAME           8
-#define SMPS_DBGID_DEFINITION_END                       9
+#define STA_SMPS_DBGID_HOST_FORCED_MODE                 9
+#define STA_SMPS_DBGID_FW_FORCED_MODE                   10
+#define STA_SMPS_DBGID_RSSI_THRESHOLD_CROSSED           11
+#define STA_SMPS_DBGID_SMPS_ACTION_FRAME_COMPLETION     12
+#define STA_SMPS_DBGID_DTIM_EBT_EVENT_CHMASK_UPDATE     13
+#define STA_SMPS_DBGID_DTIM_CHMASK_UPDATE               14
+#define STA_SMPS_DBGID_DTIM_BEACON_EVENT_CHMASK_UPDATE  15
+#define STA_SMPS_DBGID_DTIM_POWER_STATE_CHANGE          16
+#define STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_SLEEP         17
+#define STA_SMPS_DBGID_DTIM_CHMASK_UPDATE_AWAKE         18
+
+#define STA_SMPS_DBGID_DEFINITION_END                   18
 
 /* RTT module DBGIDs*/
 #define RTT_CALL_FLOW                 0
@@ -925,13 +970,42 @@ extern "C" {
 #define WLAN_HB_DBGID_TCP_TX                            14
 #define WLAN_HB_DBGID_DEFINITION_END                    15
 
-/* Thermal Manager DBGIDs */
-#define THERMAL_MGR_NEW_THRESH        0
-#define THERMAL_MGR_THRESH_CROSSED    1
+/* Thermal Manager DBGIDs*/
+#define THERMAL_MGR_DBGID_DEFINITION_START   0
+#define THERMAL_MGR_NEW_THRESH               1
+#define THERMAL_MGR_THRESH_CROSSED           2
+#define THERMAL_MGR_DBGID_DEFINITION_END     3
+
+/* WLAN PHYERR DFS(parse/filter) DBGIDs */
+#define WLAN_PHYERR_DFS_DBGID_DEFINITION_START    0
+#define WLAN_PHYERR_DFS_PHYERR_INFO_CHAN_BUFLEN   1
+#define WLAN_PHYERR_DFS_PHYERR_INFO_PPDU          2
+#define WLAN_PHYERR_DFS_DBDID_RADAR_SUMMARY       3
+#define WLAN_PHYERR_DFS_DBDID_SEARCH_FFT          4
+#define WLAN_PHTERR_DFS_DBDID_FILTER_STATUS       5
+#define WLAN_PHYERR_DFS_DBGID_DEFINITION_END      6
+
+/* RMC DBGIDs */
+#define RMC_DBGID_DEFINITION_START             0
+#define RMC_SM_INIT_ERR                        1
+#define RMC_VDEV_ALLOC_ERR                     2
+#define RMC_CREATE_INSTANCE                    3
+#define RMC_DELETE_INSTANCE                    4
+#define RMC_NEW_PRI_LEADER                     5
+#define RMC_NEW_SEC_LEADER                     6
+#define RMC_NO_LDR_CHANGE                      7
+#define RMC_LDR_INFORM_SENT                    8
+#define RMC_PEER_ADD                           9
+#define RMC_PEER_DELETE                        10
+#define RMC_PEER_UNKNOWN                       11
+#define RMC_PRI_LDR_RSSI_UPDATE                12
+#define RMC_SEC_LDR_RSSI_UPDATE                13
+#define RMC_SET_MODE                           14
+#define RMC_SET_ACTION_PERIOD                  15
+#define RMC_DBGID_DEFINITION_END               16
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* _DBGLOG_ID_H_ */
-

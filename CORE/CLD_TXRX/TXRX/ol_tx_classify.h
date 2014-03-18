@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_tx_classify.h
  * @brief API definitions for the tx classify module within the data SW.
@@ -74,15 +75,15 @@ ol_tx_dest_addr_find(
  */
 struct ol_tx_frms_queue_t *
 ol_tx_classify(
-    struct ol_txrx_vdev_t *vdev, 
-    struct ol_tx_desc_t *tx_desc, 
+    struct ol_txrx_vdev_t *vdev,
+    struct ol_tx_desc_t *tx_desc,
     adf_nbuf_t netbuf,
     struct ol_txrx_msdu_info_t *tx_msdu_info);
 
 struct ol_tx_frms_queue_t *
 ol_tx_classify_mgmt(
-    struct ol_txrx_vdev_t *vdev, 
-    struct ol_tx_desc_t *tx_desc, 
+    struct ol_txrx_vdev_t *vdev,
+    struct ol_tx_desc_t *tx_desc,
     adf_nbuf_t netbuf,
     struct ol_txrx_msdu_info_t *tx_msdu_info);
 
@@ -95,4 +96,3 @@ ol_tx_classify_mgmt(
 
 
 #endif /* _OL_TX_CLASSIFY__H_ */
-

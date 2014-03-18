@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,17 +24,17 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifdef FEATURE_OEM_DATA_SUPPORT
 
-/** ------------------------------------------------------------------------- * 
-    ------------------------------------------------------------------------- *  
+/** ------------------------------------------------------------------------- *
+    ------------------------------------------------------------------------- *
 
-  
+
     \file oemDataInternal.h
-  
+
     Exports and types for the Common OEM DATA REQ/RSP Module interfaces.
-  
-   ========================================================================== */
+========================================================================== */
 
 
 #ifndef __OEM_DATA_INTERNAL_H__
@@ -50,7 +50,7 @@
 typedef struct tagOemDataStruct
 {
     tANI_U32                         nextOemReqId; //a global req id
-    tANI_BOOLEAN                     oemDataReqActive; //indicates that currently a request has been posted and 
+    tANI_BOOLEAN                     oemDataReqActive; //indicates that currently a request has been posted and
                                                         //waiting for the response
     oemData_OemDataReqCompleteCallback   callback; //callback function pointer for returning the response
     void*                            pContext; //context of the original caller

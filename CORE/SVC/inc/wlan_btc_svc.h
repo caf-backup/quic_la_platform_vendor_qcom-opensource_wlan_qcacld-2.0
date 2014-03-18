@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,13 +24,14 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /******************************************************************************
  * wlan_btc_svc.h
  *
  ******************************************************************************/
 
 #ifndef WLAN_BTC_SVC_H
-#define WLAN_BTC_SVC_H 
+#define WLAN_BTC_SVC_H
 
 void send_btc_nlink_msg (int type, int dest_pid);
 int btc_activate_service(void *pAdapter);

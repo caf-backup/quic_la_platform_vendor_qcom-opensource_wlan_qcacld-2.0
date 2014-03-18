@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -23,6 +23,11 @@
  * This file was originally distributed by Qualcomm Atheros, Inc.
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
+ */
+
+/*
+ * Ref File: //depot/software/projects/feature_branches/gen5_phase1/os/linux/classic/ap/apps/ssm/include/aniSsmAesKeyWrap.h $
+ *
  */
 /*
  * Contains SSM-private declarations related to the AES key WRAP
@@ -54,7 +59,7 @@ typedef union uAniU32ValAry{
  * blocks. The first block is the IV from section 2.2.3 o the
  * RFC. Note: It is the caller's responsibility to free the returned
  * value.
- * 
+ *
  * @param plainText the plaintext data to wrap
  * @param len the length of the plaintext, which must be a multiple of
  * ANI_SSM_AES_KEY_WRAP_BLOCK_SIZE.
@@ -97,4 +102,3 @@ aniSsmAesKeyUnwrap(v_U32_t cryptHandle, tANI_U8 *cipherText, tANI_U32 len,
 
 
 #endif //_ANI_SSM_AES_KEY_WRAP_H_
-

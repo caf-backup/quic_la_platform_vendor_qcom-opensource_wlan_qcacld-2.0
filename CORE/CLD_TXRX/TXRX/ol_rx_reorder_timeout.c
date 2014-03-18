@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*=== header file includes ===*/
 /* generic utilities */
 #include <adf_nbuf.h>          /* adf_nbuf_t, etc. */
@@ -186,7 +187,7 @@ ol_rx_reorder_timeout_init(struct ol_txrx_pdev_t *pdev)
         rx_reorder_timeout_ac = &pdev->rx.reorder_timeout.access_cats[i];
         /* init the per-AC timers */
         adf_os_timer_init(
-            pdev->osdev, &rx_reorder_timeout_ac->timer, 
+            pdev->osdev, &rx_reorder_timeout_ac->timer,
             ol_rx_reorder_timeout, rx_reorder_timeout_ac);
         /* init the virtual timer list */
         TAILQ_INIT(&rx_reorder_timeout_ac->virtual_timer_list);

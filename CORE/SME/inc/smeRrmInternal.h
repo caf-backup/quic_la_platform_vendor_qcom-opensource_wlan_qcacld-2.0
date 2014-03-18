@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,18 +24,17 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- * */
+
 #if !defined( __SMERRMINTERNAL_H )
 #define __SMERRMINTERNAL_H
 
 
 /**=========================================================================
-  
+
   \file  smeRrmInternal.h
-  
+
   \brief prototype for SME RRM APIs
-  
+
   ========================================================================*/
 
 /* $Header$ */
@@ -50,7 +49,7 @@
 #include "palTimer.h"
 #include "rrmGlobal.h"
 
-/*-------------------------------------------------------------------------- 
+/*--------------------------------------------------------------------------
   Type declarations
   ------------------------------------------------------------------------*/
 typedef struct sRrmConfigParam
@@ -103,7 +102,8 @@ typedef struct sRrmSMEContext
 #if defined(FEATURE_WLAN_CCX) && defined(FEATURE_WLAN_CCX_UPLOAD)
    tCsrCcxBeaconReq  ccxBcnReqInfo;
 #endif /* FEATURE_WLAN_CCX && FEATURE_WLAN_CCX_UPLOAD */
-}tRrmSMEContext, *tpRrmSMEContext; 
+   tRrmMsgReqSource msgSource;
+}tRrmSMEContext, *tpRrmSMEContext;
 
 typedef struct sRrmNeighborReq
 {

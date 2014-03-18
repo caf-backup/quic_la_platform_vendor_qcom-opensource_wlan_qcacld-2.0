@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,16 +24,15 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- * 
- */
 
-/** 
+
+
+/**
  * @ingroup adf_os_public
  * @file adf_os_atomic.h
  * This file abstracts an atomic counter.
  */
- 
+
 #ifndef _ADF_OS_ATOMIC_H
 #define _ADF_OS_ATOMIC_H
 
@@ -46,7 +45,7 @@
  */
 typedef __adf_os_atomic_t    adf_os_atomic_t;
 
-/** 
+/**
  * @brief Initialize an atomic type variable
  * @param[in] v a pointer to an opaque atomic variable
  */

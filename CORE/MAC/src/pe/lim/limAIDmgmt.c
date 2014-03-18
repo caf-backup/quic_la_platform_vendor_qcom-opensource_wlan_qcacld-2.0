@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * This file limAIDmgmt.cc contains the functions related to
@@ -34,7 +35,7 @@
  * Date           Modified by    Modification Information
  * --------------------------------------------------------------------
  */
- 
+
 #include "palTypes.h"
 #include "wniCfgSta.h"
 #include "aniGlobal.h"
@@ -83,6 +84,14 @@ limInitPeerIdxpool(tpAniSirGlobal pMac,tpPESession pSessionEntry)
     if (pSessionEntry->limSystemRole == eLIM_STA_ROLE )
     {
         pSessionEntry->freePeerIdxHead = DPH_STA_HASH_INDEX_PEER + 1;
+    }
+    else
+#endif
+#ifdef QCA_IBSS_SUPPORT
+    if (pSessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE)
+    {
+        pSessionEntry->freePeerIdxHead=LIM_START_PEER_IDX;
+        maxAssocSta = pMac->lim.gLimIbssStaLimit;
     }
     else
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @addtogroup WMIAPI
  *@{
@@ -169,6 +170,8 @@ typedef enum {
     WMI_GRP_MHF_OFL,
     WMI_GRP_LOCATION_SCAN,
     WMI_GRP_OEM,
+    WMI_GRP_NAN,
+    WMI_GRP_COEX,
 } WMI_GRP_ID;
 
 #define WMI_CMD_GRP_START_ID(grp_id) (((grp_id) << 12) | 0x1)
@@ -331,7 +334,10 @@ typedef enum {
     WMI_PDEV_DFS_ENABLE_CMDID=WMI_CMD_GRP_START_ID(WMI_GRP_DFS),
     /** disable DFS (radar detection)*/
     WMI_PDEV_DFS_DISABLE_CMDID,
-
+    /** enable DFS phyerr/parse filter offload */
+    WMI_DFS_PHYERR_FILTER_ENA_CMDID,
+    /** enable DFS phyerr/parse filter offload */
+    WMI_DFS_PHYERR_FILTER_DIS_CMDID,
 
     /* Roaming specific  commands */
     /** set roam scan mode */
@@ -572,10 +578,6 @@ typedef enum {
     /** Plumb routing table for multihop forwarding offload */
     WMI_MHF_OFFLOAD_PLUMB_ROUTING_TBL_CMDID,
 
-    /** enable DFS phyerr/parse filter offload */
-    WMI_DFS_PHYERR_FILTER_ENA_CMDID,
-    /** enable DFS phyerr/parse filter offload */
-    WMI_DFS_PHYERR_FILTER_DIS_CMDID,
     /*location scan commands*/
     /*start batch scan*/
     WMI_BATCH_SCAN_ENABLE_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_LOCATION_SCAN),
@@ -585,6 +587,12 @@ typedef enum {
     WMI_BATCH_SCAN_TRIGGER_RESULT_CMDID,
     /* OEM related cmd */
     WMI_OEM_REQ_CMDID=WMI_CMD_GRP_START_ID(WMI_GRP_OEM),
+
+    /** Nan Request */
+    WMI_NAN_CMDID=WMI_CMD_GRP_START_ID(WMI_GRP_NAN),
+
+    /** Modem power state command */
+    WMI_MODEM_POWER_STATE_CMDID=WMI_CMD_GRP_START_ID(WMI_GRP_COEX),
 } WMI_CMD_ID;
 
 typedef enum {
@@ -610,6 +618,12 @@ typedef enum {
 
     /** traffic pause event */
     WMI_TX_PAUSE_EVENTID,
+
+    /** DFS radar event  */
+    WMI_DFS_RADAR_EVENTID,
+
+    /** track L1SS entry and residency event */
+    WMI_PDEV_L1SS_TRACK_EVENTID,
 
     /* VDEV specific events */
     /** VDEV started event in response to VDEV_START request */
@@ -740,6 +754,9 @@ typedef enum {
     /* Thermal Management event */
     WMI_THERMAL_MGMT_EVENTID,
 
+    /* Container for QXDM/DIAG events */
+    WMI_DIAG_DATA_CONTAINER_EVENTID,
+
     /* GPIO Event */
     WMI_GPIO_INPUT_EVENTID=WMI_EVT_GRP_START_ID(WMI_GRP_GPIO),
     /** upload H_CV info WMI event
@@ -757,9 +774,6 @@ typedef enum {
     /* TDLS Event */
     WMI_TDLS_PEER_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_TDLS),
 
-    /** DFS radar event  */
-    WMI_DFS_RADAR_EVENTID,
-
     /*location scan event*/
     /*report the firmware's capability of batch scan*/
     WMI_BATCH_SCAN_ENABLED_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_LOCATION_SCAN),
@@ -769,6 +783,9 @@ typedef enum {
     WMI_OEM_CAPABILITY_EVENTID=WMI_EVT_GRP_START_ID(WMI_GRP_OEM),
     WMI_OEM_MEASUREMENT_REPORT_EVENTID,
     WMI_OEM_ERROR_REPORT_EVENTID,
+
+    /* NAN Event */
+    WMI_NAN_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_NAN),
 } WMI_EVT_ID;
 
 /* defines for OEM message sub-types */
@@ -777,6 +794,11 @@ typedef enum {
 #define WMI_OEM_MEASUREMENT_REQ    0x03
 #define WMI_OEM_MEASUREMENT_RSP    0x04
 #define WMI_OEM_ERROR_REPORT_RSP   0x05
+
+/* below message subtype is internal to CLD. Target should
+ * never use internal response type
+ */
+#define WMI_OEM_INTERNAL_RSP       0xdeadbeef
 
 #define WMI_CHAN_LIST_TAG 0x1
 #define WMI_SSID_LIST_TAG 0x2
@@ -916,7 +938,7 @@ WMI_CHANNEL_CHANGE_CAUSE_CSA,
 #define WMI_VHT_CAP_SU_BFORMER            0x00000800
 #define WMI_VHT_CAP_SU_BFORMEE            0x00001000
 #define WMI_VHT_CAP_MU_BFORMER            0x00080000
-#define WMI_VHT_CAP MU_BFORMEE            0x00100000
+#define WMI_VHT_CAP_MU_BFORMEE            0x00100000
 
 /* These macros should be used when we wish to advertise STBC support for
  * only 1SS or 2SS or 3SS. */
@@ -959,6 +981,13 @@ typedef struct _wmi_abi_version {
 * maximum number of memroy requests allowed from FW.
 */
 #define WMI_MAX_MEM_REQS 16
+
+/* !!NOTE!!:
+ * This HW_BD_INFO_SIZE cannot be changed without breaking compatibility.
+ * Please don't change it.
+ */
+#define HW_BD_INFO_SIZE       5
+
 /**
  * The following struct holds optional payload for
  * wmi_service_ready_event_fixed_param,e.g., 11ac pass some of the
@@ -995,12 +1024,61 @@ typedef struct {
      * setup.
      */
     A_UINT32 max_num_scan_channels;
+
+    /* Hardware board specific ID. Values defined in enum WMI_HWBOARD_ID.
+     * Default 0 means tha hw_bd_info[] is invalid(legacy board).
+     */
+    A_UINT32 hw_bd_id;
+    A_UINT32 hw_bd_info[HW_BD_INFO_SIZE]; /* Board specific information. Invalid if hw_hd_id is zero. */
+
     /* The TLVs for hal_reg_capabilities, wmi_service_bitmap and mem_reqs[] will follow this TLV.
          *     HAL_REG_CAPABILITIES   hal_reg_capabilities;
          *     A_UINT32 wmi_service_bitmap[WMI_SERVICE_BM_SIZE];
          *     wlan_host_mem_req mem_reqs[];
          */
 } wmi_service_ready_event_fixed_param;
+
+typedef enum {
+    WMI_HWBD_NONE       = 0,            /* No hw board information is given */
+    WMI_HWBD_QCA6174    = 1,            /* Rome(AR6320) */
+    WMI_HWBD_QCA2582    = 2,            /* Killer 1525*/
+} WMI_HWBD_ID;
+
+#define ATH_BD_DATA_REV_MASK            0x000000FF
+#define ATH_BD_DATA_REV_SHIFT           0
+
+#define ATH_BD_DATA_PROJ_ID_MASK        0x0000FF00
+#define ATH_BD_DATA_PROJ_ID_SHIFT       8
+
+#define ATH_BD_DATA_CUST_ID_MASK        0x00FF0000
+#define ATH_BD_DATA_CUST_ID_SHIFT       16
+
+#define ATH_BD_DATA_REF_DESIGN_ID_MASK  0xFF000000
+#define ATH_BD_DATA_REF_DESIGN_ID_SHIFT 24
+
+#define SET_BD_DATA_REV(bd_data_ver, value)     \
+    ((bd_data_ver) &= ~ATH_BD_DATA_REV_MASK, (bd_data_ver) |= ((value) << ATH_BD_DATA_REV_SHIFT))
+
+#define GET_BD_DATA_REV(bd_data_ver)            \
+    (((bd_data_ver) & ATH_BD_DATA_REV_MASK) >> ATH_BD_DATA_REV_SHIFT)
+
+#define SET_BD_DATA_PROJ_ID(bd_data_ver, value) \
+    ((bd_data_ver) &= ~ATH_BD_DATA_PROJ_ID_MASK, (bd_data_ver) |= ((value) << ATH_BD_DATA_PROJ_ID_SHIFT))
+
+#define GET_BD_DATA_PROJ_ID(bd_data_ver)        \
+    (((bd_data_ver) & ATH_BD_DATA_PROJ_ID_MASK) >> ATH_BD_DATA_PROJ_ID_SHIFT)
+
+#define SET_BD_DATA_CUST_ID(bd_data_ver, value) \
+    ((bd_data_ver) &= ~ATH_BD_DATA_CUST_ID_MASK, (bd_data_ver) |= ((value) << ATH_BD_DATA_CUST_ID_SHIFT))
+
+#define GET_BD_DATA_CUST_ID(bd_data_ver)        \
+    (((bd_data_ver) & ATH_BD_DATA_CUST_ID_MASK) >> ATH_BD_DATA_CUST_ID_SHIFT)
+
+#define SET_BD_DATA_REF_DESIGN_ID(bd_data_ver, value)   \
+    ((bd_data_ver) &= ~ATH_BD_DATA_REF_DESIGN_ID_MASK, (bd_data_ver) |= ((value) << ATH_BD_DATA_REF_DESIGN_ID_SHIFT))
+
+#define GET_BD_DATA_REF_DESIGN_ID(bd_data_ver)          \
+    (((bd_data_ver) & ATH_BD_DATA_REF_DESIGN_ID_MASK) >> ATH_BD_DATA_REF_DESIGN_ID_SHIFT)
 
 #ifdef ROME_LTE_COEX_FREQ_AVOID
 typedef struct {
@@ -1854,10 +1932,10 @@ typedef struct {
 typedef struct {
     A_UINT32 tlv_header;     /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_pdev_set_quiet_cmd_fixed_param */
     A_UINT32 reserved0;      /** placeholder for pdev_id of future multiple MAC products. Init. to 0. */
-	A_UINT32 period;		/*period in TUs*/	
+	A_UINT32 period;		/*period in TUs*/
 	A_UINT32 duration;		/*duration in TUs*/
 	A_UINT32 next_start;	/*offset in TUs*/
-        A_UINT32 enabled; 		/*enable/disable*/
+        A_UINT32 enabled;		/*enable/disable*/
 } wmi_pdev_set_quiet_cmd_fixed_param;
 
 /*
@@ -2070,6 +2148,8 @@ typedef enum {
     WMI_PDEV_PARAM_HW_RFKILL_CONFIG,
     /** Enable radio low power features */
     WMI_PDEV_PARAM_LOW_POWER_RF_ENABLE,
+    /** L1SS entry and residency time track */
+    WMI_PDEV_PARAM_L1SS_TRACK,
 } WMI_PDEV_PARAM;
 
 typedef enum {
@@ -2120,6 +2200,7 @@ typedef enum {
     PAUSE_TYPE_P2P_CLIENT_NOA = 0x4, /** only vdev_map is valid, actually only one vdev id is set at one time */
     PAUSE_TYPE_P2P_GO_PS =      0x5, /** only vdev_map is valid, actually only one vdev id is set at one time */
     PAUSE_TYPE_STA_ADD_BA =     0x6, /** only peer_id and tid_map are valid, actually only one tid is set at one time */
+    PAUSE_TYPE_AP_PS =          0x7, /** for pausing AP vdev when all the connected clients are in PS. only vdev_map is valid */
 } wmi_tx_pause_type;
 
 typedef enum {
@@ -2169,6 +2250,16 @@ typedef struct {
          */
 } wmi_pdev_tpc_config_event_fixed_param;
 
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_pdev_l1ss_track_event_fixed_param  */
+    A_UINT32 periodCnt;
+    A_UINT32 L1Cnt;
+    A_UINT32 L11Cnt;
+    A_UINT32 L12Cnt;
+    A_UINT32 L1Entry;
+    A_UINT32 L11Entry;
+    A_UINT32 L12Entry;
+} wmi_pdev_l1ss_track_event_fixed_param;
 
 typedef struct {
     A_UINT32 len;
@@ -2561,6 +2652,11 @@ typedef struct {
  *  associate with AP with RMF enabled. */
 #define WMI_UNIFIED_VDEV_START_PMF_ENABLED  (1<<1)
 
+/*
+ * Host is sending bcn_tx_rate to override the beacon tx rates.
+ */
+#define WMI_UNIFIED_VDEV_START_BCN_TX_RATE_PRESENT (1<<2)
+
 typedef struct {
     A_UINT32 tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_vdev_start_request_cmd_fixed_param */
     /** unique id identifying the VDEV, generated by the caller */
@@ -2576,6 +2672,10 @@ typedef struct {
     /** ssid field. Only valid for AP/GO/IBSS/BTAmp VDEV type. */
     wmi_ssid ssid;
     /** beacon/probe reponse xmit rate. Applicable for SoftAP. */
+    /** This field will be invalid and ignored unless the */
+    /** flags field has the WMI_UNIFIED_VDEV_START_BCN_TX_RATE_PRESENT bit. */
+    /** When valid, this field contains the fixed tx rate for the beacon */
+    /** and probe response frames send by the GO or SoftAP */
     A_UINT32 bcn_tx_rate;
     /** beacon/probe reponse xmit power. Applicable for SoftAP. */
     A_UINT32 bcn_txPower;
@@ -2880,6 +2980,14 @@ typedef enum {
      * by himself. If the beacon lost time exceed this threshold, the peer is
      * thought to be gone. */
     WMI_VDEV_PARAM_IBSS_MAX_BCN_LOST_MS,
+
+    /** max rate in kpbs, transmit rate can't go beyond it */
+    WMI_VDEV_PARAM_MAX_RATE,
+
+    /* enable/disable drift sample. 0: disable; 1: clk_drift; 2: ap_drift; 3 both clk and ap drift*/
+    WMI_VDEV_PARAM_EARLY_RX_DRIFT_SAMPLE,
+    /* set Tx failure count threshold for the vdev */
+    WMI_VDEV_PARAM_SET_IBSS_TX_FAIL_CNT_THR,
 
 } WMI_VDEV_PARAM;
 
@@ -3205,6 +3313,17 @@ typedef struct {
              * Number of TX frames before the entering the Active state
              */
             WMI_STA_PS_PARAM_QPOWER_MAX_TX_BEFORE_WAKE = 7,
+
+            /**
+             * QPower SPEC PSPOLL interval
+             */
+            WMI_STA_PS_PARAM_QPOWER_SPEC_PSPOLL_WAKE_INTERVAL = 8,
+
+            /**
+             * Max SPEC PSPOLL to be sent when the PSPOLL response has
+             * no-data bit set
+             */
+            WMI_STA_PS_PARAM_QPOWER_SPEC_MAX_SPEC_NODATA_PSPOLL = 9,
         };
 
         typedef struct {
@@ -3716,7 +3835,7 @@ typedef struct {
  * For AP VDEV this peer corresponds to the remote peer STA.
  */
 #define WMI_PEER_CRIT_PROTO_HINT_ENABLED                0x9
-/* set Tx failure count threshold for the peer*/
+/* set Tx failure count threshold for the peer - Currently unused */
 #define WMI_PEER_TX_FAIL_CNT_THR                        0xA
 
 /** mimo ps values for the parameter WMI_PEER_MIMO_PS_STATE  */
@@ -3782,6 +3901,7 @@ typedef struct {
 #define WMI_PEER_PMF            0x08000000  /* Robust Management Frame Protection enabled */
 /** CAUTION TODO: Place holder for WLAN_PEER_F_PS_PRESEND_REQUIRED = 0x10000000. Need to be clean up */
 #define WMI_PEER_IS_P2P_CAPABLE 0x20000000  /* P2P capable peer */
+#define WMI_PEER_SAFEMODE_EN    0x80000000  /* Fips Mode Enabled */
 
 /**
  * Peer rate capabilities.
@@ -4550,6 +4670,7 @@ typedef enum event_type_e {
     WOW_PROBE_REQ_WPS_IE_EVENT,
     WOW_AUTH_REQ_EVENT,
     WOW_ASSOC_REQ_EVENT,
+    WOW_HTT_EVENT,
 }WOW_WAKE_EVENT_TYPE;
 
 typedef enum wake_reason_e {
@@ -4571,6 +4692,7 @@ typedef enum wake_reason_e {
     WOW_REASON_PROBE_REQ_WPS_IE_RECV,
     WOW_REASON_AUTH_REQ_RECV,
     WOW_REASON_ASSOC_REQ_RECV,
+    WOW_REASON_HTT_EVENT,
     WOW_REASON_DEBUG_TEST = 0xFF,
 }WOW_WAKE_REASON_TYPE;
 
@@ -5136,7 +5258,7 @@ typedef struct {
 
 typedef struct {
     A_UINT32    tlv_header;                     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_GTK_OFFLOAD_CMD_fixed_param */
-    A_UINT32 	vdev_id;    					/** unique id identifying the VDEV */
+    A_UINT32	vdev_id;					/** unique id identifying the VDEV */
     A_UINT32    flags;                          /* control flags, GTK offload command use high byte  */
     /* The size of following 3 arrays cannot be changed without breaking WMI compatibility. */
     A_UINT8     KEK[GTK_OFFLOAD_KEK_BYTES];     /* key encryption key */
@@ -5410,7 +5532,9 @@ typedef struct {
     A_UINT32    tlv_header;     /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_gtk_rekey_fail_event_fixed_param  */
     /** Reserved for future use */
     A_UINT32    reserved0;
+    A_UINT32 vdev_id;
 } wmi_gtk_rekey_fail_event_fixed_param;
+
 enum wmm_ac_downgrade_policy {
     WMM_AC_DOWNGRADE_DEPRIO,
     WMM_AC_DOWNGRADE_DROP,
@@ -5685,7 +5809,6 @@ typedef struct {
 typedef struct {
     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_resmgr_adaptive_ocs_enable_disable_cmd_fixed_param */
     A_UINT32 tlv_header;
-    A_UINT32 reserved0;
     /** 1: enable fw based adaptive ocs,
      *  0: disable fw based adaptive ocs
      */
@@ -6037,8 +6160,10 @@ typedef struct {
     A_UINT32 vdev_id;
     /** mac address */
     wmi_mac_addr peer_mac_address;
-    /** tx failure count */
+    /** tx failure count- will eventually be removed and not used * */
     A_UINT32 tx_fail_cnt;
+    /** seq number of the nth tx_fail_event */
+     A_UINT32 seq_no;
 } wmi_peer_tx_fail_cnt_thr_event_fixed_param;
 
 enum wmi_rmc_mode {
@@ -6212,6 +6337,84 @@ typedef struct {
 
     A_UINT32 temperature_degreeC;/* temperature in degree C*/
 } wmi_thermal_mgmt_event_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_nan_cmd_param */
+    A_UINT32 data_len; /** length in byte of data[]. */
+    /* This structure is used to send REQ binary blobs
+     * from application/service to firmware where Host drv is pass through .
+     * Following this structure is the TLV:
+     *     A_UINT8 data[];    // length in byte given by field data_len.
+     */
+} wmi_nan_cmd_param;
+
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_nan_event_hdr */
+    A_UINT32 data_len; /** length in byte of data[]. */
+    /* This structure is used to send REQ binary blobs
+     * from firmware to application/service where Host drv is pass through .
+     * Following this structure is the TLV:
+     *     A_UINT8 data[];    // length in byte given by field data_len.
+     */
+} wmi_nan_event_hdr;
+
+typedef struct {
+    A_UINT32 tlv_header;
+    A_UINT32 num_data;
+    /* followed by WMITLV_TAG_ARRAY_BYTE */
+} wmi_diag_data_container_event_fixed_param;
+
+enum {
+    WMI_PDEV_PARAM_TXPOWER_REASON_NONE = 0,
+    WMI_PDEV_PARAM_TXPOWER_REASON_SAR,
+    WMI_PDEV_PARAM_TXPOWER_REASON_MAX
+};
+
+#define PDEV_PARAM_TXPOWER_VALUE_MASK  0x000000FF
+#define PDEV_PARAM_TXPOWER_VALUE_SHIFT 0
+
+#define PDEV_PARAM_TXPOWER_REASON_MASK  0x0000FF00
+#define PDEV_PARAM_TXPOWER_REASON_SHIFT 8
+
+#define SET_PDEV_PARAM_TXPOWER_VALUE(txpower_param, value)     \
+    ((txpower_param) &= ~PDEV_PARAM_TXPOWER_VALUE_MASK, (txpower_param) |= ((value) << PDEV_PARAM_TXPOWER_VALUE_SHIFT))
+
+#define SET_PDEV_PARAM_TXPOWER_REASON(txpower_param, value)     \
+    ((txpower_param) &= ~PDEV_PARAM_TXPOWER_REASON_MASK, (txpower_param) |= ((value) << PDEV_PARAM_TXPOWER_REASON_SHIFT))
+
+#define GET_PDEV_PARAM_TXPOWER_VALUE(txpower_param)     \
+    (((txpower_param) & PDEV_PARAM_TXPOWER_VALUE_MASK) >> PDEV_PARAM_TXPOWER_VALUE_SHIFT)
+
+#define GET_PDEV_PARAM_TXPOWER_REASON(txpower_param)     \
+    (((txpower_param) & PDEV_PARAM_TXPOWER_REASON_MASK) >> PDEV_PARAM_TXPOWER_REASON_SHIFT)
+
+/**
+ * This command is sent from WLAN host driver to firmware to
+ * notify the current modem power state. Host would receive a
+ * message from modem when modem is powered on. Host driver
+ * would then send this command to firmware. Firmware would then
+ * power on WCI-2 (UART) interface for LTE/MWS Coex.
+ *
+ * This command is only applicable for APQ platform which has
+ * modem on the platform. If firmware doesn't support MWS Coex,
+ * this command can be dropped by firmware.
+ *
+ * This is a requirement from modem team that WCN can't toggle
+ * UART before modem is powered on.
+ */
+typedef struct {
+    /** TLV tag and len; tag equals
+     *  WMITLV_TAG_STRUC_wmi_modem_power_state_cmd_param */
+    A_UINT32 tlv_header;
+
+    /** Modem power state parameter */
+    A_UINT32 modem_power_state;
+} wmi_modem_power_state_cmd_param;
+
+enum {
+    WMI_MODEM_STATE_OFF = 0,
+    WMI_MODEM_STATE_ON
+};
 
 #ifdef __cplusplus
 }

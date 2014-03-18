@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #include <adf_os_atomic.h>    /* adf_os_atomic_inc, etc. */
 #include <adf_os_lock.h>      /* adf_os_spinlock */
 #include <adf_os_time.h>      /* adf_os_ticks, etc. */
@@ -55,7 +56,7 @@
 #include <ol_tx_sched.h>
 #ifdef QCA_SUPPORT_SW_TXRX_ENCAP
 #include <ol_txrx_encap.h>    /* OL_TX_RESTORE_HDR, etc*/
-#endif 
+#endif
 
 #ifdef TX_CREDIT_RECLAIM_SUPPORT
 
@@ -379,7 +380,7 @@ ol_tx_delay_compute(
 
 #endif /*!ATH_11AC_TXCOMPACT*/
 
-#ifdef QCA_TX_SINGLE_COMPLETIONS 
+#ifdef QCA_TX_SINGLE_COMPLETIONS
     #ifdef QCA_TX_STD_PATH_ONLY
         #define ol_tx_msdu_complete(_pdev, _tx_desc, _tx_descs, _netbuf, _lcl_freelist,         \
                                         _tx_desc_last, _status)                                 \
@@ -454,6 +455,7 @@ ol_tx_completion_handler(
     u_int16_t *desc_ids = (u_int16_t *)tx_desc_id_iterator;
     u_int16_t tx_desc_id;
     struct ol_tx_desc_t *tx_desc;
+    char *trace_str;
 
     uint32_t   byte_cnt = 0;
     union ol_tx_desc_list_elem_t *td_array = pdev->tx_desc.array;
@@ -466,12 +468,14 @@ ol_tx_completion_handler(
 
     OL_TX_DELAY_COMPUTE(pdev, status, desc_ids, num_msdus);
 
+    trace_str = (status) ? "OT:C:F:" : "OT:C:S:";
     for (i = 0; i < num_msdus; i++) {
         tx_desc_id = desc_ids[i];
         tx_desc = &td_array[tx_desc_id].tx_desc;
         tx_desc->status = status;
         netbuf = tx_desc->netbuf;
 
+        adf_nbuf_trace_update(netbuf, trace_str);
         /* Per SDU update of byte count */
         byte_cnt += adf_nbuf_len(netbuf);
         if (OL_TX_DESC_NO_REFS(tx_desc)) {
@@ -482,13 +486,19 @@ ol_tx_completion_handler(
                 pdev, tx_desc, tx_descs, netbuf,
                 lcl_freelist, tx_desc_last, status);
         }
+#ifdef QCA_SUPPORT_TXDESC_SANITY_CHECKS
+        tx_desc->pkt_type = 0xff;
+#ifdef QCA_COMPUTE_TX_DELAY
+        tx_desc->entry_timestamp_ticks = 0xffffffff;
+#endif
+#endif
     }
 
     /* One shot protected access to pdev freelist, when setup */
     if (lcl_freelist) {
         adf_os_spin_lock(&pdev->tx_mutex);
         tx_desc_last->next = pdev->tx_desc.freelist;
-        pdev->tx_desc.freelist = lcl_freelist; 
+        pdev->tx_desc.freelist = lcl_freelist;
         adf_os_spin_unlock(&pdev->tx_mutex);
         pdev->tx_desc.num_free += (u_int16_t) num_msdus;
     } else {
@@ -594,12 +604,12 @@ ol_tx_inspect_handler(
 
         /* vdev now points to the vdev for this descriptor. */
 
-#ifndef ATH_11AC_TXCOMPACT        
+#ifndef ATH_11AC_TXCOMPACT
         /* save this multicast packet to local free list */
-        if (adf_os_atomic_dec_and_test(&tx_desc->ref_cnt)) 
-#endif            
+        if (adf_os_atomic_dec_and_test(&tx_desc->ref_cnt))
+#endif
         {
-            /* for this function only, force htt status to be "htt_tx_status_ok" 
+            /* for this function only, force htt status to be "htt_tx_status_ok"
              * for graceful freeing of this multicast frame
              */
             ol_tx_msdu_complete(pdev, tx_desc, tx_descs, netbuf, lcl_freelist,
@@ -610,7 +620,7 @@ ol_tx_inspect_handler(
     if (lcl_freelist) {
         adf_os_spin_lock(&pdev->tx_mutex);
         tx_desc_last->next = pdev->tx_desc.freelist;
-        pdev->tx_desc.freelist = lcl_freelist; 
+        pdev->tx_desc.freelist = lcl_freelist;
         adf_os_spin_unlock(&pdev->tx_mutex);
     } else {
         ol_tx_desc_frame_list_free(pdev, &tx_descs, htt_tx_status_discard);

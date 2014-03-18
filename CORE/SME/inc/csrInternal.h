@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -20,10 +20,13 @@
  */
 
 /*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
+ * Copyright (c) 2011-2014 Qualcomm Atheros, Inc.
+ * All Rights Reserved.
+ * Qualcomm Atheros Confidential and Proprietary.
+ *
  */
+
+
 /** ------------------------------------------------------------------------- *
     ------------------------------------------------------------------------- *
 
@@ -31,8 +34,7 @@
     \file csrInternal.h
 
     Define internal data structure for MAC.
-
-   ========================================================================== */
+========================================================================== */
 #ifndef CSRINTERNAL_H__
 #define CSRINTERNAL_H__
 
@@ -63,6 +65,7 @@
 #define CSR_SCAN_RETURN_AFTER_EITHER_BAND_11d_FOUND ( CSR_SCAN_RETURN_AFTER_5_BAND_11d_FOUND | CSR_SCAN_RETURN_AFTER_24_BAND_11d_FOUND )
 #define CSR_NUM_RSSI_CAT        15
 #define CSR_MAX_STATISTICS_REQ        10
+#define CSR_ROAM_SCAN_CHANNEL_SWITCH_TIME        3
 
 //Support for multiple session
 #define CSR_SESSION_ID_INVALID    0xFF   // session ID invalid
@@ -509,6 +512,8 @@ typedef struct tagCsrNeighborRoamConfig
     tANI_U8        nMaxNeighborRetries;
     tANI_U16       nNeighborResultsRefreshPeriod;
     tANI_U16       nEmptyScanRefreshPeriod;
+    tANI_U8        nOpportunisticThresholdDiff;
+    tANI_U8        nRoamRescanRssiDiff;
 }tCsrNeighborRoamConfig;
 #endif
 
@@ -775,6 +780,7 @@ typedef struct tagCsrScanStruct
 #endif
     tCsrChannel occupiedChannels;   //This includes all channels on which candidate APs are found
     tANI_S8     inScanResultBestAPRssi;
+    eCsrBand  scanBandPreference;  //This defines the band perference for scan
 }tCsrScanStruct;
 
 #ifdef FEATURE_WLAN_TDLS_INTERNAL
@@ -838,6 +844,7 @@ typedef struct tagCsrPeStatsReqInfo
    tpAniSirGlobal         pMac;
    /* To remember if the peStats timer is stopped successfully or not */
    tANI_BOOLEAN           timerStopFailed;
+   tANI_U8                sessionId;
 
 }tCsrPeStatsReqInfo;
 
@@ -854,6 +861,7 @@ typedef struct tagCsrStatsClientReqInfo
    vos_timer_t            timer;
    tANI_BOOLEAN           timerExpired;
    tpAniSirGlobal         pMac; // TODO: Confirm this change BTAMP
+   tANI_U8                sessionId;
 }tCsrStatsClientReqInfo;
 
 typedef struct tagCsrTlStatsReqInfo
@@ -1212,14 +1220,15 @@ eHalStatus csrRoamRegisterLinkQualityIndCallback(tpAniSirGlobal pMac,
     \param cache - If requester is happy with cached stats
     \param staId - The station ID for which the stats is requested for
     \param pContext - user context to be passed back along with the callback
-
+    \param sessionId - sme session Id.
     \return eHalStatus
   ---------------------------------------------------------------------------*/
 eHalStatus csrGetStatistics(tpAniSirGlobal pMac, eCsrStatsRequesterType requesterId,
                             tANI_U32 statsMask,
                             tCsrStatsCallback callback,
                             tANI_U32 periodicity, tANI_BOOLEAN cache,
-                            tANI_U8 staId, void *pContext);
+                            tANI_U8 staId, void *pContext,
+                            tANI_U8 sessionId);
 
 /* ---------------------------------------------------------------------------
     \fn csrGetTLSTAState
@@ -1422,4 +1431,16 @@ eHalStatus csrHandoffRequest(tpAniSirGlobal pMac, tCsrHandoffRequest *pHandoffIn
 tANI_BOOLEAN csrRoamIsStaMode(tpAniSirGlobal pMac, tANI_U32 sessionId);
 #endif
 
+
+/* Post Channel Change Indication */
+eHalStatus csrRoamChannelChangeReq(tpAniSirGlobal pMac, tANI_U32 sessionId,
+                        tANI_U8 targetChannel, tANI_U8 cbMode);
+
+/* Post Beacon Tx Start Indication */
+eHalStatus csrRoamStartBeaconReq( tpAniSirGlobal pMac,
+                     tANI_U32 sessionId, tANI_U8 dfsCacWaitStatus);
+
+eHalStatus
+csrRoamSendChanSwIERequest(tpAniSirGlobal pMac, tANI_U8 sessionId,
+                     tANI_U8 targetChannel, tANI_U8 csaIeReqd);
 #endif

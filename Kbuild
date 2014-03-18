@@ -1,5 +1,5 @@
-# We can build either as part of a standalone Kernel build or part
-# of an Android build.  Determine which mechanism is being used
+# We can build either as part of a standalone Kernel build or as
+# an external module.  Determine which mechanism is being used
 ifeq ($(MODNAME),)
 	KERNEL_BUILD := 1
 else
@@ -7,10 +7,11 @@ else
 endif
 
 ifeq ($(KERNEL_BUILD),1)
-	# These are provided in Android-based builds
+	# These are provided in external module based builds
 	# Need to explicitly define for Kernel-based builds
 	MODNAME := wlan
-	WLAN_ROOT := drivers/staging/prima
+	WLAN_ROOT := drivers/staging/qcacld-2.0
+	WLAN_OPEN_SOURCE := 1
 endif
 
 ifeq ($(KERNEL_BUILD), 0)
@@ -35,13 +36,14 @@ ifeq ($(KERNEL_BUILD), 0)
 	#Flag to enable Fast Transition (11r) feature
 	CONFIG_QCOM_VOWIFI_11R := y
 
-	#Flag to enable Protected Managment Frames (11w) feature
-	ifneq ($(CONFIG_QCA_CLD_WLAN),)
-	CONFIG_WLAN_FEATURE_11W := y
-	endif
-
-	#Flag to enable LTE CoEx feature
-	CONFIG_QCOM_LTE_COEX := y
+        ifneq ($(CONFIG_QCA_CLD_WLAN),)
+                ifeq ($(CONFIG_CNSS),y)
+        #Flag to enable Protected Managment Frames (11w) feature
+                CONFIG_WLAN_FEATURE_11W := y
+        #Flag to enable LTE CoEx feature
+                CONFIG_QCOM_LTE_COEX := y
+                endif
+        endif
 
 	#Flag to enable new Linux Regulatory implementation
 	CONFIG_ENABLE_LINUX_REG := y
@@ -127,6 +129,17 @@ CONFIG_CHECKSUM_OFFLOAD := 1
 #Enable GTK offload
 CONFIG_GTK_OFFLOAD := 1
 endif
+
+#Enable IPA offload
+ifeq ($(CONFIG_IPA), y)
+CONFIG_IPA_OFFLOAD := 1
+endif
+
+#Enable Signed firmware support for split binary format
+CONFIG_QCA_SIGNED_SPLIT_BINARY_SUPPORT := 0
+
+#Enable single firmware binary format
+CONFIG_QCA_SINGLE_BINARY_SUPPORT := 0
 
 ifeq ($(CONFIG_CFG80211),y)
 HAVE_CFG80211 := 1
@@ -246,6 +259,10 @@ HDD_OBJS := 	$(HDD_SRC_DIR)/bap_hdd_main.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wmm.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wowl.o
 
+ifeq ($(CONFIG_IPA_OFFLOAD), 1)
+HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_ipa.o
+endif
+
 ifeq ($(HAVE_CFG80211),1)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_cfg80211.o \
 		$(HDD_SRC_DIR)/wlan_hdd_p2p.o
@@ -356,6 +373,26 @@ SAP_OBJS :=	$(SAP_SRC_DIR)/sapApiLinkCntl.o \
 		$(SAP_SRC_DIR)/sapChSelect.o \
 		$(SAP_SRC_DIR)/sapFsm.o \
 		$(SAP_SRC_DIR)/sapModule.o
+
+############ DFS ############ 350
+DFS_DIR :=	CORE/SERVICES/DFS
+DFS_INC_DIR :=	$(DFS_DIR)/inc
+DFS_SRC_DIR :=	$(DFS_DIR)/src
+
+DFS_INC :=	-I$(WLAN_ROOT)/$(DFS_INC_DIR) \
+		-I$(WLAN_ROOT)/$(DFS_SRC_DIR)
+
+DFS_OBJS :=	$(DFS_SRC_DIR)/dfs_bindetects.o \
+		$(DFS_SRC_DIR)/dfs.o \
+		$(DFS_SRC_DIR)/dfs_debug.o\
+		$(DFS_SRC_DIR)/dfs_fcc_bin5.o\
+		$(DFS_SRC_DIR)/dfs_init.o\
+		$(DFS_SRC_DIR)/dfs_misc.o\
+		$(DFS_SRC_DIR)/dfs_nol.o\
+		$(DFS_SRC_DIR)/dfs_phyerr_tlv.o\
+		$(DFS_SRC_DIR)/dfs_process_phyerr.o\
+		$(DFS_SRC_DIR)/dfs_process_radarevent.o\
+		$(DFS_SRC_DIR)/dfs_staggered.o
 
 ############ SME ############
 SME_DIR :=	CORE/SME
@@ -614,7 +651,8 @@ WMA_DIR :=      CORE/SERVICES/WMA
 
 WMA_INC :=      -I$(WLAN_ROOT)/$(WMA_DIR)
 
-WMA_OBJS :=     $(WMA_DIR)/wma.o
+WMA_OBJS :=     $(WMA_DIR)/wma.o \
+		$(WMA_DIR)/wma_dfs_interface.o
 
 ifeq ($(CONFIG_QCA_WIFI_ISOC), 1)
 WMA_OBJS +=     $(WMA_DIR)/wma_isoc.o
@@ -714,7 +752,8 @@ INCS :=		$(BAP_INC) \
 		$(TL_INC) \
 		$(VOSS_INC) \
 		$(WDA_INC) \
-		$(WDI_INC)
+		$(WDI_INC) \
+		$(DFS_INC)
 
 ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
 INCS +=		$(DXE_INC)
@@ -728,7 +767,8 @@ INCS +=		$(WMA_INC) \
 		$(TXRX_INC) \
 		$(PKTLOG_INC) \
 		$(HTT_INC) \
-		$(HTC_INC)
+		$(HTC_INC) \
+		$(DFS_INC)
 
 ifeq ($(CONFIG_QCA_WIFI_ISOC), 0)
 INCS +=		$(HIF_INC) \
@@ -753,7 +793,8 @@ OBJS :=		$(BAP_OBJS) \
 		$(SYS_OBJS) \
 		$(VOSS_OBJS) \
 		$(WDA_OBJS) \
-		$(WDI_OBJS)
+		$(WDI_OBJS) \
+		$(DFS_OBJS)
 
 ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
 OBJS +=		$(DXE_OBJS) \
@@ -765,7 +806,8 @@ OBJS +=		$(WMA_OBJS) \
 		$(WMI_OBJS) \
 		$(FWLOG_OBJS) \
 		$(HTC_OBJS) \
-		$(ADF_OBJS)
+		$(ADF_OBJS) \
+		$(DFS_OBJS)
 
 ifeq ($(CONFIG_QCA_WIFI_ISOC), 0)
 OBJS +=		$(HIF_OBJS) \
@@ -797,7 +839,6 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
 		-D__linux__ \
-		-DMSM_PLATFORM \
 		-DHAL_SELF_STA_PER_BSS=1 \
 		-DWLAN_FEATURE_VOWIFI_11R \
 		-DWLAN_FEATURE_NEIGHBOR_ROAMING \
@@ -827,13 +868,19 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DFEATURE_WLAN_LPHB \
 		-DFEATURE_WLAN_PAL_TIMER_DISABLE \
 		-DFEATURE_WLAN_PAL_MEM_DISABLE \
-                -DQCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+                -DQCA_SUPPORT_TXRX_VDEV_PAUSE_LL \
+		-DQCA_SUPPORT_TX_THROTTLE_LL \
+
+ifeq ($(CONFIG_ARCH_MSM), y)
+CDEFINES += -DMSM_PLATFORM
+endif
 
 ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
 CDEFINES +=	-DWLANTL_DEBUG
 else
 CDEFINES +=	-DOSIF_NEED_RX_PEER_ID \
-		-DQCA_SUPPORT_TXRX_LOCAL_PEER_ID
+		-DQCA_SUPPORT_TXRX_LOCAL_PEER_ID \
+		-DQCA_PKT_PROTO_TRACE
 endif
 
 ifneq ($(CONFIG_QCA_CLD_WLAN),)
@@ -932,11 +979,7 @@ ifeq ($(RE_ENABLE_WIFI_ON_WDI_TIMEOUT),1)
 CDEFINES += -DWDI_RE_ENABLE_WIFI_ON_WDI_TIMEOUT
 endif
 
-ifeq ($(KERNEL_BUILD),1)
-CDEFINES += -DWLAN_OPEN_SOURCE
-endif
-
-ifeq ($(findstring opensource, $(WLAN_ROOT)), opensource)
+ifeq ($(WLAN_OPEN_SOURCE), 1)
 CDEFINES += -DWLAN_OPEN_SOURCE
 endif
 
@@ -1050,11 +1093,36 @@ ifeq ($(CONFIG_CHECKSUM_OFFLOAD), 1)
 CDEFINES += -DCHECKSUM_OFFLOAD
 endif
 
+#Enable Checksum Offload support
+ifeq ($(CONFIG_IPA_OFFLOAD), 1)
+CDEFINES += -DIPA_OFFLOAD -DHDD_IPA_USE_IPA_RM_TIMER
+endif
+
 #Enable GTK Offload
 ifeq ($(CONFIG_GTK_OFFLOAD), 1)
 CDEFINES += -DWLAN_FEATURE_GTK_OFFLOAD
 CDEFINES += -DIGTK_OFFLOAD
 endif
+
+#Mark it as SMP Kernel
+ifeq ($(CONFIG_SMP),y)
+CDEFINES += -DQCA_CONFIG_SMP
+endif
+endif
+
+#Open P2P device interface only for non-MDM9630 platform
+ifneq ($(CONFIG_ARCH_MDM9630), y)
+CDEFINES += -DWLAN_OPEN_P2P_INTERFACE
+endif
+
+#Enable Signed firmware support for split binary format
+ifeq ($(CONFIG_QCA_SIGNED_SPLIT_BINARY_SUPPORT), 1)
+CDEFINES += -DQCA_SIGNED_SPLIT_BINARY_SUPPORT
+endif
+
+#Enable single firmware binary format
+ifeq ($(CONFIG_QCA_SINGLE_BINARY_SUPPORT), 1)
+CDEFINES += -DQCA_SINGLE_BINARY_SUPPORT
 endif
 
 # Fix build for GCC 4.7

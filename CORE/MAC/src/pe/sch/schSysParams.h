@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
  *
  * This file schSysParams.h contains scheduler parameter definitions
@@ -33,9 +34,9 @@
  * History:-
  * Date            Modified by    Modification Information
  * --------------------------------------------------------------------
- * 
+ *
  */
- 
+
 #ifndef __SCH_SYS_PARAMS_H__
 #define __SCH_SYS_PARAMS_H__
 
@@ -70,7 +71,7 @@
 #define MAX_TXOP_PER_SCHEDULE           400
 
 /// Scheduling quantum (units of TXOP)
-#define SCH_QUANTUM_QUEUE                 4 
+#define SCH_QUANTUM_QUEUE                 4
 
 /// Maximum unused quantum allowed to be accumulated by a queue
 #define MAX_ACCUMULATED_QUANTUM         500

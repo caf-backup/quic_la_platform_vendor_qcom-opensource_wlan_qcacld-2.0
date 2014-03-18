@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*=== header file includes ===*/
 /* generic utilities */
 #include <adf_nbuf.h>          /* adf_nbuf_t, etc. */
@@ -130,7 +131,7 @@ OL_RX_REORDER_IDX_START_SELF_SELECT(
             tail_msdu = rx_reorder_array_elem->tail; \
         } \
     } while (0)
-    
+
 #else
 
 /* reorder array elements are known to be non-NULL */
@@ -185,7 +186,7 @@ ol_rx_reorder_seq_num_check(
 
     if (seq_num_delta > (IEEE80211_SEQ_MAX >> 1)) {
          return htt_rx_status_err_replay; /* or maybe htt_rx_status_err_dup */
-    } 
+    }
     return htt_rx_status_ok;
 }
 
@@ -336,7 +337,7 @@ ol_rx_reorder_flush(
     idx_end   &= win_sz_mask;
 
     do {
-        rx_reorder_array_elem = 
+        rx_reorder_array_elem =
             &peer->tids_rx_reorder[tid].array[idx_start];
         idx_start = (idx_start + 1);
         OL_RX_REORDER_IDX_WRAP(idx_start, win_sz, win_sz_mask);
@@ -529,7 +530,11 @@ ol_rx_delba_handler(
      * the single-element statically-allocated reorder array
      * used for non block-ack cases.
      */
-    adf_os_mem_free(rx_reorder->array);
+    if (rx_reorder->array != &rx_reorder->base) {
+        TXRX_PRINT(TXRX_PRINT_LEVEL_INFO1, "%s, delete reorder array, tid:%d\n",
+                   __func__, tid);
+        adf_os_mem_free(rx_reorder->array);
+    }
 
     /* set up the TID with default parameters (ARQ window size = 1) */
     ol_rx_reorder_init(rx_reorder, tid);
@@ -556,13 +561,13 @@ ol_rx_flush_handler(
         vdev = peer->vdev;
     } else {
         return;
-    } 
+    }
 
     OL_RX_REORDER_TIMEOUT_MUTEX_LOCK(pdev);
 
     idx = idx_start & peer->tids_rx_reorder[tid].win_sz_mask;
     rx_reorder_array_elem = &peer->tids_rx_reorder[tid].array[idx];
-    if (rx_reorder_array_elem->head) {    
+    if (rx_reorder_array_elem->head) {
         rx_desc =
             htt_rx_msdu_desc_retrieve(htt_pdev, rx_reorder_array_elem->head);
         if (htt_rx_msdu_is_frag(htt_pdev, rx_desc)) {
@@ -570,7 +575,7 @@ ol_rx_flush_handler(
             /*
              * Assuming flush message sent seperately for frags
              * and for normal frames
-             */ 
+             */
             OL_RX_REORDER_TIMEOUT_MUTEX_UNLOCK(pdev);
             return;
         }
@@ -652,7 +657,7 @@ ol_rx_pn_ind_handler(
                     pdev->ctrl_pdev,
                     vdev->vdev_id, peer->mac_addr.raw, tid,
                     htt_rx_mpdu_desc_tsf32(htt_pdev, rx_desc),
-                    OL_RX_ERR_PN, mpdu_head);
+                    OL_RX_ERR_PN, mpdu_head, NULL, 0);
                 /* free all MSDUs within this MPDU */
                 do {
                     next_msdu = adf_nbuf_next(msdu);
@@ -675,7 +680,7 @@ ol_rx_pn_ind_handler(
             }
             rx_reorder_array_elem->head = NULL;
             rx_reorder_array_elem->tail = NULL;
-        } 
+        }
         seq_num = (seq_num + 1) & win_sz_mask;
     } while (seq_num != seq_num_end);
 

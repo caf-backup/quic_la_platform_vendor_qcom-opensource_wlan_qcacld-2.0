@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,13 +24,11 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**=============================================================================
   vos_getBin.c
   \brief
   Description...
-   Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
-   All Rights Reserved.
-   Qualcomm Atheros Confidential and Proprietary.
   ==============================================================================*/
 /* $HEADER$ */
 /**-----------------------------------------------------------------------------
@@ -109,7 +107,7 @@ VOS_STATUS vos_get_binary_blob( VOS_BINARY_ID binaryId,
        if ( !VOS_IS_STATUS_SUCCESS( VosSts ))
        {
           VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-                                    "%s : vos_open failed\n",__func__);
+                                    "%s : vos_open failed",__func__);
 
           return VOS_STATUS_E_FAILURE;
        }
@@ -164,4 +162,3 @@ v_BOOL_t vos_concurrent_sessions_running(void)
 
     return (j>1);
 }
-

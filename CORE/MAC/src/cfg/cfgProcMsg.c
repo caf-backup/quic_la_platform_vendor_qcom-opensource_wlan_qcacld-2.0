@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,7 +24,9 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*
+ *
  * This file contains CFG functions for processing host messages.
  *
  * Author:      Kevin Nguyen
@@ -716,7 +718,7 @@ GetStrValue(tANI_U8 *pBuf, tANI_U8 *pValue, tANI_U32 length)
  */
 
 void
-processCfgDownloadReq(tpAniSirGlobal pMac, tANI_U16 length, 
+processCfgDownloadReq(tpAniSirGlobal pMac, tANI_U16 length,
                       tANI_U32 *pConfig)
 {
     tANI_S32    i;
@@ -916,7 +918,3 @@ end:
     pMac->cfg.gParamList[WNI_CFG_DNLD_CNF_RES] = retVal;
 
 } /*** end ProcessDownloadReq() ***/
-
-
-
-

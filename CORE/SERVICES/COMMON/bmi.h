@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 //==============================================================================
 // BMI declarations and prototypes
 //
@@ -43,7 +44,7 @@ extern "C" {
 #include "osapi_linux.h"
 #include "bmi_msg.h"
 #include "ol_if_athvar.h"
-    
+
 A_STATUS bmi_download_firmware(struct ol_softc *scn);
 
 void

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /******************************************************************************
  * wlan_nlink_srv.h
  *
@@ -31,13 +32,13 @@
  * modules and vice versa. Kernel modules must register a message handler for a
  * message type so that the wlan_nlink_srv can invoke the corresponding msg handler
  * whenever a Netlink message of a particular type has been received from an
- * application.  In the opposite direction, wlan_nlink_srv provides a mechanism  
+ * application.  In the opposite direction, wlan_nlink_srv provides a mechanism
  * which kernel modules can use to send Netlink messages to applications.
  *
  ******************************************************************************/
 
 #ifndef WLAN_NLINK_SRV_H
-#define WLAN_NLINK_SRV_H 
+#define WLAN_NLINK_SRV_H
 
 #include <linux/skbuff.h>
 #include <net/netlink.h>

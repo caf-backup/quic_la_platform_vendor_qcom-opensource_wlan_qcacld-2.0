@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _HTT_TYPES__H_
 #define _HTT_TYPES__H_
 
@@ -96,7 +97,7 @@ struct htt_pdev_t {
     adf_nbuf_queue_t		txnbufq;
 #endif
 
-    struct htt_htc_pkt_union *htt_htc_pkt_freelist;    
+    struct htt_htc_pkt_union *htt_htc_pkt_freelist;
     struct {
         int is_high_latency;
     } cfg;
@@ -152,13 +153,13 @@ struct htt_pdev_t {
             unsigned msdu_payld;
         } sw_rd_idx;
 
-        /* 
-         * refill_retry_timer - timer triggered when the ring is not 
-         * refilled to the level expected 
+        /*
+         * refill_retry_timer - timer triggered when the ring is not
+         * refilled to the level expected
          */
         adf_os_timer_t refill_retry_timer;
 
-        /* 
+        /*
          * refill_ref_cnt - ref cnt for Rx buffer replenishment - this
          * variable is used to guarantee that only one thread tries
          * to replenish Rx ring.

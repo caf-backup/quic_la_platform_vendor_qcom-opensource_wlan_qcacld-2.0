@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,15 +24,16 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef WLAN_QCT_DXE_I_H
 #define WLAN_QCT_DXE_I_H
 
 /**=========================================================================
-  
+
   @file  wlan_qct_dxe_i.h
-  
-  @brief 
-               
+
+  @brief
+
    This file contains the external API exposed by the wlan data transfer abstraction layer module.
 ========================================================================*/
 
@@ -474,13 +475,13 @@ typedef struct
    {
       WLANDXE_LongDesc             dxe_long_desc;
       WLANDXE_ShortDesc            dxe_short_desc;
-   }dxedesc; 
+   }dxedesc;
 } WLANDXE_DescType;
 
 typedef struct
 {
    void                            *nextCtrlBlk;
-   wpt_packet                      *xfrFrame;  
+   wpt_packet                      *xfrFrame;
    WLANDXE_DescType                *linkedDesc;
    unsigned int                    linkedDescPhyAddr;
    wpt_uint32                       ctrlBlkOrder;
@@ -546,7 +547,7 @@ typedef struct
 {
    wpt_uint32                      refWQ_swapped;
    wpt_boolean                     chEnabled;
-   wpt_boolean                     chConfigured;    
+   wpt_boolean                     chConfigured;
    wpt_uint32                      channel;
    wpt_uint32                      chk_size_mask;
    wpt_uint32                      bmuThdSel_mask;
@@ -609,17 +610,17 @@ typedef struct
    wpt_uint32                      interruptPath;
    wpt_msg                        *rxIsrMsg;
    wpt_msg                        *txIsrMsg;
-   wpt_msg                        *rxPktAvailMsg;   
+   wpt_msg                        *rxPktAvailMsg;
    volatile WLANDXE_PowerStateType hostPowerState;
    wpt_boolean                     rxIntDisabledByIMPS;
    wpt_boolean                     txIntDisabledByIMPS;
    WLANDXE_SetPowerStateCbType     setPowerStateCb;
    volatile WLANDXE_RivaPowerStateType rivaPowerState;
-   wpt_boolean                     ringNotEmpty; 
+   wpt_boolean                     ringNotEmpty;
    wpt_boolean                     txIntEnable;
-   wpt_uint32                      txCompletedFrames; 
-   wpt_uint8                       ucTxMsgCnt; 
-   wpt_uint16                      lastKickOffDxe; 
+   wpt_uint32                      txCompletedFrames;
+   wpt_uint8                       ucTxMsgCnt;
+   wpt_uint16                      lastKickOffDxe;
    wpt_uint32                      dxeCookie;
    wpt_packet                     *freeRXPacket;
    wpt_boolean                     rxPalPacketUnavailable;
@@ -629,10 +630,10 @@ typedef struct
 } WLANDXE_CtrlBlkType;
 
 /*==========================================================================
-  @  Function Name 
+  @  Function Name
       dxeCommonDefaultConfig
 
-  @  Description 
+  @  Description
 
   @  Parameters
       WLANDXE_CtrlBlkType     *dxeCtrlBlk,
@@ -648,10 +649,10 @@ extern wpt_status dxeCommonDefaultConfig
 );
 
 /*==========================================================================
-  @  Function Name 
+  @  Function Name
       dxeChannelDefaultConfig
 
-  @  Description 
+  @  Description
       Get defualt configuration values from pre defined structure
       All the channels must have it's own configurations
 

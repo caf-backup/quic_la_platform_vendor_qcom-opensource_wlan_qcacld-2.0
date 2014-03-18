@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 //------------------------------------------------------------------------------
 // <copyright file="htc_services.h" company="Atheros">
 //    Copyright (c) 2007 Atheros Corporation.  All rights reserved.
@@ -40,7 +41,7 @@
 
 typedef enum {
     RSVD_SERVICE_GROUP  = 0,
-    WMI_SERVICE_GROUP   = 1, 
+    WMI_SERVICE_GROUP   = 1,
     NMI_SERVICE_GROUP   = 2,
     HTT_SERVICE_GROUP   = 3,
     CFG_NV_SERVICE_GROUP = 4,

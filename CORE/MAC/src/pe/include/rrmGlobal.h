@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,8 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-/*
- * */
+
 
 #if !defined( __RRMGLOBAL_H )
 #define __RRMGLOBAL_H
@@ -46,6 +45,13 @@ typedef enum eRrmRetStatus
     eRRM_FAILURE
 } tRrmRetStatus;
 
+typedef enum eRrmMsgReqSource
+{
+    eRRM_MSG_SOURCE_LEGACY_CCX  = 1, /* legacy ccx */
+    eRRM_MSG_SOURCE_11K         = 2, /* 11k */
+    eRRM_MSG_SOURCE_CCX_UPLOAD  = 3, /* ccx upload approach */
+} tRrmMsgReqSource;
+
 typedef struct sSirChannelInfo
 {
    tANI_U8 regulatoryClass;
@@ -65,6 +71,7 @@ typedef struct sSirBeaconReportReqInd
    tAniSSID     ssId;              //May be wilcard.
    tANI_U16      uDialogToken;
    tSirChannelList channelList; //From AP channel report.
+   tRrmMsgReqSource msgSource;
 } tSirBeaconReportReqInd, * tpSirBeaconReportReqInd;
 
 
@@ -73,7 +80,7 @@ typedef struct sSirBeaconReportXmitInd
    tANI_U16    messageType; // eWNI_SME_BEACON_REPORT_RESP_XMIT_IND
    tANI_U16    length;
    tSirMacAddr bssId;
-   tANI_U16     uDialogToken;
+   tANI_U16    uDialogToken;
    tANI_U8     fMeasureDone;
    tANI_U16    duration;
    tANI_U8     regClass;
@@ -88,9 +95,9 @@ typedef struct sSirNeighborReportReqInd
    tSirMacAddr  bssId;  //For the session.
    tANI_U16     noSSID; //TRUE - dont include SSID in the request.
                         //FALSE  include the SSID. It may be null (wildcard)
-   tSirMacSSid  ucSSID;  
+   tSirMacSSid  ucSSID;
 } tSirNeighborReportReqInd, * tpSirNeighborReportReqInd;
-                                   
+
 
 typedef struct sSirNeighborBssDescription
 {
@@ -105,13 +112,13 @@ typedef struct sSirNeighborBssDescription
                 tANI_U32      fSameSecurityMode:1;
                 tANI_U32      fSameAuthenticator:1;
                 tANI_U32      fCapSpectrumMeasurement:1; //see IEEE 802.11k Table 7-95d
-                tANI_U32      fCapQos:1; 
-                tANI_U32      fCapApsd:1; 
-                tANI_U32      fCapRadioMeasurement:1; 
-                tANI_U32      fCapDelayedBlockAck:1; 
+                tANI_U32      fCapQos:1;
+                tANI_U32      fCapApsd:1;
+                tANI_U32      fCapRadioMeasurement:1;
+                tANI_U32      fCapDelayedBlockAck:1;
                 tANI_U32      fCapImmediateBlockAck:1;
                 tANI_U32      fMobilityDomain:1;
-                tANI_U32      reserved:21; 
+                tANI_U32      reserved:21;
          } rrmInfo;
          struct _ccxInfo {
                 tANI_U32      channelBand:8;
@@ -127,7 +134,7 @@ typedef struct sSirNeighborBssDescription
                 tANI_U32      reserved: 16;
          } ccxInfo;
    } bssidInfo;
- 
+
    //Optional sub IEs....ignoring for now.
 }tSirNeighborBssDescription, *tpSirNeighborBssDescripton;
 
@@ -165,6 +172,7 @@ typedef struct sRRMReq
          tRRMBeaconReportRequestedIes reqIes;
       }Beacon;
    }request;
+   tANI_U8 sendEmptyBcnRpt;
 }tRRMReq, *tpRRMReq;
 
 typedef struct sRRMCaps

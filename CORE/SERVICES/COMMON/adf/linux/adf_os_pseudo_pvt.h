@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -76,4 +76,3 @@ extern int __adf_net_pseudo_attach(const char *mod_name); \
 extern int __adf_net_pseudo_detach(const char *mod_name);
 
 #endif
-

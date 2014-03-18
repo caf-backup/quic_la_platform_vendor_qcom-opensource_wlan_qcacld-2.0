@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef _OL_TXRX_INTERNAL__H_
 #define _OL_TXRX_INTERNAL__H_
 
@@ -371,7 +372,7 @@ ol_txrx_ieee80211_hdrsize(const void *data)
         (wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK) != IEEE80211_FC0_TYPE_CTL);
     if ((wh->i_fc[1] & IEEE80211_FC1_DIR_MASK) == IEEE80211_FC1_DIR_DSTODS) {
         size += IEEE80211_ADDR_LEN;
-    } 
+    }
     if (IEEE80211_QOS_HAS_SEQ(wh)) {
         size += sizeof(u_int16_t);
         /* Qos frame with Order bit set indicates an HTC frame */
@@ -602,9 +603,9 @@ do {                                                                            
 	}                                                                                \
 } while (false)
 #else
-#define OL_RX_ERR_STATISTICS(pdev, vdev, err_type, sec_type, is_mcast) 
-#define OL_RX_ERR_STATISTICS_1(pdev, vdev, peer, rx_desc, err_type) 
-#define OL_RX_ERR_STATISTICS_2(pdev, vdev, peer, rx_desc, rx_msdu, rx_status) 
+#define OL_RX_ERR_STATISTICS(pdev, vdev, err_type, sec_type, is_mcast)
+#define OL_RX_ERR_STATISTICS_1(pdev, vdev, peer, rx_desc, err_type)
+#define OL_RX_ERR_STATISTICS_2(pdev, vdev, peer, rx_desc, rx_msdu, rx_status)
 #endif /* SUPPORT_HOST_STATISTICS */
 
 #ifdef QCA_ENABLE_OL_TXRX_PEER_STATS
@@ -656,6 +657,10 @@ do {                                                                            
 
 #ifndef DEBUG_HTT_CREDIT
 #define DEBUG_HTT_CREDIT 0
+#endif
+
+#if defined(QCA_SUPPORT_TXRX_VDEV_PAUSE_LL) || defined(QCA_SUPPORT_TX_THROTTLE_LL)
+#define QCA_SUPPORT_TXRX_VDEV_LL_TXQ
 #endif
 
 #endif /* _OL_TXRX_INTERNAL__H_ */

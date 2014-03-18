@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**
  * @file ol_osif_txrx_api.h
  * @brief Define the OS specific API functions called by txrx SW.
@@ -36,10 +37,10 @@
 /**
  * @brief Call tx completion handler to release the buffers
  * @details
- * 
+ *
  * Invoke tx completion handler when the tx credit goes below low water mark.
- * This eliminate the packet drop in the host driver due to send routine not yielding 
- * the cpu when the amount of traffic pumped from the network layer is very high. 
+ * This eliminate the packet drop in the host driver due to send routine not yielding
+ * the cpu when the amount of traffic pumped from the network layer is very high.
  *
  * @param osdev
  */

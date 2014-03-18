@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef HDD_TGT_CFG_H
 #define HDD_TGT_CFG_H
 
@@ -36,6 +37,7 @@ struct hdd_tgt_services {
         u_int32_t ap_dfs;
         u_int32_t en_11ac;
         u_int32_t arp_offload;
+        u_int32_t early_rx;
 #ifdef FEATURE_WLAN_SCAN_PNO
         v_BOOL_t  pno_offload;
 #endif
@@ -76,6 +78,7 @@ struct hdd_tgt_vht_cap {
 
 struct regulatory {
 	u_int32_t reg_domain;
+	u_int32_t eeprom_rd_ext;
 	u_int16_t country_code;
 	u_int8_t alpha2[3];
 	const void *regpair;
@@ -85,12 +88,20 @@ struct hdd_tgt_cfg {
         u_int32_t target_fw_version;
         u_int8_t band_cap;
         u_int32_t reg_domain;
+        u_int32_t eeprom_rd_ext;
         v_MACADDR_t hw_macaddr;
         struct hdd_tgt_services services;
         struct hdd_tgt_ht_cap ht_cap;
 #ifdef WLAN_FEATURE_11AC
         struct hdd_tgt_vht_cap vht_cap;
 #endif
+        v_U8_t max_intf_count;
+};
+
+struct hdd_dfs_radar_ind {
+        u_int8_t   ieee_chan_number;
+        u_int32_t  chan_freq;
+        u_int32_t  dfs_radar_status;
 };
 
 #endif /* HDD_TGT_CFG_H */

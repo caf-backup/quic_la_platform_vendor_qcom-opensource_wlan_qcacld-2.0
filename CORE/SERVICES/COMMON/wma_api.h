@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /**========================================================================
 
   \file     wma.c
@@ -81,6 +82,8 @@ typedef enum {
 #define GEN_CMD  3
 #define DBG_CMD  4
 #define PPS_CMD  5
+#define QPOWER_CMD 6
+#define GTX_CMD  7
 
 #ifdef QCA_WIFI_ISOC
 VOS_STATUS wma_nv_download_start(v_VOID_t *vos_context);
@@ -96,9 +99,11 @@ VOS_STATUS wma_stop(v_VOID_t *vos_context, tANI_U8 reason);
 
 VOS_STATUS wma_close(v_VOID_t *vos_context);
 
+VOS_STATUS wma_wmi_service_close(v_VOID_t *vos_context);
+
 v_VOID_t wma_rx_ready_event(WMA_HANDLE handle, v_VOID_t *ev);
 
-v_VOID_t wma_rx_service_ready_event(WMA_HANDLE handle, 
+v_VOID_t wma_rx_service_ready_event(WMA_HANDLE handle,
 				v_VOID_t *ev);
 
 v_VOID_t wma_setneedshutdown(v_VOID_t *vos_context);
@@ -115,9 +120,11 @@ eHalStatus wma_set_htconfig(tANI_U8 vdev_id, tANI_U16 ht_capab, int value);
 eHalStatus WMA_SetRegDomain(void * clientCtxt, v_REGDOMAIN_t regId,
 		tAniBool sendRegHint);
 
+VOS_STATUS WMA_GetWcnssSoftwareVersion(v_PVOID_t pvosGCtx, tANI_U8 *pVersion,
+                                       tANI_U32 versionBufferSize);
 #ifndef QCA_WIFI_ISOC
 int wma_suspend_target(WMA_HANDLE handle, int disable_target_intr);
-void wma_target_suspend_complete(void *context);
+void wma_target_suspend_acknowledge(void *context);
 int wma_resume_target(WMA_HANDLE handle);
 int wma_is_wow_mode_selected(WMA_HANDLE handle);
 int wma_enable_wow_in_fw(WMA_HANDLE handle);

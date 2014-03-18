@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,6 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 /*===========================================================================
 
                        W L A N _ Q C T _ C T S . C
@@ -39,7 +40,6 @@
   DEPENDENCIES:
 
   Are listed for each API below.
-
 ===========================================================================*/
 
 /*===========================================================================
@@ -86,7 +86,7 @@
 #include "msm_smd.h"
 #endif
 
-/* Global context for CTS handle, it is required to keep this 
+/* Global context for CTS handle, it is required to keep this
  * transport open during SSR shutdown */
 static WCTS_HandleType gwctsHandle;
 /*----------------------------------------------------------------------------
@@ -433,7 +433,7 @@ WCTS_PALDataCallback
 } /*WCTS_PALDataCallback*/
 
 /**
- @brief    This helper function is used to clean up the pending 
+ @brief    This helper function is used to clean up the pending
            messages in the transport queue
 
  @param wctsHandlehandle:  transport handle
@@ -647,7 +647,7 @@ WCTS_OpenTransport
            WPAL_TRACE(eWLAN_MODULE_DAL_CTRL, eWLAN_PAL_TRACE_LEVEL_FATAL,
                    "WCTS_OpenTransport: Invalid magic.");
            return NULL;
-       }   
+       }
        pWCTSCb->wctsState = WCTS_STATE_OPEN;
 
        pWCTSCb->wctsNotifyCB((WCTS_HandleType)pWCTSCb,

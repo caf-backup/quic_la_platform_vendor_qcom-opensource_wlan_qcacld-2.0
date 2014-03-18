@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,19 +24,19 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
+
 #ifndef WLAN_QCT_WLANSAP_INTERNAL_H
 #define WLAN_QCT_WLANSAP_INTERNAL_H
 
 /*===========================================================================
 
-               W L A N   S A P  P A L   L A Y E R 
+               W L A N   S A P  P A L   L A Y E R
                        I N T E R N A L  A P I
 
 
 DESCRIPTION
-  This file contains the internal API exposed by the wlan SAP PAL layer 
+  This file contains the internal API exposed by the wlan SAP PAL layer
   module.
-
 ===========================================================================*/
 
 
@@ -69,8 +69,8 @@ when           who        what, where, why
 /*----------------------------------------------------------------------------
  * Include Files
  * -------------------------------------------------------------------------*/
-#include "vos_api.h" 
-#include "vos_packet.h" 
+#include "vos_api.h"
+#include "vos_packet.h"
 
 // Pick up the CSR API definitions
 #include "csrApi.h"
@@ -83,21 +83,28 @@ when           who        what, where, why
  * -------------------------------------------------------------------------*/
  #ifdef __cplusplus
  extern "C" {
- #endif 
- 
+ #endif
+
 
 /*----------------------------------------------------------------------------
  *  Defines
  * -------------------------------------------------------------------------*/
-#define SAP_DEBUG
-// Used to enable or disable security on the BT-AMP link 
-#define WLANSAP_SECURITY_ENABLED_STATE VOS_TRUE
-// How do I get SAP context from voss context? 
-#define VOS_GET_SAP_CB(ctx) vos_get_context( VOS_MODULE_ID_SAP, ctx) 
+//DFS Non Occupancy Period =30 minutes, in milliseconds
+#define SAP_DFS_NON_OCCUPANCY_PERIOD      (30 * 60 * 1000 )
 
-#define VOS_GET_HAL_CB(ctx) vos_get_context( VOS_MODULE_ID_PE, ctx) 
+#define SAP_DEBUG
+// Used to enable or disable security on the BT-AMP link
+#define WLANSAP_SECURITY_ENABLED_STATE VOS_TRUE
+// How do I get SAP context from voss context?
+#define VOS_GET_SAP_CB(ctx) vos_get_context( VOS_MODULE_ID_SAP, ctx)
+
+#define VOS_GET_HAL_CB(ctx) vos_get_context( VOS_MODULE_ID_PE, ctx)
 //MAC Address length
 #define ANI_EAPOL_KEY_RSN_NONCE_SIZE      32
+
+#define IS_ETSI_WEATHER_CH(_ch) ((_ch >= 120) && (_ch <= 130))
+#define DEFAULT_CAC_TIMEOUT (60 * 1000) //msecs - 1 min
+#define ETSI_WEATHER_CH_CAC_TIMEOUT (10 * 60 * 1000) //msecs - 10 min
 
 extern sRegulatoryChannel *regChannels;
 extern const tRfChannelProps rfChannels[NUM_RF_CHANNELS];
@@ -113,7 +120,7 @@ typedef struct sSapContext tSapContext;
 /*----------------------------------------------------------------------------
  *  Opaque SAP context Type Declaration
  * -------------------------------------------------------------------------*/
-// We were only using this syntax, when this was truly opaque. 
+// We were only using this syntax, when this was truly opaque.
 // (I.E., it was defined in a different file.)
 
 
@@ -121,6 +128,7 @@ typedef struct sSapContext tSapContext;
 typedef enum {
     eSAP_DISCONNECTED,
     eSAP_CH_SELECT,
+    eSAP_DFS_CAC_WAIT,
     eSAP_STARTING,
     eSAP_STARTED,
     eSAP_DISCONNECTING
@@ -137,13 +145,47 @@ typedef struct sSapQosCfg {
     v_U8_t              WmmIsEnabled;
 } tSapQosCfg;
 
+typedef enum {
+        eSAP_DFS_CHANNEL_USABLE,
+        eSAP_DFS_CHANNEL_AVAILABLE,
+        eSAP_DFS_CHANNEL_UNAVAILABLE
+}eSapDfsChanStatus_t;
+
+typedef struct sSapDfsNolInfo {
+    v_U8_t              dfs_channel_number;
+    eSapDfsChanStatus_t radar_status_flag;
+    unsigned long       radar_found_timestamp;
+}tSapDfsNolInfo;
+
+typedef struct sSapDfsInfo {
+    vos_timer_t         sap_dfs_cac_timer;
+    v_U8_t              sap_radar_found_status;
+    v_U8_t              is_dfs_cac_timer_running;
+
+    /*
+     * New channel to move to when a  Radar is
+     * detected on current Channel
+     */
+    v_U8_t              target_channel;
+    v_U8_t              last_radar_found_channel;
+    v_U8_t              ignore_cac;
+
+    /* Requests for Channel Switch Announcement IE
+     * generation and transmission
+     */
+    v_U8_t              csaIERequired;
+    v_U8_t              numCurrentRegDomainDfsChannels;
+    tSapDfsNolInfo      sapDfsChannelNolList[NUM_5GHZ_CHANNELS];
+
+}tSapDfsInfo;
+
 typedef struct sSapContext {
 
     vos_lock_t          SapGlobalLock;
 
     // Include the current channel of AP
     v_U32_t             channel;
- 
+
     // Include the SME(CSR) sessionId here
     v_U8_t              sessionId;
 
@@ -155,7 +197,7 @@ typedef struct sSapContext {
     // Include the associations MAC addresses
     v_U8_t              self_mac_addr[VOS_MAC_ADDRESS_LEN];
 
-    // Own SSID  
+    // Own SSID
     v_U8_t              ownSsid[MAX_SSID_LEN];
     v_U32_t             ownSsidLen;
 
@@ -163,7 +205,7 @@ typedef struct sSapContext {
     v_U8_t              ucSecEnabled;
 
     // Include the SME(CSR) context here
-    tCsrRoamProfile     csrRoamProfile; 
+    tCsrRoamProfile     csrRoamProfile;
     v_U32_t             csrRoamId;
 
     //Sap session
@@ -173,15 +215,15 @@ typedef struct sSapContext {
     tpWLAN_SAPEventCB   pfnSapEventCallback;
 
     // Include the enclosing VOSS context here
-    v_PVOID_t           pvosGCtx; 
+    v_PVOID_t           pvosGCtx;
 
     // Include the state machine structure here, state var that keeps track of state machine
     eSapFsmStates_t     sapsMachine;
 
-    // Actual storage for AP and self (STA) SSID 
+    // Actual storage for AP and self (STA) SSID
     tCsrSSIDInfo        SSIDList[2];
 
-    // Actual storage for AP bssid 
+    // Actual storage for AP bssid
     tCsrBssid           bssid;
 
     // Mac filtering settings
@@ -197,22 +239,37 @@ typedef struct sSapContext {
     v_PVOID_t         pUsrContext;
 
     v_U32_t           nStaWPARSnReqIeLength;
-    v_U8_t            pStaWpaRsnReqIE[MAX_ASSOC_IND_IE_LEN]; 
+    v_U8_t            pStaWpaRsnReqIE[MAX_ASSOC_IND_IE_LEN];
     tSirAPWPSIEs      APWPSIEs;
     tSirRSNie         APWPARSNIEs;
 
     v_U32_t           nStaAddIeLength;
-    v_U8_t            pStaAddIE[MAX_ASSOC_IND_IE_LEN]; 
+    v_U8_t            pStaAddIE[MAX_ASSOC_IND_IE_LEN];
     v_U8_t            *channelList;
     tSapChannelListInfo SapChnlList;
 
     // session to scan
     tANI_BOOLEAN        isScanSessionOpen;
+    /*
+     * This list of channels will hold 5Ghz enabled,DFS in the
+     * Current RegDomain.This list will be used to select a channel,
+     * for SAP to start including any DFS channel and also to select
+     * any random channel[5Ghz-(NON-DFS/DFS)],if SAP is operating
+     * on a DFS channel and a RADAR is detected on the channel.
+     */
+    tSapChannelListInfo SapAllChnlList;
+
+    //Information Required for SAP DFS Master mode
+    tSapDfsInfo         SapDfsInfo;
+
+    tANI_BOOLEAN       allBandScanned;
+    eCsrBand           currentPreferredBand;
+    eCsrBand           scanBandPreference;
 } *ptSapContext;
 
 
 /*----------------------------------------------------------------------------
- *  External declarations for global context 
+ *  External declarations for global context
  * -------------------------------------------------------------------------*/
 //  The main per-Physical Link (per WLAN association) context.
 extern ptSapContext  gpSapCtx;
@@ -220,13 +277,13 @@ extern ptSapContext  gpSapCtx;
 /*----------------------------------------------------------------------------
  *  SAP state machine event definition
  * -------------------------------------------------------------------------*/
-/* The event structure */ 
+/* The event structure */
 typedef struct sWLAN_SAPEvent {
     v_PVOID_t params;   /* A VOID pointer type for all possible inputs */
     v_U32_t   event;    /* State machine input event message */
     v_U32_t   u1;       /* introduced to handle csrRoamCompleteCallback roamStatus */
     v_U32_t   u2;       /* introduced to handle csrRoamCompleteCallback roamResult */
-} tWLAN_SAPEvent, *ptWLAN_SAPEvent; 
+} tWLAN_SAPEvent, *ptWLAN_SAPEvent;
 
 /*----------------------------------------------------------------------------
  * Function Declarations and Documentation
@@ -236,34 +293,34 @@ typedef struct sWLAN_SAPEvent {
 
   FUNCTION    WLANSAP_ScanCallback()
 
-  DESCRIPTION 
-    Callback for Scan (scan results) Events  
+  DESCRIPTION
+    Callback for Scan (scan results) Events
 
-  DEPENDENCIES 
-    NA. 
+  DEPENDENCIES
+    NA.
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
     tHalHandle:  the tHalHandle passed in with the scan request
     *p2: the second context pass in for the caller, opaque sap Handle here
     scanID:
-    status: Status of scan -success, failure or abort 
-   
+    status: Status of scan -success, failure or abort
+
   RETURN VALUE
-    The eHalStatus code associated with performing the operation  
+    The eHalStatus code associated with performing the operation
 
     eHAL_STATUS_SUCCESS:  Success
-  
-  SIDE EFFECTS 
+
+  SIDE EFFECTS
 
 ============================================================================*/
 eHalStatus
 WLANSAP_ScanCallback
 (
-  tHalHandle halHandle, 
+  tHalHandle halHandle,
   void *pContext,
-  v_U32_t scanID, 
+  v_U32_t scanID,
   eCsrScanStatus scanStatus
 );
 
@@ -271,13 +328,13 @@ WLANSAP_ScanCallback
 
   FUNCTION    WLANSAP_RoamCallback()
 
-  DESCRIPTION 
-    Callback for Roam (connection status) Events  
+  DESCRIPTION
+    Callback for Roam (connection status) Events
 
-  DEPENDENCIES 
-    NA. 
+  DEPENDENCIES
+    NA.
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
       pContext:  is the pContext passed in with the roam request
@@ -286,22 +343,22 @@ WLANSAP_ScanCallback
       roamId: is to identify the callback related roam request. 0 means unsolicited
       roamStatus: is a flag indicating the status of the callback
       roamResult: is the result
-   
+
   RETURN VALUE
-    The eHalStatus code associated with performing the operation  
+    The eHalStatus code associated with performing the operation
 
     eHAL_STATUS_SUCCESS:  Success
-  
-  SIDE EFFECTS 
-  
+
+  SIDE EFFECTS
+
 ============================================================================*/
 eHalStatus
 WLANSAP_RoamCallback
 (
-  void *pContext, 
+  void *pContext,
   tCsrRoamInfo *pCsrRoamInfo,
-  v_U32_t roamId, 
-  eRoamCmdStatus roamStatus, 
+  v_U32_t roamId,
+  eRoamCmdStatus roamStatus,
   eCsrRoamResult roamResult
 );
 
@@ -309,30 +366,30 @@ WLANSAP_RoamCallback
 
   FUNCTION    WLANSAP_CleanCB
 
-  DESCRIPTION 
+  DESCRIPTION
     Clear out all fields in the SAP context.
-    
-  DEPENDENCIES 
-    
-  PARAMETERS 
+
+  DEPENDENCIES
+
+  PARAMETERS
 
     IN
     pSapCtx:  pointer to the SAP control block
     freeFlag:   flag indicating whether to free any allocations.
 
   RETURN VALUE
-    The result code associated with performing the operation  
+    The result code associated with performing the operation
 
-    VOS_STATUS_E_FAULT:  pointer to SAP cb is NULL ; access would cause a page 
-                         fault  
-    VOS_STATUS_SUCCESS:  Everything is good :) 
+    VOS_STATUS_E_FAULT:  pointer to SAP cb is NULL ; access would cause a page
+                         fault
+    VOS_STATUS_SUCCESS:  Everything is good :)
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
-VOS_STATUS 
+VOS_STATUS
 WLANSAP_CleanCB
-( 
+(
   ptSapContext  pSapCtx,
   v_U32_t freeFlag /* If 0 do not empty */
 );
@@ -340,33 +397,33 @@ WLANSAP_CleanCB
 
   FUNCTION    WLANSapFsm
 
-  DESCRIPTION 
-    SAP forward state machine to handle the states of the SAP 
-    
-  DEPENDENCIES 
-    
-  PARAMETERS 
+  DESCRIPTION
+    SAP forward state machine to handle the states of the SAP
+
+  DEPENDENCIES
+
+  PARAMETERS
 
     IN
     sapContext:  pointer to the SAP control block
     sapEvent   : SAP event
     status : status of SAP state machine
-   
+
   RETURN VALUE
     Status of the SAP forward machine
 
-    VOS_STATUS_E_FAULT:  pointer to SAP cb is NULL ; access would cause a page 
-                         fault  
-    VOS_STATUS_SUCCESS:  Everything is good :) 
+    VOS_STATUS_E_FAULT:  pointer to SAP cb is NULL ; access would cause a page
+                         fault
+    VOS_STATUS_SUCCESS:  Everything is good :)
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 
 VOS_STATUS
 SapFsm
 (
-    ptSapContext sapContext, /* sapContext value */    
+    ptSapContext sapContext, /* sapContext value */
     ptWLAN_SAPEvent sapEvent, /* State machine event */
     v_U8_t *status    /* return the SAP status here */
 );
@@ -375,27 +432,27 @@ SapFsm
 
   FUNCTION    WLANSAP_pmcFullPwrReqCB
 
-  DESCRIPTION 
-    Callback provide to PMC in the pmcRequestFullPower API.     
-    
-  DEPENDENCIES 
-    
-  PARAMETERS 
+  DESCRIPTION
+    Callback provide to PMC in the pmcRequestFullPower API.
+
+  DEPENDENCIES
+
+  PARAMETERS
 
     IN
-    callbackContext:  The user passed in a context to identify 
-    status:           The halStatus     
-   
+    callbackContext:  The user passed in a context to identify
+    status:           The halStatus
+
   RETURN VALUE
     None
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
-void 
+void
 WLANSAP_pmcFullPwrReqCB
-( 
-  void *callbackContext, 
+(
+  void *callbackContext,
   eHalStatus status
 );
 
@@ -403,22 +460,22 @@ WLANSAP_pmcFullPwrReqCB
 
   FUNCTION    sapSelectChannel
 
-  DESCRIPTION 
+  DESCRIPTION
     Runs a algorithm to select the best channel to operate in for Soft AP in 2.4GHz band
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        halHandle : Pointer to HAL handle
        pSapCtx : Pointer to SAP context
        pResult : Pointer to tScanResultHandle
-   
+
   RETURN VALUE
     If SUCCESS channel number or zero for FAILURE.
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 
@@ -428,18 +485,18 @@ v_U8_t sapSelectChannel(tHalHandle halHandle, ptSapContext pSapCtx, tScanResultH
 
   FUNCTION    sapSignalHDDevent
 
-  DESCRIPTION 
+  DESCRIPTION
     SAP HDD event callback function
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        sapContext : Pointer to SAP handle
-       pCsrRoamInfo : csrRoamprofile 
+       pCsrRoamInfo : csrRoamprofile
        sapHddevent    : SAP HDD callback event
-   
+
   RETURN VALUE
     If SUCCESS or FAILURE.
 
@@ -454,12 +511,12 @@ sapSignalHDDevent( ptSapContext sapContext, tCsrRoamInfo * pCsrRoamInfo, eSapHdd
 
   FUNCTION    sapFsm
 
-  DESCRIPTION 
+  DESCRIPTION
     SAP Forward state machine
 
-  DEPENDENCIES 
-    
-  PARAMETERS 
+  DEPENDENCIES
+
+  PARAMETERS
 
     IN
        sapContext : Pointer to SAP handle
@@ -468,7 +525,7 @@ sapSignalHDDevent( ptSapContext sapContext, tCsrRoamInfo * pCsrRoamInfo, eSapHdd
  RETURN VALUE
     If SUCCESS or FAILURE.
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 VOS_STATUS
@@ -482,12 +539,12 @@ sapFsm
 
   FUNCTION    sapConvertToCsrProfile
 
-  DESCRIPTION 
+  DESCRIPTION
     sapConvertToCsrProfile
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        pconfig_params : Pointer to configuration structure
@@ -507,12 +564,12 @@ sapconvertToCsrProfile(tsap_Config_t *pconfig_params, eCsrRoamBssType bssType, t
 
   FUNCTION    sapFreeRoamProfile
 
-  DESCRIPTION 
+  DESCRIPTION
     sapConvertToCsrProfile
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        profile : pointer to a csrProfile that needs to be freed
@@ -529,12 +586,12 @@ void sapFreeRoamProfile(tCsrRoamProfile *profile);
 
   FUNCTION    sapIsPeerMacAllowed
 
-  DESCRIPTION 
+  DESCRIPTION
     Function to implement MAC filtering for station association in SoftAP
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        sapContext : Pointer to SAP handle
@@ -543,7 +600,7 @@ void sapFreeRoamProfile(tCsrRoamProfile *profile);
  RETURN VALUE
     If SUCCESS or FAILURE.
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 VOS_STATUS
@@ -553,12 +610,12 @@ sapIsPeerMacAllowed(ptSapContext sapContext, v_U8_t *peerMac);
 
   FUNCTION    sapSortMacList
 
-  DESCRIPTION 
+  DESCRIPTION
     Function to implement sorting of MAC addresses
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        macList : Pointer to mac address array
@@ -567,7 +624,7 @@ sapIsPeerMacAllowed(ptSapContext sapContext, v_U8_t *peerMac);
  RETURN VALUE
     None
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 void
@@ -608,13 +665,13 @@ sapAddMacToACL(v_MACADDR_t *macList, v_U8_t *size, v_U8_t *peerMac);
 
   FUNCTION    sapRemoveMacFromACL
 
-  DESCRIPTION 
+  DESCRIPTION
     Function to REMOVE a mac address from an ACL.
     The function ensures that the ACL list remains sorted after the DELETION.
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        macList          : ACL list of mac addresses (black/white list)
@@ -626,7 +683,7 @@ sapAddMacToACL(v_MACADDR_t *macList, v_U8_t *size, v_U8_t *peerMac);
  RETURN VALUE
     None.
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 void
@@ -636,13 +693,13 @@ sapRemoveMacFromACL(v_MACADDR_t *macList, v_U8_t *size, v_U8_t index);
 
   FUNCTION    sapPrintACL
 
-  DESCRIPTION 
+  DESCRIPTION
     Function to print all the mac address of an ACL.
     Useful for debug.
-    
-  DEPENDENCIES 
 
-  PARAMETERS 
+  DEPENDENCIES
+
+  PARAMETERS
 
     IN
        macList          : ACL list of mac addresses (black/white list)
@@ -651,28 +708,28 @@ sapRemoveMacFromACL(v_MACADDR_t *macList, v_U8_t *size, v_U8_t index);
  RETURN VALUE
     None.
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
-void 
+void
 sapPrintACL(v_MACADDR_t *macList, v_U8_t size);
 
 /*==========================================================================
 
   FUNCTION    sapSearchMacList
 
-  DESCRIPTION 
+  DESCRIPTION
     Function to search for a mac address in an ACL
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        macList          : list of mac addresses (black/white list)
        num_mac          : size of the ACL
        peerMac          : Mac address of the peer
-    OP       
+    OP
        index            : the index at which the peer mac is found
                               this value gets filled in this function. If the caller is not interested
                               in the index of the peerMac to be searched, it can pass NULL here.
@@ -681,7 +738,7 @@ sapPrintACL(v_MACADDR_t *macList, v_U8_t size);
     SUCCESS          : if the mac addr being searched for is found
     FAILURE          : if the mac addr being searched for is NOT found
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 eSapBool
@@ -692,12 +749,12 @@ sapSearchMacList(v_MACADDR_t *macList, v_U8_t num_mac, v_U8_t *peerMac, v_U8_t *
 
   FUNCTION    sap_AcquireGlobalLock
 
-  DESCRIPTION 
+  DESCRIPTION
     Function to implement acquire SAP global lock
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        sapContext : Pointer to SAP handle
@@ -706,7 +763,7 @@ sapSearchMacList(v_MACADDR_t *macList, v_U8_t num_mac, v_U8_t *peerMac, v_U8_t *
  RETURN VALUE
     If SUCCESS or FAILURE.
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 VOS_STATUS
@@ -716,12 +773,12 @@ sap_AcquireGlobalLock( ptSapContext  pSapCtx );
 
   FUNCTION    sapIsPeerMacAllowed
 
-  DESCRIPTION 
+  DESCRIPTION
     Function to implement release SAP global lock
 
-  DEPENDENCIES 
+  DEPENDENCIES
 
-  PARAMETERS 
+  PARAMETERS
 
     IN
        sapContext : Pointer to SAP handle
@@ -730,7 +787,7 @@ sap_AcquireGlobalLock( ptSapContext  pSapCtx );
  RETURN VALUE
     If SUCCESS or FAILURE.
 
-  SIDE EFFECTS 
+  SIDE EFFECTS
 
 ============================================================================*/
 VOS_STATUS
@@ -772,8 +829,27 @@ eCsrPhyMode sapConvertSapPhyModeToCsrPhyMode( eSapPhyMode sapPhyMode );
 void sapUpdateUnsafeChannelList(void);
 #endif /* FEATURE_WLAN_CH_AVOID */
 
+/*---------------------------------------------------------------------------
+FUNCTION  sapIndicateRadar
+
+DESCRIPTION Function to implement actions on Radar Detection when SAP is on
+            DFS Channel
+
+DEPENDENCIES PARAMETERS
+IN sapContext : Sap Context which hold SapDfsInfo
+   dfs_event : Event from DFS Module
+
+RETURN VALUE  : Target Channel For SAP to Move on to when Radar is Detected.
+
+SIDE EFFECTS
+---------------------------------------------------------------------------*/
+v_U8_t
+sapIndicateRadar(ptSapContext sapContext,tSirSmeDfsEventInd *dfs_event);
+
+VOS_STATUS
+sapInitDfsChannelNolList(ptSapContext sapContext);
+
 #ifdef __cplusplus
 }
-#endif 
+#endif
 #endif /* #ifndef WLAN_QCT_WLANSAP_INTERNAL_H */
-
