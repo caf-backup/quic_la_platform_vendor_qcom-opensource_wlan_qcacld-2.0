@@ -3,12 +3,18 @@
 # Assume no targets will be supported
 WLAN_CHIPSET :=
 
+ifneq (loki,$(TARGET_PRODUCT))
+ifneq (saturn,$(TARGET_PRODUCT))
+
 # Build/Package options for 8084/8092 target
 ifeq ($(call is-board-platform-in-list, apq8084 mpq8092),true)
 	WLAN_CHIPSET     := qca_cld
 	WLAN_SELECT      := CONFIG_QCA_CLD_WLAN=m
 	WLAN_ISOC_SELECT := CONFIG_QCA_WIFI_ISOC=0
 	WLAN_ISOC_SELECT += CONFIG_QCA_WIFI_2_0=1
+endif
+
+endif
 endif
 
 # Build/Package only in case of supported target

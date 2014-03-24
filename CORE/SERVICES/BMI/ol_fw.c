@@ -42,9 +42,6 @@
 #include "fw_one_bin.h"
 #include "bin_sig.h"
 
-//Temp fix to fix wlan load issue on Loki
-#undef CONFIG_CNSS
-
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC) && defined(CONFIG_CNSS)
 #include <net/cnss.h>
 #endif
