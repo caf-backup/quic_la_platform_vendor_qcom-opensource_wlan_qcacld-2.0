@@ -64,6 +64,9 @@
 #include <wlan_hdd_includes.h>
 #include <net/arp.h>
 #include <net/cfg80211.h>
+#ifdef CONFIG_CNSS
+#include <net/cnss.h>
+#endif
 #include <linux/wireless.h>
 #include <wlan_hdd_wowl.h>
 #include <aniGlobal.h>
@@ -103,6 +106,32 @@
 #define MAX_VHT_MCS_IDX 10
 #define GET_IE_LEN_IN_BSS_DESC(lenInBss) ( lenInBss + sizeof(lenInBss) - \
         ((uintptr_t)OFFSET_OF( tSirBssDescription, ieFields)))
+
+/* For IBSS, enable obss, fromllb, overlapOBSS & overlapFromllb protection
+   check. The bit map is defined in:
+
+    typedef struct sCfgProtection
+    {
+        tANI_U32 overlapFromlla:1;
+        tANI_U32 overlapFromllb:1;
+        tANI_U32 overlapFromllg:1;
+        tANI_U32 overlapHt20:1;
+        tANI_U32 overlapNonGf:1;
+        tANI_U32 overlapLsigTxop:1;
+        tANI_U32 overlapRifs:1;
+        tANI_U32 overlapOBSS:1;
+        tANI_U32 fromlla:1;
+        tANI_U32 fromllb:1;
+        tANI_U32 fromllg:1;
+        tANI_U32 ht20:1;
+        tANI_U32 nonGf:1;
+        tANI_U32 lsigTxop:1;
+        tANI_U32 rifs:1;
+        tANI_U32 obss:1;
+    }tCfgProtection, *tpCfgProtection;
+
+*/
+#define IBSS_CFG_PROTECTION_ENABLE_MASK 0x8282
 
 #define HDD2GHZCHAN(freq, chan, flag)   {     \
     .band =  IEEE80211_BAND_2GHZ, \
@@ -145,7 +174,7 @@ static const u32 hdd_cipher_suites[] =
     WLAN_CIPHER_SUITE_WEP40,
     WLAN_CIPHER_SUITE_WEP104,
     WLAN_CIPHER_SUITE_TKIP,
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
 #define WLAN_CIPHER_SUITE_KRK 0x004096ff /* use for KRK */
     WLAN_CIPHER_SUITE_KRK,
     WLAN_CIPHER_SUITE_CCMP,
@@ -267,7 +296,9 @@ static struct ieee80211_supported_band wlan_hdd_band_2_4_GHZ =
     .ht_cap.cap            =  IEEE80211_HT_CAP_SGI_20
                             | IEEE80211_HT_CAP_GRN_FLD
                             | IEEE80211_HT_CAP_DSSSCCK40
-                            | IEEE80211_HT_CAP_LSIG_TXOP_PROT,
+                            | IEEE80211_HT_CAP_LSIG_TXOP_PROT
+                            | IEEE80211_HT_CAP_SGI_40
+                            | IEEE80211_HT_CAP_SUP_WIDTH_20_40,
     .ht_cap.ampdu_factor   = IEEE80211_HT_MAX_AMPDU_64K,
     .ht_cap.ampdu_density  = IEEE80211_HT_MPDU_DENSITY_16,
     .ht_cap.mcs.rx_mask    = { 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
@@ -628,7 +659,7 @@ int wlan_hdd_send_avoid_freq_event(hdd_context_t *pHddCtx,
 
     vendor_event = cfg80211_vendor_event_alloc(pHddCtx->wiphy,
                        sizeof(tHddAvoidFreqList),
-                       QCOM_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_INDEX,
+                       QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_INDEX,
                        GFP_KERNEL);
     if (!vendor_event)
     {
@@ -652,11 +683,60 @@ static const struct nl80211_vendor_cmd_info wlan_hdd_cfg80211_vendor_events[] =
 {
 #ifdef FEATURE_WLAN_CH_AVOID
     {
-        .vendor_id = QCOM_NL80211_VENDOR_ID,
-        .subcmd = QCOM_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY
+        .vendor_id = QCA_NL80211_VENDOR_ID,
+        .subcmd = QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY
     },
 #endif /* FEATURE_WLAN_CH_AVOID */
 };
+
+int is_driver_dfs_capable(struct wiphy *wiphy, struct wireless_dev *wdev,
+                          void *data, int data_len)
+{
+    u32 dfs_capability;
+    struct sk_buff *temp_skbuff;
+    int ret_val;
+
+    dfs_capability = !!(wiphy->flags & WIPHY_FLAG_DFS_OFFLOAD);
+
+    temp_skbuff = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, sizeof(u32) +
+                                                      NLMSG_HDRLEN);
+
+    if (temp_skbuff != NULL)
+    {
+
+        ret_val = nla_put_u32(temp_skbuff, QCA_WLAN_VENDOR_ATTR_DFS,
+                              dfs_capability);
+        if (ret_val)
+        {
+            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                      "%s: QCA_WLAN_VENDOR_ATTR_DFS put fail", __func__);
+            kfree_skb(temp_skbuff);
+
+            return ret_val;
+        }
+
+        return cfg80211_vendor_cmd_reply(temp_skbuff);
+    }
+
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+              "%s: dfs capability: buffer alloc fail", __func__);
+    return -1;
+
+}
+
+
+const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
+{
+    {
+        .info.vendor_id = QCA_NL80211_VENDOR_ID,
+        .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_DFS_CAPABILITY,
+        .flags = WIPHY_VENDOR_CMD_NEED_WDEV |
+                 WIPHY_VENDOR_CMD_NEED_NETDEV |
+                 WIPHY_VENDOR_CMD_NEED_RUNNING,
+        .doit = is_driver_dfs_capable
+    }
+};
+
 
 /*
  * FUNCTION: wlan_hdd_cfg80211_wiphy_alloc
@@ -790,13 +870,13 @@ int wlan_hdd_cfg80211_init(struct device *dev,
     wiphy->wowlan.pattern_min_len = 1;
     wiphy->wowlan.pattern_max_len = WOWL_PTRN_MAX_SIZE;
 
-#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
     if (pCfg->isFastTransitionEnabled
 #ifdef FEATURE_WLAN_LFR
        || pCfg->isFastRoamIniFeatureEnabled
 #endif
-#ifdef FEATURE_WLAN_CCX
-       || pCfg->isCcxIniFeatureEnabled
+#ifdef FEATURE_WLAN_ESE
+       || pCfg->isEseIniFeatureEnabled
 #endif
     )
     {
@@ -927,9 +1007,13 @@ int wlan_hdd_cfg80211_init(struct device *dev,
     wiphy->max_remain_on_channel_duration = 1000;
 #endif
 
-    wiphy->n_vendor_commands = 0;
+    wiphy->n_vendor_commands = ARRAY_SIZE(hdd_wiphy_vendor_commands);
+    wiphy->vendor_commands = hdd_wiphy_vendor_commands;
+
     wiphy->vendor_events = wlan_hdd_cfg80211_vendor_events;
     wiphy->n_vendor_events = ARRAY_SIZE(wlan_hdd_cfg80211_vendor_events);
+
+    wiphy->flags |= WIPHY_FLAG_DFS_OFFLOAD;
 
     EXIT();
     return 0;
@@ -1909,6 +1993,38 @@ static int wlan_hdd_cfg80211_set_channel( struct wiphy *wiphy, struct net_device
     return status;
 }
 
+/*
+ * FUNCTION: wlan_hdd_set_acs_allowed_channels
+ * set only allowed channel for ACS
+ * input channel list is a string with comma separated
+ * channel number, the first number is the total number
+ * of channels specified. e.g. 4,1,6,9,36
+ */
+static void wlan_hdd_set_acs_allowed_channels(
+                                             char *acsAllowedChnls,
+                                             char *acsSapChnlList,
+                                             int length)
+{
+    char *p;
+
+    /* a white space is required at the beginning of the
+       string to be properly parsed by function
+       sapSetPreferredChannel later */
+    strlcpy(acsSapChnlList, " ", length);
+    strlcat(acsSapChnlList, acsAllowedChnls, length);
+    p = acsSapChnlList;
+    while (*p)
+    {
+        /* looking for comma, replace it with white space */
+        if (*p == ',')
+            *p = ' ';
+
+        p++;
+    }
+
+    return;
+}
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0))
 static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
                             struct beacon_parameters *params)
@@ -1965,6 +2081,15 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
 
     hddLog(VOS_TRACE_LEVEL_INFO_HIGH,"****pConfig->dtim_period=%d***\n",
                                       pConfig->dtim_period);
+
+    pConfig->enOverLapCh = !!pHddCtx->cfg_ini->gEnableOverLapCh;
+    if (strlen(iniConfig->acsAllowedChnls) > 0)
+    {
+        wlan_hdd_set_acs_allowed_channels(
+                                     iniConfig->acsAllowedChnls,
+                                     pConfig->acsAllowedChnls,
+                                     sizeof(pConfig->acsAllowedChnls));
+    }
 
     if (pHostapdAdapter->device_mode == WLAN_HDD_SOFTAP)
     {
@@ -2333,6 +2458,7 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
         pConfig->scanBandPreference = psmeConfig->csrConfig.scanBandPreference;
         vos_mem_free(psmeConfig);
     }
+    pConfig->acsBandSwitchThreshold = iniConfig->acsBandSwitchThreshold;
 
     pSapEventCallback = hdd_hostapd_SAPEventCB;
     if(WLANSAP_StartBss(pVosContext, pSapEventCallback, pConfig,
@@ -2778,7 +2904,6 @@ static int wlan_hdd_cfg80211_change_beacon(struct wiphy *wiphy,
 
 #endif //(LINUX_VERSION_CODE > KERNEL_VERSION(3,3,0))
 
-
 static int wlan_hdd_cfg80211_change_bss (struct wiphy *wiphy,
                                       struct net_device *dev,
                                       struct bss_parameters *params)
@@ -2787,12 +2912,21 @@ static int wlan_hdd_cfg80211_change_bss (struct wiphy *wiphy,
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     int ret = 0;
     eHalStatus halStatus;
+    v_CONTEXT_t pVosContext = pHddCtx->pvosContext;
+    ptSapContext pSapCtx = NULL;
 
     ENTER();
 
     hddLog(VOS_TRACE_LEVEL_INFO, "%s: device_mode = %d, ap_isolate = %d",
                                __func__,pAdapter->device_mode,
                                params->ap_isolate);
+    if (!pVosContext)
+        return -EINVAL;
+
+    pSapCtx = VOS_GET_SAP_CB(pVosContext);
+
+    if (!pSapCtx)
+        return -EINVAL;
 
     if((pAdapter->device_mode == WLAN_HDD_SOFTAP)
      ||  (pAdapter->device_mode == WLAN_HDD_P2P_GO)
@@ -2805,7 +2939,7 @@ static int wlan_hdd_cfg80211_change_bss (struct wiphy *wiphy,
             pAdapter->sessionCtx.ap.apDisableIntraBssFwd = !!params->ap_isolate;
 
             halStatus = sme_ApDisableIntraBssFwd(pHddCtx->hHal,
-                        pAdapter->sessionId,
+                        pSapCtx->sessionId,
                         pAdapter->sessionCtx.ap.apDisableIntraBssFwd);
             if (!HAL_STATUS_SUCCESS(halStatus))
             {
@@ -3734,7 +3868,7 @@ static int wlan_hdd_cfg80211_add_key( struct wiphy *wiphy,
             }
 #endif
 
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
         case WLAN_CIPHER_SUITE_KRK:
             setKey.encType = eCSR_ENCRYPT_TYPE_KRK;
             break;
@@ -4349,6 +4483,11 @@ static struct cfg80211_bss* wlan_hdd_cfg80211_inform_bss(
 #endif
 
     chan = __ieee80211_get_channel(wiphy, freq);
+
+    if (!chan) {
+       hddLog(VOS_TRACE_LEVEL_ERROR, "%s chan pointer is NULL", __func__);
+       return NULL;
+    }
 
     bss = cfg80211_get_bss(wiphy, chan, pBssDesc->bssId,
                            &roamProfile->SSID.ssId[0], roamProfile->SSID.length,
@@ -5736,7 +5875,7 @@ static int wlan_hdd_cfg80211_set_auth_type(hdd_adapter_t *pAdapter,
                     "%s: set authentication type to SHARED", __func__);
             pHddStaCtx->conn_info.authType = eCSR_AUTH_TYPE_SHARED_KEY;
             break;
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
         case NL80211_AUTHTYPE_NETWORK_EAP:
             hddLog(VOS_TRACE_LEVEL_INFO,
                             "%s: set authentication type to CCKM WPA", __func__);
@@ -5790,7 +5929,7 @@ static int wlan_hdd_set_akm_suite( hdd_adapter_t *pAdapter,
                     __func__);
             pWextState->authKeyMgmt |= IW_AUTH_KEY_MGMT_802_1X;
             break;
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
 #define WLAN_AKM_SUITE_CCKM         0x00409600 /* Should be in ieee802_11_defs.h */
 #define IW_AUTH_KEY_MGMT_CCKM       8  /* Should be in linux/wireless.h */
         case WLAN_AKM_SUITE_CCKM:
@@ -5862,7 +6001,7 @@ static int wlan_hdd_cfg80211_set_cipher( hdd_adapter_t *pAdapter,
             break;
 #endif
 
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
         case WLAN_CIPHER_SUITE_KRK:
             encryptionType = eCSR_ENCRYPT_TYPE_KRK;
             break;
@@ -6832,6 +6971,9 @@ static int wlan_hdd_cfg80211_join_ibss( struct wiphy *wiphy,
         return -EINVAL;
     }
 
+    /* enable selected protection checks in IBSS mode */
+    pRoamProfile->cfg_protection = IBSS_CFG_PROTECTION_ENABLE_MASK;
+
     /* BSSID is provided by upper layers hence no need to AUTO generate */
     if (NULL != params->bssid) {
        if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_IBSS_AUTO_BSSID, 0,
@@ -6861,6 +7003,17 @@ static int wlan_hdd_cfg80211_join_ibss( struct wiphy *wiphy,
                      (v_U8_t *)&pHddCtx->cfg_ini->IbssBssid.bytes[0],
                      VOS_MAC_ADDR_SIZE);
         alloc_bssid = VOS_TRUE;
+    }
+
+    if ((params->beacon_interval > CFG_BEACON_INTERVAL_MIN)
+        && (params->beacon_interval <= CFG_BEACON_INTERVAL_MAX))
+        pRoamProfile->beaconInterval = params->beacon_interval;
+    else {
+        pRoamProfile->beaconInterval = CFG_BEACON_INTERVAL_DEFAULT;
+        hddLog(VOS_TRACE_LEVEL_INFO_HIGH,
+                "%s: input beacon interval %d TU is invalid, use default %d TU",
+                __func__, params->beacon_interval,
+                pRoamProfile->beaconInterval);
     }
 
     /* Set Channel */
@@ -7379,14 +7532,19 @@ static int wlan_hdd_cfg80211_get_station(struct wiphy *wiphy, struct net_device 
     //convert to the UI units of 100kbps
     myRate = pAdapter->hdd_stats.ClassA_stat.tx_rate * 5;
 #ifdef QCA_WIFI_2_0
-    if (!(rate_flags & eHAL_TX_RATE_LEGACY) && myRate)
+    if (!(rate_flags & eHAL_TX_RATE_LEGACY))
     {
         nss = pAdapter->hdd_stats.ClassA_stat.rx_frag_cnt;
-        pAdapter->hdd_stats.ClassA_stat.mcs_index =
-                                  wlan_hdd_get_mcs_idx(myRate, rate_flags, nss);
-        hddLog(VOS_TRACE_LEVEL_DEBUG, "computed mcs idx %d from rate:%d",
+
+        if(myRate)
+        {
+            pAdapter->hdd_stats.ClassA_stat.mcs_index =
+                wlan_hdd_get_mcs_idx(myRate, rate_flags, nss);
+            hddLog(VOS_TRACE_LEVEL_DEBUG, "computed mcs idx %d from rate:%d",
                                      pAdapter->hdd_stats.ClassA_stat.mcs_index,
                                      myRate);
+        }
+
         myRate = 0;
     }
 #endif
@@ -7492,10 +7650,9 @@ static int wlan_hdd_cfg80211_get_station(struct wiphy *wiphy, struct net_device 
             maxRate = (currentRate > maxRate)?currentRate:maxRate;
         }
         /* Get MCS Rate Set --
-           only if we are connected at MCS rates (or)
-           if we are always reporting max speed  (or)
+           Only if we are always reporting max speed  (or)
            if we have good rssi */
-         if (((0 == rssidx) && !(rate_flags & eHAL_TX_RATE_LEGACY)) ||
+         if ((0 == rssidx) ||
               (eHDD_LINK_SPEED_REPORT_MAX == pCfg->reportMaxLinkSpeed))
         {
             if (0 != ccmCfgGetStr(WLAN_HDD_GET_HAL_CTX(pAdapter), WNI_CFG_CURRENT_MCS_SET,
@@ -7984,7 +8141,7 @@ static int wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *d
     tANI_U32 j=0;
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
     tHalHandle halHandle;
-    eHalStatus result;
+    eHalStatus result = eHAL_STATUS_SUCCESS;
     int status;
     tANI_U8  BSSIDMatched = 0;
     hdd_context_t *pHddCtx;
@@ -8062,7 +8219,7 @@ static int wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *d
     result = sme_RoamSetPMKIDCache(halHandle,pAdapter->sessionId,
                                     PMKIDCache,
                                     PMKIDCacheIndex);
-    return 0;
+    return HAL_STATUS_SUCCESS(result) ? 0 : -EINVAL;
 }
 
 
@@ -8076,7 +8233,7 @@ static int wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *d
     int status;
     tANI_U8  BSSIDMatched = 0;
     hdd_context_t *pHddCtx;
-    int result = 0;
+    eHalStatus result = eHAL_STATUS_SUCCESS;
 
     hddLog(VOS_TRACE_LEVEL_DEBUG, "%s: deleting PMKSA for " MAC_ADDRESS_STR,
            __func__, MAC_ADDR_ARRAY(pmksa->bssid));
@@ -8141,7 +8298,7 @@ static int wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *d
 
              /*delete the last PMKID cache in CSR*/
              result = sme_RoamDelPMKIDfromCache(halHandle, pAdapter->sessionId, pmksa->bssid);
-             if (0 != result)
+             if (!HAL_STATUS_SUCCESS(result))
              {
                 hddLog(VOS_TRACE_LEVEL_ERROR,"%s: cannot delete PMKSA %d CONTENT.",
                           __func__,PMKIDCacheIndex);
@@ -8164,7 +8321,8 @@ static int wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *d
        dump_pmkid(halHandle, pmksa->pmkid);
        return -EINVAL;
     }
-   return result;
+
+    return HAL_STATUS_SUCCESS(result) ? 0 : -EINVAL;
 }
 
 
@@ -8177,6 +8335,7 @@ static int wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device 
     hdd_context_t *pHddCtx;
     tANI_U8 *pBSSId;
     int status = -1;
+    eHalStatus result = eHAL_STATUS_SUCCESS;
 
     hddLog(VOS_TRACE_LEVEL_DEBUG, "%s: flushing PMKSA ",__func__);
 
@@ -8215,9 +8374,9 @@ static int wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device 
           pBSSId =(tANI_U8 *)(PMKIDCache[j].BSSID);
 
           /*delete the PMKID in CSR*/
-          status = sme_RoamDelPMKIDfromCache(halHandle, pAdapter->sessionId, pBSSId);
+          result = sme_RoamDelPMKIDfromCache(halHandle, pAdapter->sessionId, pBSSId);
 
-          if (0 != status)
+          if (!HAL_STATUS_SUCCESS(result))
           {
              hddLog(VOS_TRACE_LEVEL_ERROR ,"%s cannot flush PMKIDCache %d.",
                     __func__,j);
@@ -8228,7 +8387,8 @@ static int wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device 
       }
 
     PMKIDCacheIndex = 0;
-    return status;
+
+    return HAL_STATUS_SUCCESS(result) ? 0 : -EINVAL;
 }
 #endif
 
@@ -8256,7 +8416,7 @@ static int wlan_hdd_cfg80211_update_ft_ies(struct wiphy *wiphy,
     }
 
 #ifdef WLAN_FEATURE_VOWIFI_11R_DEBUG
-    hddLog(LOGE, FL("%s called with Ie of length = %zu\n"), __func__,
+    hddLog(LOG1, FL("%s called with Ie of length = %zu\n"), __func__,
            ftie->ie_len);
 #endif
 
@@ -8827,7 +8987,7 @@ static int wlan_hdd_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *d
 
 #ifdef WLAN_FEATURE_TDLS_DEBUG
     VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-               "%s: " MAC_ADDRESS_STR " action %d, dialog_token %d status %d, len = %d",
+               "%s: " MAC_ADDRESS_STR " action %d, dialog_token %d status %d, len = %zu",
                "tdls_mgmt", MAC_ADDR_ARRAY(peer),
                action_code, dialog_token, status_code, len);
 #endif
@@ -8845,7 +9005,7 @@ static int wlan_hdd_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *d
        else
        {
            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                    "%s: " MAC_ADDRESS_STR " peer doesn't exist or not connected %d dialog_token %d status %d, len = %d",
+                    "%s: " MAC_ADDRESS_STR " peer doesn't exist or not connected %d dialog_token %d status %d, len = %zu",
                     __func__, MAC_ADDR_ARRAY(peer), (NULL == pTdlsPeer) ? -1 : pTdlsPeer->link_status,
                      dialog_token, status_code, len);
            return -EPERM;
@@ -9637,7 +9797,7 @@ void wlan_hdd_testmode_rx_event(void *buf, size_t buf_len)
 
     if (!buf || !buf_len) {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                  "%s: buf or buf_len invalid, buf = %p buf_len = %d",
+                  "%s: buf or buf_len invalid, buf = %p buf_len = %zu",
                   __func__, buf, buf_len);
         return;
     }
@@ -9829,6 +9989,10 @@ int wlan_hdd_cfg80211_resume_wlan(struct wiphy *wiphy)
         return 0;
     }
 
+#ifdef CONFIG_CNSS
+    cnss_request_bus_bandwidth(CNSS_BUS_WIDTH_MEDIUM);
+#endif
+
 #ifdef QCA_WIFI_2_0
     /* Resume MC thread */
     complete(&vosSchedContext->ResumeMcEvent);
@@ -9996,6 +10160,10 @@ int wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 #endif
 
     pHddCtx->isWiphySuspended = TRUE;
+
+#ifdef CONFIG_CNSS
+    cnss_request_bus_bandwidth(CNSS_BUS_WIDTH_NONE);
+#endif
 
     EXIT();
     return 0;

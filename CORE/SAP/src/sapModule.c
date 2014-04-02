@@ -573,6 +573,7 @@ WLANSAP_StartBss
     ptSapContext  pSapCtx = NULL;
     tANI_BOOLEAN restartNeeded;
     tHalHandle hHal;
+    int ret;
 
     /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -*/
 
@@ -597,7 +598,19 @@ WLANSAP_StartBss
         /* Channel selection is auto or configured */
         pSapCtx->channel = pConfig->channel;
         pSapCtx->scanBandPreference = pConfig->scanBandPreference;
+        pSapCtx->acsBandSwitchThreshold = pConfig->acsBandSwitchThreshold;
         pSapCtx->pUsrContext = pUsrContext;
+
+        pSapCtx->enableOverLapCh = pConfig->enOverLapCh;
+        if (strlen(pConfig->acsAllowedChnls) > 0)
+        {
+            ret = sapSetPreferredChannel(pConfig->acsAllowedChnls);
+            if (0 != ret)
+            {
+                VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                       "%s: ACS set preferred channel failed!", __func__);
+            }
+        }
 
         //Set the BSSID to your "self MAC Addr" read the mac address from Configuation ITEM received from HDD
         pSapCtx->csrRoamProfile.BSSIDs.numOfBSSIDs = 1;
@@ -1328,7 +1341,7 @@ WLANSAP_DeauthSta
 ============================================================================*/
 VOS_STATUS
 WLANSAP_SetChannelRange(tHalHandle hHal,v_U8_t startChannel, v_U8_t endChannel,
-                              v_U8_t operatingBand)
+                              eSapOperatingBand operatingBand)
 {
 
     v_U8_t    validChannelFlag =0;
@@ -1367,23 +1380,28 @@ WLANSAP_SetChannelRange(tHalHandle hHal,v_U8_t startChannel, v_U8_t endChannel,
     }
     switch(operatingBand)
     {
-       case RF_SUBBAND_2_4_GHZ:
+       case eSAP_RF_SUBBAND_2_4_GHZ:
           bandStartChannel = RF_CHAN_1;
           bandEndChannel = RF_CHAN_14;
           break;
 
-       case RF_SUBBAND_5_LOW_GHZ:
+       case eSAP_RF_SUBBAND_5_LOW_GHZ:
           bandStartChannel = RF_CHAN_36;
           bandEndChannel = RF_CHAN_64;
           break;
 
-       case RF_SUBBAND_5_MID_GHZ:
+       case eSAP_RF_SUBBAND_5_MID_GHZ:
           bandStartChannel = RF_CHAN_100;
           bandEndChannel = RF_CHAN_140;
           break;
 
-       case RF_SUBBAND_5_HIGH_GHZ:
+       case eSAP_RF_SUBBAND_5_HIGH_GHZ:
           bandStartChannel = RF_CHAN_149;
+          bandEndChannel = RF_CHAN_165;
+          break;
+
+       case eSAP_RF_SUBBAND_5_ALL_GHZ:
+          bandStartChannel = RF_CHAN_36;
           bandEndChannel = RF_CHAN_165;
           break;
 
@@ -2412,8 +2430,9 @@ WLANSAP_ChannelChangeRequest(v_PVOID_t pSapCtx, tANI_U8 tArgetChannel)
         return VOS_STATUS_E_FAULT;
     }
 
-    halStatus = sme_RoamChannelChangeReq( hHal, sapContext->sessionId, tArgetChannel,
-                sapConvertSapPhyModeToCsrPhyMode(sapContext->csrRoamProfile.phyMode));
+    halStatus = sme_RoamChannelChangeReq( hHal, sapContext->bssid,
+       tArgetChannel,
+       sapConvertSapPhyModeToCsrPhyMode(sapContext->csrRoamProfile.phyMode) );
 
     if (halStatus == eHAL_STATUS_SUCCESS)
     {
@@ -2478,7 +2497,7 @@ VOS_STATUS WLANSAP_StartBeaconReq(v_PVOID_t pSapCtx)
        /* CAC Wait done without any Radar Detection */
        dfsCacWaitStatus = VOS_TRUE;
        halStatus = sme_RoamStartBeaconReq( hHal,
-                   sapContext->sessionId, dfsCacWaitStatus);
+                   sapContext->bssid, dfsCacWaitStatus);
        if (halStatus == eHAL_STATUS_SUCCESS)
        {
            return VOS_STATUS_SUCCESS;
@@ -2532,9 +2551,11 @@ WLANSAP_DfsSendCSAIeRequest(v_PVOID_t pSapCtx)
         return VOS_STATUS_E_FAULT;
     }
 
-    halStatus = sme_RoamCsaIeRequest(hHal, sapContext->sessionId,
+    halStatus = sme_RoamCsaIeRequest(hHal,
+                              sapContext->bssid,
                               sapContext->SapDfsInfo.target_channel,
                               sapContext->SapDfsInfo.csaIERequired);
+
     if (halStatus == eHAL_STATUS_SUCCESS)
     {
         return VOS_STATUS_SUCCESS;

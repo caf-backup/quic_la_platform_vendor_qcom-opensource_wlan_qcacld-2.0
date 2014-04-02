@@ -50,9 +50,10 @@ ifeq ($(KERNEL_BUILD), 0)
 
 endif
 
-# To enable CCX upload, dependent config
-# CONFIG_QCOM_CCX must be enabled.
-CONFIG_QCOM_CCX_UPLOAD := n
+# To enable ESE upload, dependent config
+# CONFIG_QCOM_ESE must be enabled.
+CONFIG_QCOM_ESE := n
+CONFIG_QCOM_ESE_UPLOAD := n
 
 # Feature flags which are not (currently) configurable via Kconfig
 
@@ -332,9 +333,9 @@ MAC_LIM_OBJS := $(MAC_SRC_DIR)/pe/lim/limAIDmgmt.o \
 		$(MAC_SRC_DIR)/pe/lim/limTrace.o \
 		$(MAC_SRC_DIR)/pe/lim/limUtils.o
 
-ifeq ($(CONFIG_QCOM_CCX),y)
-ifneq ($(CONFIG_QCOM_CCX_UPLOAD),y)
-MAC_LIM_OBJS += $(MAC_SRC_DIR)/pe/lim/limProcessCcxFrame.o
+ifeq ($(CONFIG_QCOM_ESE),y)
+ifneq ($(CONFIG_QCOM_ESE_UPLOAD),y)
+MAC_LIM_OBJS += $(MAC_SRC_DIR)/pe/lim/limProcessEseFrame.o
 endif
 endif
 
@@ -413,9 +414,9 @@ SME_CSR_OBJS := $(SME_SRC_DIR)/csr/csrApiRoam.o \
 		$(SME_SRC_DIR)/csr/csrNeighborRoam.o \
 		$(SME_SRC_DIR)/csr/csrUtil.o
 
-ifeq ($(CONFIG_QCOM_CCX),y)
-ifneq ($(CONFIG_QCOM_CCX_UPLOAD),y)
-SME_CSR_OBJS += $(SME_SRC_DIR)/csr/csrCcx.o
+ifeq ($(CONFIG_QCOM_ESE),y)
+ifneq ($(CONFIG_QCOM_ESE_UPLOAD),y)
+SME_CSR_OBJS += $(SME_SRC_DIR)/csr/csrEse.o
 endif
 endif
 
@@ -838,6 +839,7 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DWLAN_PERF \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
+		-Werror\
 		-D__linux__ \
 		-DHAL_SELF_STA_PER_BSS=1 \
 		-DWLAN_FEATURE_VOWIFI_11R \
@@ -870,6 +872,7 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DFEATURE_WLAN_PAL_MEM_DISABLE \
                 -DQCA_SUPPORT_TXRX_VDEV_PAUSE_LL \
 		-DQCA_SUPPORT_TX_THROTTLE_LL \
+		-DWMI_INTERFACE_EVENT_LOGGING\
 
 ifeq ($(CONFIG_ARCH_MSM), y)
 CDEFINES += -DMSM_PLATFORM
@@ -879,8 +882,14 @@ ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
 CDEFINES +=	-DWLANTL_DEBUG
 else
 CDEFINES +=	-DOSIF_NEED_RX_PEER_ID \
-		-DQCA_SUPPORT_TXRX_LOCAL_PEER_ID \
-		-DQCA_PKT_PROTO_TRACE
+		-DQCA_SUPPORT_TXRX_LOCAL_PEER_ID
+CDEFINES +=	-DQCA_LL_TX_FLOW_CT
+endif
+
+ifeq ($(CONFIG_QCA_WIFI_2_0), 1)
+ifeq ($(CONFIG_DEBUG_LL),y)
+CDEFINES +=    	-DQCA_PKT_PROTO_TRACE
+endif
 endif
 
 ifneq ($(CONFIG_QCA_CLD_WLAN),)
@@ -912,12 +921,12 @@ CDEFINES += -DUSE_80211_WMMTSPEC_FOR_RIC
 endif
 endif
 
-ifeq ($(CONFIG_QCOM_CCX),y)
-CDEFINES += -DFEATURE_WLAN_CCX
+ifeq ($(CONFIG_QCOM_ESE),y)
+CDEFINES += -DFEATURE_WLAN_ESE
 CDEFINES += -DQCA_COMPUTE_TX_DELAY
 CDEFINES += -DQCA_COMPUTE_TX_DELAY_PER_TID
-ifeq ($(CONFIG_QCOM_CCX_UPLOAD),y)
-CDEFINES += -DFEATURE_WLAN_CCX_UPLOAD
+ifeq ($(CONFIG_QCOM_ESE_UPLOAD),y)
+CDEFINES += -DFEATURE_WLAN_ESE_UPLOAD
 endif
 endif
 
@@ -1108,6 +1117,11 @@ endif
 ifeq ($(CONFIG_SMP),y)
 CDEFINES += -DQCA_CONFIG_SMP
 endif
+endif
+
+#enable wlan auto shutdown feature for mdm9630
+ifeq ($(CONFIG_ARCH_MDM9630), y)
+CDEFINES += -DFEATURE_WLAN_AUTO_SHUTDOWN
 endif
 
 #Open P2P device interface only for non-MDM9630 platform

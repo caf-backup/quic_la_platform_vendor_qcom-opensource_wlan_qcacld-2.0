@@ -898,7 +898,7 @@ static void hdd_ipa_i2w_cb(void *priv, enum ipa_dp_evt_type evt,
 		skb = WLANTL_SendIPA_DataFrame(hdd_ipa->hdd_ctx->pvosContext,
 				iface_context->tl_context, ipa_tx_desc->skb);
 		if (skb) {
-			HDD_IPA_LOG(VOS_TRACE_LEVEL_FATAL, "TLSHIM tx fail");
+			HDD_IPA_LOG(VOS_TRACE_LEVEL_DEBUG, "TLSHIM tx fail");
 			ipa_free_skb(ipa_tx_desc);
 			return;
 		}
@@ -912,18 +912,34 @@ static int hdd_ipa_setup_sys_pipe(struct hdd_ipa_priv *hdd_ipa)
 {
 	int i, ret = 0;
 	struct ipa_sys_connect_params *ipa;
+	uint32_t desc_fifo_sz;
+
+	/* The maximum number of descriptors that can be provided to a BAM at
+	 * once is one less than the total number of descriptors that the buffer
+	 * can contain.
+	 * If max_num_of_descriptors = (BAM_PIPE_DESCRIPTOR_FIFO_SIZE / sizeof
+	 * (SPS_DESCRIPTOR)), then (max_num_of_descriptors - 1) descriptors can
+	 * be provided at once.
+	 * Because of above requirement, one extra descriptor will be added to
+	 * make sure hardware always has one descriptor.
+	 */
+	desc_fifo_sz = hdd_ipa->hdd_ctx->cfg_ini->IpaDescSize
+                        + sizeof(struct sps_iovec);
 
 	/*setup TX pipes */
 	for (i = 0; i < HDD_IPA_MAX_IFACE; i++) {
 		ipa = &hdd_ipa->sys_pipe[i].ipa_sys_params;
 
 		ipa->client = hdd_ipa_adapter_2_client[i].cons_client;
-		ipa->desc_fifo_sz = hdd_ipa->hdd_ctx->cfg_ini->IpaDescSize;
+		ipa->desc_fifo_sz = desc_fifo_sz;
 		ipa->priv = &hdd_ipa->iface_context[i];
 		ipa->notify = hdd_ipa_i2w_cb;
 
 		ipa->ipa_ep_cfg.hdr.hdr_len = HDD_IPA_WLAN_TX_HDR_LEN;
 		ipa->ipa_ep_cfg.mode.mode = IPA_BASIC;
+
+		if (!hdd_ipa_is_rm_enabled(hdd_ipa))
+			ipa->keep_ipa_awake = 1;
 
 		ret = ipa_setup_sys_pipe(ipa, &(hdd_ipa->sys_pipe[i].conn_hdl));
 		if (ret) {
@@ -944,17 +960,7 @@ static int hdd_ipa_setup_sys_pipe(struct hdd_ipa_priv *hdd_ipa)
 
 	ipa->client = hdd_ipa->prod_client;
 
-	/* The maximum number of descriptors that can be provided to a BAM at
-	 * once is one less than the total number of descriptors that the buffer
-	 * can contain.
-	 * If max_num_of_descriptors = (BAM_PIPE_DESCRIPTOR_FIFO_SIZE / sizeof
-	 * (SPS_DESCRIPTOR)), then (max_num_of_descriptors - 1) descriptors can
-	 * be provided at once.
-	 * Because of above requirement, one extra descriptor will be added to
-	 * make sure hardware always has one descriptor.
-	 */
-	ipa->desc_fifo_sz = hdd_ipa->hdd_ctx->cfg_ini->IpaDescSize
-		+ sizeof(struct sps_iovec);
+	ipa->desc_fifo_sz = desc_fifo_sz;
 	ipa->priv = hdd_ipa;
 	ipa->notify = hdd_ipa_w2i_cb;
 
@@ -962,6 +968,9 @@ static int hdd_ipa_setup_sys_pipe(struct hdd_ipa_priv *hdd_ipa)
 	ipa->ipa_ep_cfg.hdr.hdr_len = HDD_IPA_WLAN_RX_HDR_LEN;
 	ipa->ipa_ep_cfg.hdr.hdr_ofst_metadata_valid = 1;
 	ipa->ipa_ep_cfg.mode.mode = IPA_BASIC;
+
+	if (!hdd_ipa_is_rm_enabled(hdd_ipa))
+		ipa->keep_ipa_awake = 1;
 
 	ret = ipa_setup_sys_pipe(ipa, &(hdd_ipa->sys_pipe[i].conn_hdl));
 	if (ret) {
