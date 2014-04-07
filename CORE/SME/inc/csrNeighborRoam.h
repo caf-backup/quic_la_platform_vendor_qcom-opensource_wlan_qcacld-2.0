@@ -71,6 +71,9 @@ typedef struct sCsrNeighborRoamCfgParams
     tANI_U16        emptyScanRefreshPeriod;
     tANI_U8         nOpportunisticThresholdDiff;
     tANI_U8         nRoamRescanRssiDiff;
+    tANI_U8         nRoamBmissFirstBcnt;
+    tANI_U8         nRoamBmissFinalBcnt;
+    tANI_U8         nRoamBeaconRssiWeight;
 } tCsrNeighborRoamCfgParams, *tpCsrNeighborRoamCfgParams;
 
 #define CSR_NEIGHBOR_ROAM_INVALID_CHANNEL_INDEX    255
@@ -182,8 +185,8 @@ typedef struct sCsrNeighborRoamControlInfo
     tANI_BOOLEAN                is11rAssoc;
     tCsr11rAssocNeighborInfo    FTRoamInfo;
 #endif /* WLAN_FEATURE_VOWIFI_11R */
-#ifdef FEATURE_WLAN_CCX
-    tANI_BOOLEAN                isCCXAssoc;
+#ifdef FEATURE_WLAN_ESE
+    tANI_BOOLEAN                isESEAssoc;
     tANI_BOOLEAN                isVOAdmitted;
     tANI_U32                    MinQBssLoadRequired;
 #endif
@@ -205,6 +208,9 @@ typedef struct sCsrNeighborRoamControlInfo
 #endif
     tSmeFastRoamTrigger         cfgRoamEn;
     tSirMacAddr                 cfgRoambssId;
+    tANI_U8                     currentRoamBmissFirstBcnt;
+    tANI_U8                     currentRoamBmissFinalBcnt;
+    tANI_U8                     currentRoamBeaconRssiWeight;
 } tCsrNeighborRoamControlInfo, *tpCsrNeighborRoamControlInfo;
 
 
@@ -236,8 +242,17 @@ csrNeighborRoamSetOpportunisticScanThresholdDiff(tpAniSirGlobal pMac,
 VOS_STATUS
 csrNeighborRoamSetRoamRescanRssiDiff(tpAniSirGlobal pMac,
                                      v_U8_t nRoamRescanRssiDiff);
+VOS_STATUS
+csrNeighborRoamSetRoamBmissFirstBcnt(tpAniSirGlobal pMac,
+                                     v_U8_t nRoamBmissFirstBcnt);
+VOS_STATUS
+csrNeighborRoamSetRoamBmissFinalBcnt(tpAniSirGlobal pMac,
+                                     v_U8_t nRoamBmissFinalBcnt);
+VOS_STATUS
+csrNeighborRoamSetRoamBeaconRssiWeight(tpAniSirGlobal pMac,
+                                     v_U8_t nRoamBeaconRssiWeight);
 VOS_STATUS csrNeighborRoamUpdateFastRoamingEnabled(tpAniSirGlobal pMac, const v_BOOL_t fastRoamEnabled);
-VOS_STATUS csrNeighborRoamUpdateCcxModeEnabled(tpAniSirGlobal pMac, const v_BOOL_t ccxMode);
+VOS_STATUS csrNeighborRoamUpdateEseModeEnabled(tpAniSirGlobal pMac, const v_BOOL_t eseMode);
 VOS_STATUS csrNeighborRoamChannelsFilterByCurrentBand(
                       tpAniSirGlobal pMac,
                       tANI_U8*  pInputChannelList,
@@ -266,7 +281,7 @@ VOS_STATUS csrNeighborRoamMergeChannelLists(tpAniSirGlobal pMac,
 #define REASON_LOOKUP_THRESH_CHANGED                3
 #define REASON_DISCONNECTED                         4
 #define REASON_RSSI_DIFF_CHANGED                    5
-#define REASON_CCX_INI_CFG_CHANGED                  6
+#define REASON_ESE_INI_CFG_CHANGED                  6
 #define REASON_NEIGHBOR_SCAN_REFRESH_PERIOD_CHANGED 7
 #define REASON_VALID_CHANNEL_LIST_CHANGED           8
 #define REASON_FLUSH_CHANNEL_LIST                   9
@@ -280,6 +295,9 @@ VOS_STATUS csrNeighborRoamMergeChannelLists(tpAniSirGlobal pMac,
 #define REASON_SCAN_HOME_TIME_CHANGED               17
 #define REASON_OPPORTUNISTIC_THRESH_DIFF_CHANGED    18
 #define REASON_ROAM_RESCAN_RSSI_DIFF_CHANGED        19
+#define REASON_ROAM_BMISS_FIRST_BCNT_CHANGED        20
+#define REASON_ROAM_BMISS_FINAL_BCNT_CHANGED        21
+#define REASON_ROAM_BEACON_RSSI_WEIGHT_CHANGED      22
 eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 command, tANI_U8 reason);
 eHalStatus csrNeighborRoamCandidateFoundIndHdlr(tpAniSirGlobal pMac, void* pMsg);
 eHalStatus csrNeighborRoamHandoffReqHdlr(tpAniSirGlobal pMac, void* pMsg);
@@ -288,12 +306,12 @@ eHalStatus csrNeighborRoamSssidScanDone(tpAniSirGlobal pMac, eHalStatus status);
 eHalStatus csrNeighborRoamStartLfrScan(tpAniSirGlobal pMac);
 #endif
 
-#if defined(FEATURE_WLAN_CCX) && defined(FEATURE_WLAN_CCX_UPLOAD)
+#if defined(FEATURE_WLAN_ESE) && defined(FEATURE_WLAN_ESE_UPLOAD)
 VOS_STATUS csrSetCCKMIe(tpAniSirGlobal pMac, const tANI_U8 sessionId,
                             const tANI_U8 *pCckmIe,
                             const tANI_U8 ccKmIeLen);
 VOS_STATUS csrRoamReadTSF(tpAniSirGlobal pMac, tANI_U8 *pTimestamp);
-#endif /*FEATURE_WLAN_CCX && FEATURE_WLAN_CCX_UPLOAD */
+#endif /*FEATURE_WLAN_ESE && FEATURE_WLAN_ESE_UPLOAD */
 
 #endif /* WLAN_FEATURE_NEIGHBOR_ROAMING */
 

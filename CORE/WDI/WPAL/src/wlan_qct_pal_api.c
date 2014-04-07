@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -46,7 +46,7 @@
 #include "vos_api.h"
 
 #include "dma-mapping.h"
-#include <mach/subsystem_restart.h>
+#include <soc/qcom/subsystem_restart.h>
 #include <linux/wcnss_wlan.h>
 
 typedef struct sPalStruct
@@ -429,3 +429,20 @@ void wpalFwDumpReq(wpt_uint32 cmd, wpt_uint32 arg1, wpt_uint32 arg2,
    vos_fwDumpReq(cmd, arg1, arg2, arg3, arg4);
    return;
 }
+
+/*---------------------------------------------------------------------------
+    wpalDevicePanic -  Trigger Device Panic
+       Trigger device panic to help debug
+
+    Param:
+       NONE
+
+    Return:
+       NONE
+---------------------------------------------------------------------------*/
+void wpalDevicePanic(void)
+{
+   BUG_ON(0);
+   return;
+}
+

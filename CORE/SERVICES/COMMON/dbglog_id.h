@@ -719,7 +719,10 @@ extern "C" {
 #define RESOURCE_PEER_ALLOC                         1
 #define RESOURCE_PEER_FREE                          2
 #define RESOURCE_PEER_ALLOC_WAL_PEER                3
-#define RESOURCE_DBGID_DEFINITION_END               4
+#define RESOURCE_PEER_NBRHOOD_MGMT_ALLOC            4
+#define RESOURCE_PEER_NBRHOOD_MGMT_INFO             5
+#define RESOURCE_DBGID_DEFINITION_END               6
+
 /* DCS debug IDs*/
 #define WLAN_DCS_DBGID_INIT                         0
 #define WLAN_DCS_DBGID_WMI_CWINT                    1
@@ -819,7 +822,14 @@ extern "C" {
 #define WOW_AP_VDEV_DISALLOW    11
 #define WOW_STA_VDEV_DISALLOW   12
 #define WOW_P2PGO_VDEV_DISALLOW 13
-#define WOW_DBGID_DEFINITION_END 14
+#define WOW_NS_OFLD_ENABLE       14
+#define WOW_ARP_OFLD_ENABLE      15
+#define WOW_NS_ARP_OFLD_DISABLE  16
+#define WOW_NS_RECEIVED          17
+#define WOW_NS_REPLIED           18
+#define WOW_ARP_RECEIVED         19
+#define WOW_ARP_REPLIED          20
+#define WOW_DBGID_DEFINITION_END 21
 
 /* SWBMISS module DBGIDs */
 #define SWBMISS_DBGID_DEFINITION_START  0
@@ -860,7 +870,9 @@ extern "C" {
 #define ROAM_CANCEL_LOW_PRIO_SCAN 29
 #define ROAM_FINAL_BMISS_RECVD    30
 #define ROAM_CONFIG_SCAN_MODE     31
-#define ROAM_DBGID_DEFINITION_END 32
+#define ROAM_BMISS_FINAL_SCAN_ENABLE 32
+#define ROAM_SUITABLE_AP_EVENT    33
+#define ROAM_DBGID_DEFINITION_END 34
 
 /* DATA_TXRX module DBGIDs*/
 #define DATA_TXRX_DBGID_DEFINITION_START         0

@@ -56,6 +56,7 @@
 #include <linux/init.h>
 #include <linux/wireless.h>
 #include <linux/semaphore.h>
+#include <linux/compat.h>
 #include <vos_api.h>
 #include <vos_sched.h>
 #include <linux/etherdevice.h>
@@ -207,100 +208,186 @@ int hdd_hostapd_change_mtu(struct net_device *dev, int new_mtu)
     return 0;
 }
 
-int hdd_hostapd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+static int hdd_hostapd_driver_command(hdd_adapter_t *pAdapter,
+                                      hdd_priv_data_t *priv_data)
 {
-    hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
-    hdd_priv_data_t priv_data;
-    tANI_U8 *command = NULL;
-    int ret = 0;
+   tANI_U8 *command = NULL;
+   int ret = 0;
 
-    if (NULL == pAdapter)
-    {
-       VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-          "%s: HDD adapter context is Null", __func__);
-       ret = -ENODEV;
-       goto exit;
-    }
+   /*
+    * Note that valid pointers are provided by caller
+    */
 
-    if ((!ifr) || (!ifr->ifr_data))
-    {
-        ret = -EINVAL;
-        goto exit;
-    }
+   if (priv_data->total_len <= 0 ||
+       priv_data->total_len > HOSTAPD_IOCTL_COMMAND_STRLEN_MAX)
+   {
+      /* below we allocate one more byte for command buffer.
+       * To avoid addition overflow total_len should be
+       * smaller than INT_MAX. */
+      hddLog(VOS_TRACE_LEVEL_ERROR, "%s: integer out of range len %d",
+             __func__, priv_data->total_len);
+      ret = -EFAULT;
+      goto exit;
+   }
 
-    if (copy_from_user(&priv_data, ifr->ifr_data, sizeof(hdd_priv_data_t)))
-    {
-        ret = -EFAULT;
-        goto exit;
-    }
+   /* Allocate +1 for '\0' */
+   command = kmalloc((priv_data->total_len + 1), GFP_KERNEL);
+   if (!command)
+   {
+      hddLog(VOS_TRACE_LEVEL_ERROR, "%s: failed to allocate memory", __func__);
+      ret = -ENOMEM;
+      goto exit;
+   }
 
-    if (priv_data.total_len <= 0 ||
-        priv_data.total_len > HOSTAPD_IOCTL_COMMAND_STRLEN_MAX)
-    {
-        /* below we allocate one more byte for command buffer.
-         * To avoid addition overflow total_len should be
-         * smaller than INT_MAX. */
-        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-           "%s: integer out of range len %d", __func__, priv_data.total_len);
-        ret = -EFAULT;
-        goto exit;
-    }
+   if (copy_from_user(command, priv_data->buf, priv_data->total_len))
+   {
+      ret = -EFAULT;
+      goto exit;
+   }
 
-    command = kmalloc((priv_data.total_len + 1), GFP_KERNEL);
-    if (!command)
-    {
-        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-           "%s: failed to allocate memory\n", __func__);
-        ret = -ENOMEM;
-        goto exit;
-    }
+   /* Make sure the command is NUL-terminated */
+   command[priv_data->total_len] = '\0';
 
-    if (copy_from_user(command, priv_data.buf, priv_data.total_len))
-    {
-        ret = -EFAULT;
-        goto exit;
-    }
+   hddLog(VOS_TRACE_LEVEL_INFO,
+          "***HOSTAPD*** : Received %s cmd from Wi-Fi GUI***", command);
 
-    command[priv_data.total_len] = '\0';
-
-    if ((SIOCDEVPRIVATE + 1) == cmd)
-    {
-        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-           "***HOSTAPD*** : Received %s cmd from Wi-Fi GUI***", command);
-
-        if(strncmp(command, "P2P_SET_NOA", 11) == 0 )
-        {
-            hdd_setP2pNoa(dev, command);
-        }
-        else if( strncmp(command, "P2P_SET_PS", 10) == 0 )
-        {
-            hdd_setP2pOpps(dev, command);
-        }
+   if (strncmp(command, "P2P_SET_NOA", 11) == 0)
+   {
+      hdd_setP2pNoa(pAdapter->dev, command);
+   }
+   else if (strncmp(command, "P2P_SET_PS", 10) == 0)
+   {
+      hdd_setP2pOpps(pAdapter->dev, command);
+   }
 #ifdef FEATURE_WLAN_BATCH_SCAN
-        else if( strncmp(command, "WLS_BATCHING", 12) == 0 )
-        {
-           ret = hdd_handle_batch_scan_ioctl(pAdapter, &priv_data, command);
-        }
+   else if (strncmp(command, "WLS_BATCHING", 12) == 0)
+   {
+      ret = hdd_handle_batch_scan_ioctl(pAdapter, priv_data, command);
+   }
 #endif
+   else if (strncmp(command, "SET_SAP_CHANNEL_LIST", 20) == 0)
+   {
+      /*
+       * command should be a string having format
+       * SET_SAP_CHANNEL_LIST <num channels> <channels seperated by spaces>
+       */
+      hddLog(VOS_TRACE_LEVEL_INFO,
+             "%s: Received Command to Set Preferred Channels for SAP",
+             __func__);
 
-        /*
-           command should be a string having format
-           SET_SAP_CHANNEL_LIST <num of channels> <the channels seperated by spaces>
-        */
-        if(strncmp(command, "SET_SAP_CHANNEL_LIST", 20) == 0)
-        {
-            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                       " Received Command to Set Preferred Channels for SAP in %s", __func__);
+      ret = sapSetPreferredChannel(command);
+   }
 
-            ret = sapSetPreferredChannel(command);
-        }
-
-    }
 exit:
    if (command)
    {
-       kfree(command);
+      kfree(command);
    }
+   return ret;
+}
+
+#ifdef CONFIG_COMPAT
+static int hdd_hostapd_driver_compat_ioctl(hdd_adapter_t *pAdapter,
+                                           struct ifreq *ifr)
+{
+   struct {
+      compat_uptr_t buf;
+      int used_len;
+      int total_len;
+   } compat_priv_data;
+   hdd_priv_data_t priv_data;
+   int ret = 0;
+
+   /*
+    * Note that pAdapter and ifr have already been verified by caller,
+    * and HDD context has also been validated
+    */
+   if (copy_from_user(&compat_priv_data, ifr->ifr_data,
+                      sizeof(compat_priv_data))) {
+       ret = -EFAULT;
+       goto exit;
+   }
+   priv_data.buf = compat_ptr(compat_priv_data.buf);
+   priv_data.used_len = compat_priv_data.used_len;
+   priv_data.total_len = compat_priv_data.total_len;
+   ret = hdd_hostapd_driver_command(pAdapter, &priv_data);
+ exit:
+   return ret;
+}
+#else /* CONFIG_COMPAT */
+static int hdd_hostapd_driver_compat_ioctl(hdd_adapter_t *pAdapter,
+                                           struct ifreq *ifr)
+{
+   /* will never be invoked */
+   return 0;
+}
+#endif /* CONFIG_COMPAT */
+
+static int hdd_hostapd_driver_ioctl(hdd_adapter_t *pAdapter, struct ifreq *ifr)
+{
+   hdd_priv_data_t priv_data;
+   int ret = 0;
+
+   /*
+    * Note that pAdapter and ifr have already been verified by caller,
+    * and HDD context has also been validated
+    */
+   if (copy_from_user(&priv_data, ifr->ifr_data, sizeof(priv_data))) {
+      ret = -EFAULT;
+   } else {
+      ret = hdd_hostapd_driver_command(pAdapter, &priv_data);
+   }
+   return ret;
+}
+
+static int hdd_hostapd_ioctl(struct net_device *dev,
+                             struct ifreq *ifr, int cmd)
+{
+   hdd_adapter_t *pAdapter;
+   hdd_context_t *pHddCtx;
+   int ret;
+
+   pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
+   if (NULL == pAdapter) {
+      hddLog(VOS_TRACE_LEVEL_ERROR,
+             "%s: HDD adapter context is Null", __func__);
+      ret = -ENODEV;
+      goto exit;
+   }
+   if (dev != pAdapter->dev) {
+      hddLog(VOS_TRACE_LEVEL_ERROR,
+             "%s: HDD adapter/dev inconsistency", __func__);
+      ret = -ENODEV;
+      goto exit;
+   }
+
+   if ((!ifr) || (!ifr->ifr_data)) {
+      ret = -EINVAL;
+      goto exit;
+   }
+
+   pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
+   ret = wlan_hdd_validate_context(pHddCtx);
+   if (ret) {
+      hddLog(VOS_TRACE_LEVEL_ERROR, "%s: invalid context", __func__);
+      ret = -EBUSY;
+      goto exit;
+   }
+
+   switch (cmd) {
+   case (SIOCDEVPRIVATE + 1):
+      if (is_compat_task())
+         ret = hdd_hostapd_driver_compat_ioctl(pAdapter, ifr);
+      else
+         ret = hdd_hostapd_driver_ioctl(pAdapter, ifr);
+      break;
+   default:
+      hddLog(VOS_TRACE_LEVEL_ERROR, "%s: unknown ioctl %d",
+             __func__, cmd);
+      ret = -EINVAL;
+      break;
+   }
+ exit:
    return ret;
 }
 
@@ -464,7 +551,6 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
     v_U8_t staId;
     VOS_STATUS vos_status;
     v_BOOL_t bWPSState;
-    v_BOOL_t bApActive = FALSE;
     v_BOOL_t bAuthRequired = TRUE;
     tpSap_AssocMacAddr pAssocStasArray = NULL;
     char unknownSTAEvent[IW_CUSTOM_MAX+1];
@@ -474,6 +560,9 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
     hdd_context_t *pHddCtx;
     hdd_scaninfo_t *pScanInfo  = NULL;
     struct iw_michaelmicfailure msg;
+#ifdef MSM_PLATFORM
+    unsigned long flags;
+#endif
 
     dev = (struct net_device *)usrDataForCallback;
     if (!dev)
@@ -526,6 +615,8 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             else
             {
                 pHddApCtx->uBCStaId = pSapEvent->sapevt.sapStartBssCompleteEvent.staId;
+                pHostapdAdapter->sessionId =
+                        pSapEvent->sapevt.sapStartBssCompleteEvent.sessionId;
                 //@@@ need wep logic here to set privacy bit
                 hdd_softap_Register_BC_STA(pHostapdAdapter, pHddApCtx->uPrivacy);
             }
@@ -548,6 +639,9 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                    hddLog(LOGE, FL("Failed to init AP inactivity timer\n"));
 
             }
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+            wlan_hdd_auto_shutdown_enable(pHddCtx, VOS_TRUE);
+#endif
             pHddApCtx->operatingChannel = pSapEvent->sapevt.sapStartBssCompleteEvent.operatingChannel;
             pHostapdState->bssState = BSS_START;
 
@@ -709,6 +803,7 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                vos_pkt_trace_buf_update("HA:ASSOC");
             }
 #endif /* QCA_PKT_PROTO_TRACE */
+            pHddApCtx->bApActive = VOS_TRUE;
             // Stop AP inactivity timer
             if (pHddApCtx->hdd_ap_inactivity_timer.state == VOS_TIMER_STATE_RUNNING)
             {
@@ -716,6 +811,9 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                 if (!VOS_IS_STATUS_SUCCESS(vos_status))
                    hddLog(LOGE, FL("Failed to start AP inactivity timer\n"));
             }
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+            wlan_hdd_auto_shutdown_enable(pHddCtx, VOS_FALSE);
+#endif
             vos_wake_lock_timeout_acquire(&pHddCtx->sap_wake_lock,
                                           HDD_SAP_WAKE_LOCK_DURATION);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
@@ -759,6 +857,20 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                   pHostapdAdapter->sessionId, pHddApCtx->operatingChannel);
             }
 #endif
+
+#ifdef MSM_PLATFORM
+            /* start timer in sap/p2p_go */
+            spin_lock_irqsave(&pHddCtx->bus_bw_lock, flags);
+            pHddCtx->sta_cnt++;
+            pHostapdAdapter->connection++;
+            if (1 == pHostapdAdapter->connection) {
+                pHostapdAdapter->prev_tx_packets = pHostapdAdapter->stats.tx_packets;
+                pHostapdAdapter->prev_rx_packets = pHostapdAdapter->stats.rx_packets;
+            }
+            if (1 == pHddCtx->sta_cnt)
+                hdd_start_bus_bw_compute_timer(pHostapdAdapter);
+            spin_unlock_irqrestore(&pHddCtx->bus_bw_lock, flags);
+#endif
             break;
         case eSAP_STA_DISASSOC_EVENT:
             memcpy(wrqu.addr.sa_data, &pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac,
@@ -789,21 +901,22 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
 #endif /* QCA_PKT_PROTO_TRACE */
             hdd_softap_DeregisterSTA(pHostapdAdapter, staId);
 
-            if (0 != (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->nAPAutoShutOff)
+            pHddApCtx->bApActive = VOS_FALSE;
+            spin_lock_bh( &pHostapdAdapter->staInfo_lock );
+            for (i = 0; i < WLAN_MAX_STA_COUNT; i++)
             {
-                spin_lock_bh( &pHostapdAdapter->staInfo_lock );
-                // Start AP inactivity timer if no stations associated with it
-                for (i = 0; i < WLAN_MAX_STA_COUNT; i++)
+                if (pHostapdAdapter->aStaInfo[i].isUsed && i != (WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter))->uBCStaId)
                 {
-                    if (pHostapdAdapter->aStaInfo[i].isUsed && i != (WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter))->uBCStaId)
-                    {
-                        bApActive = TRUE;
-                        break;
-                    }
+                    pHddApCtx->bApActive = VOS_TRUE;
+                    break;
                 }
-                spin_unlock_bh( &pHostapdAdapter->staInfo_lock );
+            }
+            spin_unlock_bh( &pHostapdAdapter->staInfo_lock );
 
-                if (bApActive == FALSE)
+            // Start AP inactivity timer if no stations associated with it
+            if ((0 != (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->nAPAutoShutOff))
+            {
+                if (pHddApCtx->bApActive == FALSE)
                 {
                     if (pHddApCtx->hdd_ap_inactivity_timer.state == VOS_TIMER_STATE_STOPPED)
                     {
@@ -815,6 +928,10 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                         VOS_ASSERT(vos_timer_getCurrentState(&pHddApCtx->hdd_ap_inactivity_timer) == VOS_TIMER_STATE_STOPPED);
                 }
             }
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+            wlan_hdd_auto_shutdown_enable(pHddCtx, VOS_TRUE);
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
             cfg80211_del_sta(dev,
                             (const u8 *)&pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac.bytes[0],
@@ -831,6 +948,20 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                   ePeerDisconnected, 0,
                   pHostapdAdapter->sessionId, pHddApCtx->operatingChannel);
             }
+#endif
+
+#ifdef MSM_PLATFORM
+            /*stop timer in sap/p2p_go */
+            spin_lock_irqsave(&pHddCtx->bus_bw_lock, flags);
+            pHddCtx->sta_cnt--;
+            pHostapdAdapter->connection--;
+            if (0 == pHostapdAdapter->connection) {
+                pHostapdAdapter->prev_tx_packets = 0;
+                pHostapdAdapter->prev_rx_packets = 0;
+            }
+            if (0 == pHddCtx->sta_cnt)
+                hdd_stop_bus_bw_compute_timer(pHostapdAdapter);
+            spin_unlock_irqrestore(&pHddCtx->bus_bw_lock, flags);
 #endif
             break;
         case eSAP_WPS_PBC_PROBE_REQ_EVENT:
@@ -967,6 +1098,9 @@ stopbss :
             if (!VOS_IS_STATUS_SUCCESS(vos_status))
                 hddLog(LOGE, FL("Failed to Destroy AP inactivity timer"));
         }
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+        wlan_hdd_auto_shutdown_enable(pHddCtx, VOS_TRUE);
+#endif
 
         /* Stop the pkts from n/w stack as we are going to free all of
          * the TX WMM queues for all STAID's */
@@ -1151,6 +1285,19 @@ static iw_softap_setparam(struct net_device *dev,
                 WLANSAP_SetMode(pVosContext, set_value);
             }
             break;
+
+        case QCSAP_PARAM_AUTO_CHANNEL:
+            if ((0 != set_value) && (1 != set_value))
+            {
+                hddLog(LOGE, FL("Invalid setAutoChannel value %d"), set_value);
+                ret = -EINVAL;
+            }
+            else
+            {
+                (WLAN_HDD_GET_CTX(pHostapdAdapter))->cfg_ini->apAutoChannelSelection = set_value;
+            }
+            break;
+
         case QCSAP_PARAM_MAX_ASSOC:
             if (WNI_CFG_ASSOC_STA_LIMIT_STAMIN > set_value)
             {
@@ -1223,6 +1370,7 @@ static iw_softap_setparam(struct net_device *dev,
                 rateUpdate->nss = (pConfig->enable2x2 == 0) ? 0 : 1;
                 rateUpdate->dev_mode = pHostapdAdapter->device_mode;
                 rateUpdate->mcastDataRate24GHz = set_value;
+                rateUpdate->mcastDataRate24GHzTxFlag = 1;
                 rateUpdate->mcastDataRate5GHz = set_value;
                 rateUpdate->bcastDataRate = -1;
                 status = sme_SendRateUpdateInd(hHal, rateUpdate);
@@ -1522,14 +1670,8 @@ static iw_softap_setparam(struct net_device *dev,
                                 (int)WMI_VDEV_PARAM_ENABLE_RTSCTS,
                                 set_value, VDEV_CMD);
                 if (!ret) {
-                    if (ccmCfgSetInt(hHal, WNI_CFG_RTS_THRESHOLD, (tANI_U32)value,
-                        ccmCfgSetCallback, eANI_BOOLEAN_TRUE) !=
-                        eHAL_STATUS_SUCCESS) {
-
-                        hddLog(LOGE, "FAILED TO SET RTSCTS at SAP");
-                        ret = -EIO;
-                        break;
-                    }
+                    hddLog(LOGE, "FAILED TO SET RTSCTS at SAP");
+                    ret = -EIO;
                 }
                 break;
             }
@@ -1732,6 +1874,18 @@ static iw_softap_setparam(struct net_device *dev,
                   break;
              }
 #endif /* QCA_PKT_PROTO_TRACE */
+
+        case QCASAP_SET_TM_LEVEL:
+             {
+                  hddLog(VOS_TRACE_LEVEL_INFO, "Set Thermal Mitigation Level %d",
+                            set_value);
+#ifdef QCA_WIFI_ISOC
+                  hddLog(VOS_TRACE_LEVEL_ERROR, " 'setTmLevel' Command Not supported for this mode");
+#else
+                  (void)sme_SetThermalLevel(hHal, set_value);
+#endif
+                  break;
+             }
 
 #endif /* QCA_WIFI_2_0 */
         default:
@@ -3769,7 +3923,8 @@ static const struct iw_priv_args hostapd_private_args[] = {
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "setMccLatency" },
    { QCSAP_PARAM_SET_MCC_CHANNEL_QUOTA,
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "setMccQuota" },
-
+   { QCSAP_PARAM_AUTO_CHANNEL,
+      IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,  "setAutoChannel" },
 
 #ifdef QCA_WIFI_2_0
  /* Sub-cmds DBGLOG specific commands */
@@ -3947,6 +4102,11 @@ static const struct iw_priv_args hostapd_private_args[] = {
         0,
         "setDbgLvl" },
 #endif /* QCA_PKT_PROTO_TRACE */
+
+    {   QCASAP_SET_TM_LEVEL,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "setTmLevel" },
 
 #endif /* QCA_WIFI_2_0 */
 
