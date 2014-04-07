@@ -604,7 +604,6 @@ ol_rx_pn_ind_handler(
     void *rx_desc;
     struct ol_txrx_peer_t *peer;
     struct ol_rx_reorder_array_elem_t *rx_reorder_array_elem;
-    union htt_rx_pn_t pn;
     unsigned win_sz_mask;
     adf_nbuf_t head_msdu = NULL;
     adf_nbuf_t tail_msdu = NULL;
@@ -618,6 +617,7 @@ ol_rx_pn_ind_handler(
         return;
     }
 
+    adf_os_atomic_set(&peer->fw_pn_check, 1);
     /*TODO: Fragmentation case*/
     win_sz_mask = peer->tids_rx_reorder[tid].win_sz_mask;
     seq_num_start &= win_sz_mask;
@@ -631,6 +631,11 @@ ol_rx_pn_ind_handler(
         if (rx_reorder_array_elem->head) {
             if (pn_ie_cnt && seq_num_start == (int)(pn_ie[i])) {
                 adf_nbuf_t msdu, next_msdu, mpdu_head, mpdu_tail;
+                static u_int32_t last_pncheck_print_time = 0;
+                int log_level;
+                u_int32_t current_time_ms;
+                union htt_rx_pn_t pn = {0};
+                int index, pn_len;
 
                 mpdu_head = msdu = rx_reorder_array_elem->head;
                 mpdu_tail = rx_reorder_array_elem->tail;
@@ -638,26 +643,39 @@ ol_rx_pn_ind_handler(
                 pn_ie_cnt--;
                 i++;
                 rx_desc = htt_rx_msdu_desc_retrieve(htt_pdev, msdu);
-                htt_rx_mpdu_desc_pn(htt_pdev, rx_desc, &pn, 16);
+                index = htt_rx_msdu_is_wlan_mcast(pdev->htt_pdev, rx_desc) ?
+                                   txrx_sec_mcast : txrx_sec_ucast;
+                pn_len = pdev->rx_pn[peer->security[index].sec_type].len;
+                htt_rx_mpdu_desc_pn(htt_pdev, rx_desc, &pn, pn_len);
 
-                TXRX_PRINT(TXRX_PRINT_LEVEL_WARN,
-                "Tgt PN check failed - TID %d, peer %p "
-                "(%02x:%02x:%02x:%02x:%02x:%02x)\n"
-                "    PN (u64 x2)= 0x%08llx %08llx (LSBs = %lld)\n"
-                "    new seq num = %d\n",
-                tid, peer,
-                peer->mac_addr.raw[0], peer->mac_addr.raw[1],
-                peer->mac_addr.raw[2], peer->mac_addr.raw[3],
-                peer->mac_addr.raw[4], peer->mac_addr.raw[5],
-                pn.pn128[1],
-                pn.pn128[0],
-                pn.pn128[0] & 0xffffffffffffULL,
-                htt_rx_mpdu_desc_seq_num(htt_pdev, rx_desc));
-                ol_rx_err(
-                    pdev->ctrl_pdev,
-                    vdev->vdev_id, peer->mac_addr.raw, tid,
-                    htt_rx_mpdu_desc_tsf32(htt_pdev, rx_desc),
-                    OL_RX_ERR_PN, mpdu_head, NULL, 0);
+                current_time_ms = adf_os_ticks_to_msecs(adf_os_ticks());
+                if (TXRX_PN_CHECK_FAILURE_PRINT_PERIOD_MS <
+                      (current_time_ms - last_pncheck_print_time)) {
+                    last_pncheck_print_time = current_time_ms;
+                    log_level = TXRX_PRINT_LEVEL_WARN;
+                }
+                else {
+                    log_level = TXRX_PRINT_LEVEL_INFO2;
+                }
+                TXRX_PRINT(log_level,
+                    "Tgt PN check failed - TID %d, peer %p "
+                    "(%02x:%02x:%02x:%02x:%02x:%02x)\n"
+                    "    PN (u64 x2)= 0x%08llx %08llx (LSBs = %lld)\n"
+                    "    new seq num = %d\n",
+                    tid, peer,
+                    peer->mac_addr.raw[0], peer->mac_addr.raw[1],
+                    peer->mac_addr.raw[2], peer->mac_addr.raw[3],
+                    peer->mac_addr.raw[4], peer->mac_addr.raw[5],
+                    pn.pn128[1],
+                    pn.pn128[0],
+                    pn.pn128[0] & 0xffffffffffffULL,
+                    htt_rx_mpdu_desc_seq_num(htt_pdev, rx_desc));
+                    ol_rx_err(
+                        pdev->ctrl_pdev,
+                        vdev->vdev_id, peer->mac_addr.raw, tid,
+                        htt_rx_mpdu_desc_tsf32(htt_pdev, rx_desc),
+                        OL_RX_ERR_PN, mpdu_head, NULL, 0);
+
                 /* free all MSDUs within this MPDU */
                 do {
                     next_msdu = adf_nbuf_next(msdu);

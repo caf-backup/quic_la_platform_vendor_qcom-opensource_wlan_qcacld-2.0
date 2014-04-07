@@ -3848,6 +3848,9 @@ typedef struct sSirRoamOffloadScanReq
   tSirRoamNetworkType ConnectedNetwork;
   tSirMobilityDomainInfo MDID;
   tANI_U8 sessionId;
+  tANI_U8   RoamBmissFirstBcnt;
+  tANI_U8   RoamBmissFinalBcnt;
+  tANI_U8   RoamBeaconRssiWeight;
 } tSirRoamOffloadScanReq, *tpSirRoamOffloadScanReq;
 #endif //WLAN_FEATURE_ROAM_SCAN_OFFLOAD
 
@@ -4862,5 +4865,11 @@ typedef struct sSirTxPowerLimit
     u_int32_t txPower2g;
     u_int32_t txPower5g;
 } tSirTxPowerLimit;
+
+// Notify MODEM power state to FW
+typedef struct
+{
+    tANI_U32 param;
+} tSirModemPowerStateInd, *tpSirModemPowerStateInd;
 
 #endif /* __SIR_API_H */
