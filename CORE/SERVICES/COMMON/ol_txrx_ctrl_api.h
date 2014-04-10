@@ -997,4 +997,44 @@ static inline void ol_tx_throttle_init_period(struct ol_txrx_pdev_t *pdev,
 
 void ol_vdev_rx_set_intrabss_fwd(ol_txrx_vdev_handle vdev, a_bool_t val);
 
+#ifdef QCA_LL_TX_FLOW_CT
+/**
+ * @brief Query TX resource availability by OS IF
+ * @details
+ *  OS IF will query TX resource status to decide back pressuring or not
+ *
+ * @param vdev - the virtual device
+ * @param low_watermark - low free descriptor count to pause os tx q
+ * @param high_watermark_offset - high free descriptor count to resume os tx q
+ *    offset value from low watermark.
+ *    high watermark = low watermark + high_watermark_offset
+ * @return boolean- true if tx data path has enough resource
+                    false if tx data path does not have enough resource
+ */
+a_bool_t
+ol_txrx_get_tx_resource(
+    ol_txrx_vdev_handle vdev,
+    unsigned int low_watermark,
+    unsigned int high_watermark_offset
+);
+
+/**
+ * @brief Set MAX LL TX Pause Q depth per vdev
+ * @details
+ *  Each vdev will have different TX Pause Q depth
+ *  High bandwidth vdev may have more TX Pause Q depth
+ *  Low bandwidth vdev will have less TX Pause Q depth not to block
+ *  high bandwidth vdev
+ *
+ * @param vdev - the virtual device
+ * @param pause_q_depth - TX Pause Q depth per vdev
+ * @return NONE
+ */
+void
+ol_txrx_ll_set_tx_pause_q_depth(
+    ol_txrx_vdev_handle vdev,
+    int pause_q_depth
+);
+#endif /* QCA_LL_TX_FLOW_CT */
+
 #endif /* _OL_TXRX_CTRL_API__H_ */

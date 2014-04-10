@@ -274,7 +274,7 @@ limSendSmeJoinReassocRsp(tpAniSirGlobal pMac, tANI_U16 msgType,
 #ifdef WLAN_FEATURE_VOWIFI_11R
             psessionEntry->RICDataLen +
 #endif
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
             psessionEntry->tspecLen +
 #endif
             sizeof(tSirSmeJoinRsp) - sizeof(tANI_U8) ;
@@ -314,7 +314,7 @@ limSendSmeJoinReassocRsp(tpAniSirGlobal pMac, tANI_U16 msgType,
 #ifdef WLAN_FEATURE_VOWIFI_11R
         pSirSmeJoinRsp->parsedRicRspLen = 0;
 #endif
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
         pSirSmeJoinRsp->tspecIeLen = 0;
 #endif
 
@@ -366,7 +366,7 @@ limSendSmeJoinReassocRsp(tpAniSirGlobal pMac, tANI_U16 msgType,
                 PELOG1(limLog(pMac, LOG1, FL("RicLength=%d"), pSirSmeJoinRsp->parsedRicRspLen);)
             }
 #endif
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_ESE
             if(psessionEntry->tspecIes != NULL)
             {
                 pSirSmeJoinRsp->tspecIeLen = psessionEntry->tspecLen;
@@ -376,7 +376,7 @@ limSendSmeJoinReassocRsp(tpAniSirGlobal pMac, tANI_U16 msgType,
                               psessionEntry->tspecIes, pSirSmeJoinRsp->tspecIeLen);
                 vos_mem_free(psessionEntry->tspecIes);
                 psessionEntry->tspecIes = NULL;
-                PELOG1(limLog(pMac, LOG1, FL("CCX-TspecLen=%d"), psessionEntry->tspecLen);)
+                PELOG1(limLog(pMac, LOG1, FL("ESE-TspecLen=%d"), psessionEntry->tspecLen);)
             }
 #endif
             pSirSmeJoinRsp->aid = psessionEntry->limAID;
@@ -1306,7 +1306,9 @@ limSendSmeDisassocNtf(tpAniSirGlobal pMac,
 
                 return;
             }
-
+            limLog(pMac, LOG1, FL("send eWNI_SME_DEAUTH_RSP with "
+            "retCode: %d for "MAC_ADDRESS_STR),reasonCode,
+            MAC_ADDR_ARRAY(peerMacAddr));
             pSirSmeDisassocRsp->messageType = eWNI_SME_DISASSOC_RSP;
             pSirSmeDisassocRsp->length      = sizeof(tSirSmeDisassocRsp);
             //sessionId
@@ -1354,7 +1356,9 @@ limSendSmeDisassocNtf(tpAniSirGlobal pMac,
 
                 return;
             }
-
+            limLog(pMac, LOG1, FL("send eWNI_SME_DISASSOC_IND with "
+            "retCode: %d for "MAC_ADDRESS_STR),reasonCode,
+            MAC_ADDR_ARRAY(peerMacAddr));
             pSirSmeDisassocInd->messageType = eWNI_SME_DISASSOC_IND;
             pSirSmeDisassocInd->length      = sizeof(tSirSmeDisassocInd);
 
@@ -1751,7 +1755,9 @@ limSendSmeDeauthNtf(tpAniSirGlobal pMac, tSirMacAddr peerMacAddr, tSirResultCode
 
                 return;
             }
-
+            limLog(pMac, LOG1, FL("send eWNI_SME_DEAUTH_RSP with "
+            "retCode: %d for"MAC_ADDRESS_STR),reasonCode,
+            MAC_ADDR_ARRAY(peerMacAddr));
             pSirSmeDeauthRsp->messageType = eWNI_SME_DEAUTH_RSP;
             pSirSmeDeauthRsp->length      = sizeof(tSirSmeDeauthRsp);
             pSirSmeDeauthRsp->statusCode = reasonCode;
@@ -1784,7 +1790,9 @@ limSendSmeDeauthNtf(tpAniSirGlobal pMac, tSirMacAddr peerMacAddr, tSirResultCode
 
                 return;
             }
-
+            limLog(pMac, LOG1, FL("send eWNI_SME_DEAUTH_IND with "
+            "retCode: %d for "MAC_ADDRESS_STR),reasonCode,
+            MAC_ADDR_ARRAY(peerMacAddr));
             pSirSmeDeauthInd->messageType = eWNI_SME_DEAUTH_IND;
             pSirSmeDeauthInd->length      = sizeof(tSirSmeDeauthInd);
             pSirSmeDeauthInd->reasonCode = eSIR_MAC_UNSPEC_FAILURE_REASON;
@@ -2512,7 +2520,7 @@ limSendSmePEStatisticsRsp(tpAniSirGlobal pMac, tANI_U16 msgType, void* stats)
 
 } /*** end limSendSmePEStatisticsRsp() ***/
 
-#if defined WLAN_FEATURE_VOWIFI_11R || defined FEATURE_WLAN_CCX || defined(FEATURE_WLAN_LFR)
+#if defined WLAN_FEATURE_VOWIFI_11R || defined FEATURE_WLAN_ESE || defined(FEATURE_WLAN_LFR)
 /**
  * limSendSmePEGetRoamRssiRsp()
  *
@@ -2573,9 +2581,9 @@ limSendSmePEGetRoamRssiRsp(tpAniSirGlobal pMac, tANI_U16 msgType, void* stats)
 
 #endif
 
-#if defined(FEATURE_WLAN_CCX) && defined(FEATURE_WLAN_CCX_UPLOAD)
+#if defined(FEATURE_WLAN_ESE) && defined(FEATURE_WLAN_ESE_UPLOAD)
 /**
- * limSendSmePECcxTsmRsp()
+ * limSendSmePEEseTsmRsp()
  *
  *FUNCTION:
  * This function is called to send tsm stats response to HDD.
@@ -2590,7 +2598,7 @@ limSendSmePEGetRoamRssiRsp(tpAniSirGlobal pMac, tANI_U16 msgType, void* stats)
  */
 
 void
-limSendSmePECcxTsmRsp(tpAniSirGlobal pMac, tAniGetTsmStatsRsp *pStats)
+limSendSmePEEseTsmRsp(tpAniSirGlobal pMac, tAniGetTsmStatsRsp *pStats)
 {
     tSirMsgQ            mmhMsg;
     tANI_U8             sessionId;
@@ -2615,9 +2623,9 @@ limSendSmePECcxTsmRsp(tpAniSirGlobal pMac, tAniGetTsmStatsRsp *pStats)
 
     pPeStats->msgType = eWNI_SME_GET_TSM_STATS_RSP;
     pPeStats->tsmMetrics.RoamingCount
-      = pPeSessionEntry->ccxContext.tsm.tsmMetrics.RoamingCount;
+      = pPeSessionEntry->eseContext.tsm.tsmMetrics.RoamingCount;
     pPeStats->tsmMetrics.RoamingDly
-      = pPeSessionEntry->ccxContext.tsm.tsmMetrics.RoamingDly;
+      = pPeSessionEntry->eseContext.tsm.tsmMetrics.RoamingDly;
 
     mmhMsg.type = eWNI_SME_GET_TSM_STATS_RSP;
     mmhMsg.bodyptr = pStats;
@@ -2626,9 +2634,9 @@ limSendSmePECcxTsmRsp(tpAniSirGlobal pMac, tAniGetTsmStatsRsp *pStats)
     limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT);
 
     return;
-} /*** end limSendSmePECcxTsmRsp() ***/
+} /*** end limSendSmePEEseTsmRsp() ***/
 
-#endif /* FEATURE_WLAN_CCX) && FEATURE_WLAN_CCX_UPLOAD */
+#endif /* FEATURE_WLAN_ESE) && FEATURE_WLAN_ESE_UPLOAD */
 
 void
 limSendSmeIBSSPeerInd(
@@ -2783,7 +2791,6 @@ void limHandleDeleteBssRsp(tpAniSirGlobal pMac,tpSirMsgQ MsgQ)
     {
         limLog(pMac, LOGE,FL("Session Does not exist for given sessionID %d"),
           pDelBss->sessionId);
-        vos_mem_free(pDelBss);
         return;
     }
     if (psessionEntry->limSystemRole == eLIM_STA_IN_IBSS_ROLE)
@@ -2952,7 +2959,7 @@ limSendSmeCandidateFoundInd(tpAniSirGlobal pMac, tANI_U8  sessionId)
     pSirSmeCandidateFoundInd->sessionId     =  sessionId;
 
 
-    limLog( pMac, LOGE, FL("posting candidate ind to SME"));
+    limLog( pMac, LOG1, FL("posting candidate ind to SME"));
     mmhMsg.type = eWNI_SME_CANDIDATE_FOUND_IND;
     mmhMsg.bodyptr = pSirSmeCandidateFoundInd;
     mmhMsg.bodyval = 0;

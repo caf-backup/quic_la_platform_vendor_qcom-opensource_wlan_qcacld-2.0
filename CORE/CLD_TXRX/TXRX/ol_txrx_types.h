@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -271,7 +271,7 @@ struct ol_tx_sched_t;
 typedef struct ol_tx_sched_t *ol_tx_sched_handle;
 
 #ifndef OL_TXRX_NUM_LOCAL_PEER_IDS
-#define OL_TXRX_NUM_LOCAL_PEER_IDS 41 /* default */
+#define OL_TXRX_NUM_LOCAL_PEER_IDS 33 /* default */
 #endif
 
 #ifndef ol_txrx_local_peer_id_t
@@ -752,8 +752,13 @@ struct ol_txrx_vdev_t {
 		a_bool_t is_paused;
 		adf_os_spinlock_t mutex;
 		adf_os_timer_t timer;
+		int max_q_depth;
 	} ll_pause;
 	a_bool_t disable_intrabss_fwd;
+	adf_os_atomic_t os_q_paused;
+	u_int16_t tx_fl_lwm;
+	u_int16_t tx_fl_hwm;
+	ol_txrx_tx_flow_control_fp osif_flow_control_cb;
 };
 
 struct ol_rx_reorder_array_elem_t {

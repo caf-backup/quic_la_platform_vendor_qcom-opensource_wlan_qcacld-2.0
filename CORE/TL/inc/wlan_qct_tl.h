@@ -275,9 +275,9 @@ typedef struct
  /*Flag to indicate if STA is a WAPI STA*/
   v_U8_t         ucIsWapiSta;
 
-#ifdef FEATURE_WLAN_CCX
- /*Flag to indicate if STA is a CCX STA*/
-  v_U8_t         ucIsCcxSta;
+#ifdef FEATURE_WLAN_ESE
+ /*Flag to indicate if STA is a ESE STA*/
+  v_U8_t         ucIsEseSta;
 #endif
 
   /*DPU Signature used for broadcast data - used for data caching*/
@@ -630,6 +630,29 @@ typedef VOS_STATUS (*WLANTL_STARxCBType)( v_PVOID_t              pvosGCtx,
 typedef VOS_STATUS (*WLANTL_STARxCBType)(v_PVOID_t              pvosGCtx,
                                          adf_nbuf_t             pDataBuff,
                                          v_U8_t                 ucSTAId);
+
+#ifdef QCA_LL_TX_FLOW_CT
+/*----------------------------------------------------------------------------
+
+  DESCRIPTION
+    Type of the TX Flow Control callback registered with TL.
+
+    TL will call this to notify the client when TX resource condition
+    is chnaged
+
+  PARAMETERS
+
+    IN
+    adapterCtxt:    pointer to device apapter context
+    resume_tx:      Ressume OS TX Q
+
+  RETURN VALUE
+    NONE
+
+----------------------------------------------------------------------------*/
+typedef void (*WLANTL_TxFlowControlCBType)(void *adapterCtxt,
+                                               v_BOOL_t resume_tx);
+#endif /* QCA_LL_TX_FLOW_CT */
 #endif /* QCA_WIFI_2_0 */
 
 /*----------------------------------------------------------------------------
@@ -2991,6 +3014,131 @@ WLANTL_TLDebugMessage
 {
 
 }
+#endif /* QCA_WIFI_2_0 */
+
+
+#ifdef QCA_WIFI_2_0
+#ifdef QCA_LL_TX_FLOW_CT
+/*=============================================================================
+  FUNCTION    WLANTL_GetTxResource
+
+  DESCRIPTION
+    This function will query WLAN kernel driver TX resource availability.
+    Per STA/VDEV instance, if TX resource is not available, should back
+    pressure to OS NET layer.
+
+  DEPENDENCIES
+    NONE
+
+  PARAMETERS
+   IN
+   vos_context   : Pointer to VOS global context
+   sta_id : STA/VDEV instance to query TX resource
+   low_watermark : Low threashold to block OS Q
+   high_watermark_offset : Offset to high watermark from low watermark
+
+  RETURN VALUE
+    VOS_TRUE : Enough resource available, Not need to PAUSE TX OS Q
+    VOS_FALSE : TX resource is not enough, stop OS TX Q
+
+  SIDE EFFECTS
+
+==============================================================================*/
+v_BOOL_t WLANTL_GetTxResource
+(
+   void *vos_context,
+   v_U8_t sessionId,
+   unsigned int low_watermark,
+   unsigned int high_watermark_offset
+);
+
+/*=============================================================================
+  FUNCTION    WLANTL_TXFlowControlCb
+
+  DESCRIPTION
+    This function will be called by TX resource management unit.
+    If TC resource management unit reserved enough resource for TX session,
+    Call this function to resume OS TX Q.
+
+  PARAMETERS
+   IN
+   tlContext : Pointer to TL SHIM context
+   peer_idx  : peer index belongs to virtual device
+   sessionId : STA/VDEV instance to query TX resource
+   resume_tx : Resume OS TX Q or not
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_TXFlowControlCb
+(
+   void  *tlContext,
+   v_U8_t sessionId,
+   v_BOOL_t resume_tx
+);
+
+/*=============================================================================
+  FUNCTION    WLANTL_RegisterTXFlowControl
+
+  DESCRIPTION
+    This function will be called by TL client.
+    Any device want to enable TX flow control, should register Cb function
+    And needed information into TL SHIM
+
+  PARAMETERS
+   IN
+   vos_ctx : Global OS context context
+   sta_id  : STA/VDEV instance index
+   flowControl : Flow control callback function pointer
+   sessionId : VDEV ID
+   adpaterCtxt : VDEV os interface adapter context
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_RegisterTXFlowControl
+(
+   void *vos_ctx,
+   WLANTL_TxFlowControlCBType flowControl,
+   v_U8_t sessionId,
+   void *adpaterCtxt
+);
+
+/*=============================================================================
+  FUNCTION    WLANTL_SetAdapterMaxQDepth
+
+  DESCRIPTION
+    This function will be called by TL client.
+    Based on the adapter TX available bandwidth, set different TX Pause Q size
+    Low Bandwidth adapter will have less count of TX Pause Q size to prevent
+    reserve all TX descriptors which shared with FW.
+    High Bandwidth adapter will have more count of TX Pause Q size
+
+  PARAMETERS
+   IN
+   vos_ctx : Global OS context context
+   sessionId  : adapter instance index
+   max_q_depth : Max pause Q depth for adapter
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_SetAdapterMaxQDepth
+(
+   void *vos_ctx,
+   v_U8_t sessionId,
+   int max_q_depth
+);
+#endif /* QCA_LL_TX_FLOW_CT */
 #endif /* QCA_WIFI_2_0 */
 
 #endif /* #ifndef WLAN_QCT_WLANTL_H */
