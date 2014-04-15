@@ -2201,6 +2201,7 @@ typedef enum {
     PAUSE_TYPE_P2P_GO_PS =      0x5, /** only vdev_map is valid, actually only one vdev id is set at one time */
     PAUSE_TYPE_STA_ADD_BA =     0x6, /** only peer_id and tid_map are valid, actually only one tid is set at one time */
     PAUSE_TYPE_AP_PS =          0x7, /** for pausing AP vdev when all the connected clients are in PS. only vdev_map is valid */
+    PAUSE_TYPE_HOST =           0x15,/** host is requesting vdev pause */
 } wmi_tx_pause_type;
 
 typedef enum {
@@ -2989,6 +2990,9 @@ typedef enum {
     /* set Tx failure count threshold for the vdev */
     WMI_VDEV_PARAM_SET_IBSS_TX_FAIL_CNT_THR,
 
+    /* set ebt resync timeout value, in the unit of TU */
+    WMI_VDEV_PARAM_EBT_RESYNC_TIMEOUT,
+
 } WMI_VDEV_PARAM;
 
 enum wmi_pkt_type {
@@ -3004,6 +3008,13 @@ typedef struct {
                 mutxbfer : 1,
                 reserved : 4;
 } wmi_vdev_txbf_en;
+
+/** Upto 8 bits are available for Roaming module to be sent along with
+WMI_VDEV_PARAM_ROAM_FW_OFFLOAD WMI_VDEV_PARAM **/
+/* Enable Roaming FW offload LFR1.5/LFR2.0 implementation */
+#define WMI_ROAM_FW_OFFLOAD_ENABLE_FLAG                          0x1
+/* Enable Roaming module in FW to do scan based on Final BMISS */
+#define WMI_ROAM_BMISS_FINAL_SCAN_ENABLE_FLAG                    0x2
 
         /** slot time long */
         #define WMI_VDEV_SLOT_TIME_LONG                                  0x1
@@ -4241,6 +4252,8 @@ enum {
     WMI_AUTH_WAPI_PSK,
     WMI_AUTH_FT_RSNA, /* 11r FT */
     WMI_AUTH_FT_RSNA_PSK,
+    WMI_AUTH_RSNA_PSK_SHA256,
+    WMI_AUTH_RSNA_8021X_SHA256,
 };
 
 typedef struct {
@@ -4415,6 +4428,10 @@ typedef struct {
 #define WMI_ROAM_REASON_BMISS     0x2 /** beacon miss detected */
 #define WMI_ROAM_REASON_DEAUTH    0x2 /** deauth/disassoc received */
 #define WMI_ROAM_REASON_LOW_RSSI  0x3 /** connected AP's low rssi condition detected */
+#define WMI_ROAM_REASON_SUITABLE_AP 0x4 /** found another AP that matches
+                                          SSID and Security profile in
+                                          WMI_ROAM_AP_PROFILE, found during scan
+                                          triggered upon FINAL_BMISS **/
 
 /** WMI_PROFILE_MATCH_EVENT: offload scan
  * generated when ever atleast one of the matching profiles is found
@@ -4574,6 +4591,7 @@ typedef enum wmi_peer_sta_kickout_reason {
     WMI_PEER_STA_KICKOUT_REASON_XRETRY = 1,
     WMI_PEER_STA_KICKOUT_REASON_INACTIVITY = 2,
     WMI_PEER_STA_KICKOUT_REASON_IBSS_DISCONNECT = 3,
+    WMI_PEER_STA_KICKOUT_REASON_TDLS_DISCONNECT = 4,    /* TDLS peer has disappeared. All tx is failing */
 } PEER_KICKOUT_REASON;
 
 typedef struct {
@@ -4815,7 +4833,8 @@ typedef enum {
     PKT_PWR_SAVE_DELIM_CRC_FAIL =     0x0040,
     PKT_PWR_SAVE_GID_NSTS_ZERO =      0x0080,
     PKT_PWR_SAVE_RSSI_CHECK =         0x0100,
-    WMI_PKT_PWR_SAVE_MAX =            0x0200,
+    PKT_PWR_SAVE_5G_EBT =             0x0200,
+    WMI_PKT_PWR_SAVE_MAX =            0x0400,
 } WMI_PKT_PWR_SAVE_TYPE;
 
 typedef struct {
@@ -5343,6 +5362,7 @@ typedef struct {
     A_UINT32 tlv_header;
     A_UINT32 vdev_id;        /* home vdev id */
     A_UINT32 meas_token;     /* from measure request frame */
+    A_UINT32 dialog_token;
     A_UINT32 number_bursts;  /* zero keep sending until cancel, bigger than 0 means times e.g. 1,2 */
     A_UINT32 burst_interval; /* unit in mill seconds, interval between consecutive burst*/
     A_UINT32 burst_cycle;   /* times cycle through within one burst */
@@ -5973,7 +5993,9 @@ typedef enum {
     /** Upper threshold for beacon-RSSI. Used to reduce RX chainmask. */
     WMI_STA_SMPS_PARAM_UPPER_BRSSI_THRESH = 3,
     /** Lower threshold for beacon-RSSI. Used to increase RX chainmask. */
-    WMI_STA_SMPS_PARAM_LOWER_BRSSI_THRESH = 4
+    WMI_STA_SMPS_PARAM_LOWER_BRSSI_THRESH = 4,
+    /** Enable/Disable DTIM 1chRx feature */
+    WMI_STA_SMPS_PARAM_DTIM_1CHRX_ENABLE = 5
 } wmi_sta_smps_param;
 
 typedef struct {

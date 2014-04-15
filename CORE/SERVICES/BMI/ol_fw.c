@@ -47,6 +47,17 @@
 #include <net/cnss.h>
 #endif
 
+static u_int32_t refclk_speed_to_hz[] = {
+	48000000, /* SOC_REFCLK_48_MHZ */
+	19200000, /* SOC_REFCLK_19_2_MHZ */
+	24000000, /* SOC_REFCLK_24_MHZ */
+	26000000, /* SOC_REFCLK_26_MHZ */
+	37400000, /* SOC_REFCLK_37_4_MHZ */
+	38400000, /* SOC_REFCLK_38_4_MHZ */
+	40000000, /* SOC_REFCLK_40_MHZ */
+	52000000, /* SOC_REFCLK_52_MHZ */
+};
+
 extern int
 dbglog_parse_debug_logs(ol_scn_t scn, u_int8_t *datap, u_int32_t len);
 
@@ -370,6 +381,21 @@ static int ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 		printk("%s: no Patch file defined\n", __func__);
 		return EOK;
 	case ATH_BOARD_DATA_FILE:
+#ifdef QCA_WIFI_FTM
+		if (vos_get_conparam() == VOS_FTM_MODE) {
+#ifdef CONFIG_CNSS
+			filename = fw_files.utf_board_data;
+#else
+			filename = QCA_BOARD_DATA_FILE;
+#endif
+#ifdef QCA_SIGNED_SPLIT_BINARY_SUPPORT
+			bin_sign = TRUE;
+#endif
+			printk(KERN_INFO "%s: Loading board data file %s\n",
+				__func__, filename);
+			break;
+	}
+#endif /* QCA_WIFI_FTM */
 #ifdef CONFIG_CNSS
 		filename = fw_files.board_data;
 #else
@@ -387,7 +413,26 @@ static int ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 
 		if (file == ATH_OTP_FILE)
 			return -ENOENT;
+
+#if defined(QCA_WIFI_FTM) && defined(CONFIG_CNSS)
+		/* Try default board data file if FTM specific
+		 * board data file is not present. */
+		if (filename == fw_files.utf_board_data) {
+			filename = fw_files.board_data;
+			printk("%s: Trying to load default %s\n",
+				__func__, filename);
+			if (request_firmware(&fw_entry, filename,
+				scn->sc_osdev->device) != 0) {
+				printk("%s: Failed to get %s\n",
+					__func__, filename);
+				return -1;
+			}
+		} else {
+			return -1;
+		}
+#else
 		return -1;
+#endif
 	}
 
         if (!fw_entry || !fw_entry->data) {
@@ -646,7 +691,7 @@ int ol_copy_ramdump(struct ol_softc *scn)
 		goto out;
 	}
 
-	ret = ol_target_coredump(scn, ramdump_base, TOTAL_DUMP_SIZE);
+	ret = ol_target_coredump(scn, ramdump_base, size);
 	iounmap(ramdump_base);
 
 out:
@@ -663,20 +708,17 @@ static void ramdump_work_handler(struct work_struct *ramdump)
 		goto out_fail;
 	}
 
+#ifdef TARGET_RAMDUMP_AFTER_KERNEL_PANIC
 	if (ramdump_scn->crash_shutdown) {
-		if (hif_pci_check_soc_status(ramdump_scn->hif_sc))
-			goto out;
+		if (!hif_pci_check_soc_status(ramdump_scn->hif_sc)
+			&& !ol_copy_ramdump(ramdump_scn))
+			printk("%s: RAM dump collecting completed!\n", __func__);
 
-		if (ol_copy_ramdump(ramdump_scn))
-			goto out;
-
-		printk("%s: RAM dump collecting completed!\n", __func__);
-
-out:
 		ramdump_scn->crash_shutdown = false;
 		complete(&ramdump_scn->ramdump_event);
 		return;
-	}
+    }
+#endif
 
 #ifdef DEBUG
 	ret = hif_pci_check_soc_status(ramdump_scn->hif_sc);
@@ -755,9 +797,11 @@ void ol_target_failure(void *instance, A_STATUS status)
 		return;
 	}
 
+#ifdef TARGET_RAMDUMP_AFTER_KERNEL_PANIC
 	if (scn->crash_shutdown)
 		printk("XXX TARGET ASSERTED because of Kernel Panic XXX\n");
 	else
+#endif
 		printk("XXX TARGET ASSERTED XXX\n");
 	scn->target_status = OL_TRGET_STATUS_RESET;
 
@@ -961,10 +1005,365 @@ ol_check_dataset_patch(struct ol_softc *scn, u_int32_t *address)
 	return 0;
 }
 
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
+
+A_STATUS ol_fw_populate_clk_settings(A_refclk_speed_t refclk,
+				struct cmnos_clock_s *clock_s)
+{
+	if (!clock_s)
+		return A_ERROR;
+
+	switch (refclk) {
+	case SOC_REFCLK_48_MHZ:
+		clock_s->wlan_pll.div = 0xE;
+		clock_s->wlan_pll.rnfrac = 0x2AAA8;
+		clock_s->pll_settling_time = 2400;
+		break;
+	case SOC_REFCLK_19_2_MHZ:
+		clock_s->wlan_pll.div = 0x24;
+		clock_s->wlan_pll.rnfrac = 0x2AAA8;
+		clock_s->pll_settling_time = 960;
+		break;
+	case SOC_REFCLK_24_MHZ:
+		clock_s->wlan_pll.div = 0x1D;
+		clock_s->wlan_pll.rnfrac = 0x15551;
+		clock_s->pll_settling_time = 1200;
+		break;
+	case SOC_REFCLK_26_MHZ:
+		clock_s->wlan_pll.div = 0x1B;
+		clock_s->wlan_pll.rnfrac = 0x4EC4;
+		clock_s->pll_settling_time = 1300;
+		break;
+	case SOC_REFCLK_37_4_MHZ:
+		clock_s->wlan_pll.div = 0x12;
+		clock_s->wlan_pll.rnfrac = 0x34B49;
+		clock_s->pll_settling_time = 1870;
+		break;
+	case SOC_REFCLK_38_4_MHZ:
+		clock_s->wlan_pll.div = 0x12;
+		clock_s->wlan_pll.rnfrac = 0x15551;
+		clock_s->pll_settling_time = 1920;
+		break;
+	case SOC_REFCLK_40_MHZ:
+		clock_s->wlan_pll.div = 0x11;
+		clock_s->wlan_pll.rnfrac = 0x26665;
+		clock_s->pll_settling_time = 2000;
+		break;
+	case SOC_REFCLK_52_MHZ:
+		clock_s->wlan_pll.div = 0x1B;
+		clock_s->wlan_pll.rnfrac = 0x4EC4;
+		clock_s->pll_settling_time = 2600;
+		break;
+	case SOC_REFCLK_UNKNOWN:
+		clock_s->wlan_pll.refdiv = 0;
+		clock_s->wlan_pll.div = 0;
+		clock_s->wlan_pll.rnfrac = 0;
+		clock_s->wlan_pll.outdiv = 0;
+		clock_s->pll_settling_time = 1024;
+		clock_s->refclk_hz = 0;
+	default:
+		return A_ERROR;
+	}
+
+	clock_s->refclk_hz = refclk_speed_to_hz[refclk];
+	clock_s->wlan_pll.refdiv = 0;
+	clock_s->wlan_pll.outdiv = 1;
+
+	return A_OK;
+}
+
+A_STATUS ol_patch_pll_switch(struct ol_softc * scn)
+{
+	HIF_DEVICE *hif_device = scn->hif_hdl;
+	A_STATUS status;
+	u_int32_t addr = 0;
+	u_int32_t reg_val = 0;
+	u_int32_t mem_val = 0;
+	struct cmnos_clock_s clock_s;
+	u_int32_t cmnos_core_clk_div_addr = 0;
+	u_int32_t cmnos_cpu_pll_init_done_addr = 0;
+	u_int32_t cmnos_cpu_speed_addr = 0;
+	struct hif_pci_softc *sc = scn->hif_sc;
+
+	switch (scn->target_version) {
+	case AR6320_REV1_1_VERSION:
+		cmnos_core_clk_div_addr = AR6320_CORE_CLK_DIV_ADDR;
+		cmnos_cpu_pll_init_done_addr = AR6320_CPU_PLL_INIT_DONE_ADDR;
+		cmnos_cpu_speed_addr = AR6320_CPU_SPEED_ADDR;
+		break;
+	case AR6320_REV1_3_VERSION:
+	case AR6320_REV2_1_VERSION:
+		cmnos_core_clk_div_addr = AR6320V2_CORE_CLK_DIV_ADDR;
+		cmnos_cpu_pll_init_done_addr = AR6320V2_CPU_PLL_INIT_DONE_ADDR;
+		cmnos_cpu_speed_addr = AR6320V2_CPU_SPEED_ADDR;
+		break;
+	default:
+		pr_err("%s: Unsupported target version %x\n", __func__,
+		       scn->target_version);
+		return A_ERROR;
+	}
+
+	addr = (RTC_SOC_BASE_ADDRESS | EFUSE_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read EFUSE Addr\n");
+		return status;
+	}
+
+	status = ol_fw_populate_clk_settings(EFUSE_XTAL_SEL_GET(reg_val),
+					&clock_s);
+	if (status != A_OK) {
+		pr_err("Failed to set clock settings\n");
+		return status;
+	}
+	pr_debug("crystal_freq: %dHz\n", clock_s.refclk_hz);
+
+	/* ------Step 1----*/
+	reg_val = 0;
+	addr = (RTC_SOC_BASE_ADDRESS | BB_PLL_CONFIG_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read PLL_CONFIG Addr\n");
+		return status;
+	}
+	pr_debug("Step 1a: %8X\n", reg_val);
+
+	reg_val &= ~(BB_PLL_CONFIG_FRAC_MASK | BB_PLL_CONFIG_OUTDIV_MASK);
+	reg_val |= (BB_PLL_CONFIG_FRAC_SET(clock_s.wlan_pll.rnfrac) |
+			BB_PLL_CONFIG_OUTDIV_SET(clock_s.wlan_pll.outdiv));
+	status = BMIWriteSOCRegister(hif_device, addr, reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write PLL_CONFIG Addr\n");
+		return status;
+	}
+
+	reg_val = 0;
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read back PLL_CONFIG Addr\n");
+		return status;
+	}
+	pr_debug("Step 1b: %8X\n", reg_val);
+
+	/* ------Step 2----*/
+	reg_val = 0;
+	addr = (RTC_WMAC_BASE_ADDRESS | WLAN_PLL_SETTLE_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read PLL_SETTLE Addr\n");
+		return status;
+	}
+	pr_debug("Step 2a: %8X\n", reg_val);
+
+	reg_val &= ~WLAN_PLL_SETTLE_TIME_MASK;
+	reg_val |= WLAN_PLL_SETTLE_TIME_SET(clock_s.pll_settling_time);
+	status = BMIWriteSOCRegister(hif_device, addr, reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write PLL_SETTLE Addr\n");
+		return status;
+	}
+
+	reg_val = 0;
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read back PLL_SETTLE Addr\n");
+		return status;
+	}
+	pr_debug("Step 2b: %8X\n", reg_val);
+
+	/* ------Step 3----*/
+	reg_val = 0;
+	addr = (RTC_SOC_BASE_ADDRESS | SOC_CORE_CLK_CTRL_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read CLK_CTRL Addr\n");
+		return status;
+	}
+	pr_debug("Step 3a: %8X\n", reg_val);
+
+	reg_val &= ~SOC_CORE_CLK_CTRL_DIV_MASK;
+	reg_val |= SOC_CORE_CLK_CTRL_DIV_SET(1);
+	status = BMIWriteSOCRegister(hif_device, addr, reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write CLK_CTRL Addr\n");
+		return status;
+	}
+
+	reg_val = 0;
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read back CLK_CTRL Addr\n");
+		return status;
+	}
+	pr_debug("Step 3b: %8X\n", reg_val);
+
+	/* ------Step 4-----*/
+	mem_val = 1;
+	status = BMIWriteMemory(hif_device, cmnos_core_clk_div_addr,
+			(A_UCHAR *)&mem_val, 4, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write CLK_DIV Addr\n");
+		return status;
+	}
+
+	/* ------Step 5-----*/
+	reg_val = 0;
+	addr = (RTC_WMAC_BASE_ADDRESS | WLAN_PLL_CONTROL_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read PLL_CTRL Addr\n");
+		return status;
+	}
+	pr_debug("Step 5a: %8X\n", reg_val);
+
+	reg_val &= ~(WLAN_PLL_CONTROL_REFDIV_MASK | WLAN_PLL_CONTROL_DIV_MASK |
+			WLAN_PLL_CONTROL_NOPWD_MASK);
+	reg_val |=  (WLAN_PLL_CONTROL_REFDIV_SET(clock_s.wlan_pll.refdiv) |
+			WLAN_PLL_CONTROL_DIV_SET(clock_s.wlan_pll.div) |
+			WLAN_PLL_CONTROL_NOPWD_SET(1));
+	status = BMIWriteSOCRegister(hif_device, addr, reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write PLL_CTRL Addr\n");
+		return status;
+	}
+
+	reg_val = 0;
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read back PLL_CTRL Addr\n");
+		return status;
+	}
+	OS_DELAY(100);
+	pr_debug("Step 5b: %8X\n", reg_val);
+
+	/* ------Step 6-------*/
+	do {
+		reg_val = 0;
+		status = BMIReadSOCRegister(hif_device, (RTC_WMAC_BASE_ADDRESS |
+				RTC_SYNC_STATUS_OFFSET), &reg_val, scn);
+		if (status != A_OK) {
+			pr_err("Failed to read RTC_SYNC_STATUS Addr\n");
+			return status;
+		}
+	} while(RTC_SYNC_STATUS_PLL_CHANGING_GET(reg_val));
+
+	/* ------Step 7-------*/
+	reg_val = 0;
+	addr = (RTC_WMAC_BASE_ADDRESS | WLAN_PLL_CONTROL_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read PLL_CTRL Addr for CTRL_BYPASS\n");
+		return status;
+	}
+	pr_debug("Step 7a: %8X\n", reg_val);
+
+	reg_val &= ~WLAN_PLL_CONTROL_BYPASS_MASK;
+	reg_val |= WLAN_PLL_CONTROL_BYPASS_SET(0);
+	status = BMIWriteSOCRegister(hif_device, addr, reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write PLL_CTRL Addr for CTRL_BYPASS\n");
+		return status;
+	}
+
+	reg_val = 0;
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read back PLL_CTRL Addr for CTRL_BYPASS\n");
+		return status;
+	}
+	pr_debug("Step 7b: %8X\n", reg_val);
+
+	/* ------Step 8--------*/
+	do {
+		reg_val = 0;
+		status = BMIReadSOCRegister(hif_device,
+			(RTC_WMAC_BASE_ADDRESS | RTC_SYNC_STATUS_OFFSET),
+			&reg_val, scn);
+		if (status != A_OK) {
+			pr_err("Failed to read SYNC_STATUS Addr\n");
+			return status;
+		}
+	} while(RTC_SYNC_STATUS_PLL_CHANGING_GET(reg_val));
+
+	/* ------Step 9--------*/
+	reg_val = 0;
+	addr = (RTC_SOC_BASE_ADDRESS | SOC_CPU_CLOCK_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read CPU_CLK Addr\n");
+		return status;
+	}
+	pr_debug("Step 9a: %8X\n", reg_val);
+
+	reg_val &= ~SOC_CPU_CLOCK_STANDARD_MASK;
+	reg_val |= SOC_CPU_CLOCK_STANDARD_SET(1);;
+	status = BMIWriteSOCRegister(hif_device, addr, reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write CPU_CLK Addr\n");
+		return status;
+	}
+
+	reg_val = 0;
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read back CPU_CLK Addr\n");
+		return status;
+	}
+	pr_debug("Step 9b: %8X\n", reg_val);
+
+	/* ------Step 10-------*/
+	reg_val = 0;
+	addr = (RTC_WMAC_BASE_ADDRESS | WLAN_PLL_CONTROL_OFFSET);
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read PLL_CTRL Addr for NOPWD\n");
+		return status;
+	}
+	pr_debug("Step 10a: %8X\n", reg_val);
+
+	reg_val &= ~WLAN_PLL_CONTROL_NOPWD_MASK;
+	status = BMIWriteSOCRegister(hif_device, addr, reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write PLL_CTRL Addr for NOPWD\n");
+		return status;
+	}
+
+	reg_val = 0;
+	status = BMIReadSOCRegister(hif_device, addr, &reg_val, scn);
+	if (status != A_OK) {
+		pr_err("Failed to read back PLL_CTRL Addr for NOPWD\n");
+		return status;
+	}
+	pr_debug("Step 10b: %8X\n", reg_val);
+
+	/* ------Step 11-------*/
+	mem_val = 1;
+	status = BMIWriteMemory(hif_device, cmnos_cpu_pll_init_done_addr,
+			(A_UCHAR *)&mem_val, 4, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write PLL_INIT Addr\n");
+		return status;
+	}
+
+	mem_val = TARGET_CPU_FREQ;
+	status = BMIWriteMemory(hif_device, cmnos_cpu_speed_addr,
+			(A_UCHAR *)&mem_val, 4, scn);
+	if (status != A_OK) {
+		pr_err("Failed to write CPU_SPEED Addr\n");
+		return status;
+	}
+
+	return status;
+}
+#endif
+
 int ol_download_firmware(struct ol_softc *scn)
 {
 	u_int32_t param, address = 0;
 	int status = !EOK;
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
+	A_STATUS ret;
+#endif
 
 	/* Transfer Board Data from Target EEPROM to Target RAM */
 	/* Determine where in Target RAM to write Board Data */
@@ -976,6 +1375,14 @@ int ol_download_firmware(struct ol_softc *scn)
 		address = AR6004_REV5_BOARD_DATA_ADDRESS;
 		printk("%s: Target address not known! Using 0x%x\n", __func__, address);
 	}
+
+#if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
+	ret = ol_patch_pll_switch(scn);
+	if (ret) {
+		pr_err("pll switch failed. status %d\n", ret);
+		return -1;
+	}
+#endif
 
 	if (scn->cal_in_flash) {
 		/* Write EEPROM or Flash data to Target RAM */
@@ -1168,7 +1575,8 @@ static int ol_ath_get_reg_table(A_UINT32 target_version,
 	return section_len;
 }
 
-static int ol_diag_read_reg_loc(struct ol_softc *scn, u_int8_t *buffer)
+static int ol_diag_read_reg_loc(struct ol_softc *scn, u_int8_t *buffer,
+		u_int32_t buffer_len)
 {
 	int i, len, section_len, fill_len;
 	int dump_len, result = 0;
@@ -1184,9 +1592,18 @@ static int ol_diag_read_reg_loc(struct ol_softc *scn, u_int8_t *buffer)
 	}
 
 	curr_sec = reg_table.section;
-	for (i=0; i<reg_table.section_size; i++) {
+	for (i = 0; i < reg_table.section_size; i++) {
 
 		dump_len = curr_sec->end_addr - curr_sec->start_addr;
+
+		if ((buffer_len - result) < dump_len) {
+			printk("Not enough memory to dump the registers:"
+					" %d: 0x%08x-0x%08x\n", i,
+					curr_sec->start_addr,
+					curr_sec->end_addr);
+			goto out;
+		}
+
 		len = ol_diag_read(scn, buffer, curr_sec->start_addr, dump_len);
 
 		if (len != -EIO) {
@@ -1203,6 +1620,14 @@ static int ol_diag_read_reg_loc(struct ol_softc *scn, u_int8_t *buffer)
 			next_sec = (tgt_reg_section *)((u_int8_t *)curr_sec
 							+ sizeof(*curr_sec));
 			fill_len = next_sec->start_addr - curr_sec->end_addr;
+			if ((buffer_len - result) < fill_len) {
+				printk("Not enough memory to fill registers:"
+						" %d: 0x%08x-0x%08x\n", i,
+						curr_sec->end_addr,
+						next_sec->start_addr);
+				goto out;
+			}
+
 			if (fill_len) {
 				adf_os_mem_set(buffer,
 					       INVALID_REG_LOC_DUMMY_DATA,
@@ -1273,6 +1698,8 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 		case 2:
 			/* REG SECTION */
 			pos = REGISTER_LOCATION;
+			/*  ol_diag_read_reg_loc checks for buffer overrun */
+			readLen = 0;
 			break;
 		case 3:
 			/* AXI SECTION */
@@ -1283,7 +1710,8 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 
 		if ((blockLength - amountRead) >= readLen) {
 			if (pos == REGISTER_LOCATION)
-				result = ol_diag_read_reg_loc(scn, bufferLoc);
+				result = ol_diag_read_reg_loc(scn, bufferLoc,
+						blockLength - amountRead);
 			else
 				result = ol_diag_read(scn, bufferLoc,
 						      pos, readLen);

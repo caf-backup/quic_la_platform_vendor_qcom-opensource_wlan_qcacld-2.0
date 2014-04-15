@@ -387,7 +387,7 @@ static void __limInitAssocVars(tpAniSirGlobal pMac)
     vos_mem_set(pMac->lim.protStaCache,
                 sizeof(tCacheParams) * LIM_PROT_STA_CACHE_SIZE, 0);
 
-#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_LFR)
+#if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
     pMac->lim.pSessionEntry = NULL;
     pMac->lim.reAssocRetryAttempt = 0;
 #endif
@@ -561,8 +561,8 @@ static tSirRetStatus __limInitConfig( tpAniSirGlobal pMac )
    if(cfgSetInt(pMac,  WNI_CFG_HT_AMPDU_PARAMS, *(tANI_U8*)pAmpduParamInfo) !=
       eSIR_SUCCESS)
    {
-      PELOGE(limLog(pMac, LOGE, FL("could not update HT AMPDU Param CFG"));)
-      return eSIR_FAILURE;
+     limLog(pMac, LOGE, FL("cfg get short preamble failed"));
+     return eSIR_FAILURE;
    }
 
    /* WNI_CFG_SHORT_PREAMBLE - this one is not updated in
@@ -1032,13 +1032,6 @@ tSirRetStatus peOpen(tpAniSirGlobal pMac, tMacOpenParameters *pMacOpenParam)
         PELOGE(limLog(pMac, LOGE, FL("pe lock init failed!"));)
         return eSIR_FAILURE;
     }
-
-    if (!VOS_IS_STATUS_SUCCESS(
-        vos_spin_lock_init(&pMac->lim.limDisassocDeauthCnfReq.deauthDisassocInprogress)))
-    {
-        PELOGE(limLog(pMac, LOGE, FL("deauth/disassoc process lock init failed!"));)
-        return eSIR_FAILURE;
-    }
     pMac->lim.deauthMsgCnt = 0;
     return eSIR_SUCCESS;
 }
@@ -1083,12 +1076,6 @@ tSirRetStatus peClose(tpAniSirGlobal pMac)
     pMac->pmm.gPmmTim.pTim = NULL;
     if( !VOS_IS_STATUS_SUCCESS( vos_lock_destroy( &pMac->lim.lkPeGlobalLock ) ) )
     {
-        return eSIR_FAILURE;
-    }
-    if (!VOS_IS_STATUS_SUCCESS(
-        vos_spin_lock_destroy(&pMac->lim.limDisassocDeauthCnfReq.deauthDisassocInprogress)))
-    {
-        PELOGE(limLog(pMac, LOGE, FL("deauth/disassoc process lock destroy failed!"));)
         return eSIR_FAILURE;
     }
     return eSIR_SUCCESS;
@@ -1647,7 +1634,7 @@ limUpdateOverlapStaParam(tpAniSirGlobal pMac, tSirMacAddr bssId, tpLimProtStaPar
 
     if (i == LIM_PROT_STA_OVERLAP_CACHE_SIZE)
     {
-        PELOG1(limLog(pMac, LOG1, FL("Overlap cache is full"));)
+       PELOG1(limLog(pMac, LOGW, FL("Overlap cache is full"));)
     }
     else
     {

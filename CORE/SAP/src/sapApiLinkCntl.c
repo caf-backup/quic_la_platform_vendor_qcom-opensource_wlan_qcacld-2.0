@@ -194,7 +194,7 @@ WLANSAP_ScanCallback
                     the selected sub-band so select default channel in the
                     BAND(2.4GHz/5GHZ) */
                  ccmCfgGetInt( halHandle, WNI_CFG_SAP_CHANNEL_SELECT_OPERATING_BAND, &operatingBand);
-                 if(RF_SUBBAND_2_4_GHZ == operatingBand )
+                 if(eSAP_RF_SUBBAND_2_4_GHZ == operatingBand )
                      psapContext->channel = SAP_DEFAULT_CHANNEL;
                  else
                      psapContext->channel = SAP_DEFAULT_5GHZ_CHANNEL;
@@ -742,6 +742,15 @@ WLANSAP_RoamCallback
                sapConvertSapPhyModeToCsrPhyMode(sapContext->csrRoamProfile.phyMode);
             tHalHandle hHal =
                (tHalHandle)vos_get_context( VOS_MODULE_ID_SME, sapContext->pvosGCtx);
+
+            if (NULL == hHal)
+            {
+               VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                         "In %s invalid hHal roamStatus = %d "
+                         "roamResult = %d", __func__, roamStatus, roamResult);
+               halStatus = eHAL_STATUS_FAILED_ALLOC;
+               break;
+            }
 
             /* Both success and failure cases are handled intentionally handled
              * together. Irrespective of whether the channel switch IE was

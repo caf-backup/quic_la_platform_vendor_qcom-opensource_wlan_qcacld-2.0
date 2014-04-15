@@ -72,10 +72,12 @@ static struct completion change_country_code;
 
 #endif
 
+#ifndef CONFIG_ENABLE_LINUX_REG
 static char crda_alpha2[2] = {0, 0}; /* country code from initial crda req */
 static char run_time_alpha2[2] = {0, 0}; /* country code from none-default country req */
 static v_BOOL_t crda_regulatory_entry_valid = VOS_FALSE;
 static v_BOOL_t crda_regulatory_run_time_entry_valid = VOS_FALSE;
+#endif /* ndef CONFIG_ENABLE_LINUX_REG */
 
 
 /*----------------------------------------------------------------------------
@@ -821,7 +823,13 @@ bool is_world_regd(u_int32_t regd)
 static const struct ieee80211_regdomain *vos_default_world_regdomain(void)
 {
    /* this is the most restrictive */
-   return &vos_world_regdom_64;
+    return &vos_world_regdom_64;
+}
+
+static const struct ieee80211_regdomain *vos_custom_world_regdomain(void)
+{
+   /* this is the most restrictive */
+    return &vos_world_regdom_60_61_62;
 }
 
 static const
@@ -1028,17 +1036,24 @@ static void vos_reg_apply_world_flags(struct wiphy *wiphy,
    }
 }
 
-static int regd_init_wiphy(struct regulatory *reg,
+static int regd_init_wiphy(hdd_context_t *pHddCtx, struct regulatory *reg,
       struct wiphy *wiphy)
 {
    const struct ieee80211_regdomain *regd;
 
-   if (is_world_regd(reg->reg_domain)) {
-      regd = vos_world_regdomain(reg);
-      wiphy->flags |= WIPHY_FLAG_CUSTOM_REGULATORY;
-   } else {
-      regd = vos_default_world_regdomain();
-      wiphy->flags |= WIPHY_FLAG_STRICT_REGULATORY;
+   if  (pHddCtx->cfg_ini->fRegChangeDefCountry) {
+       regd = vos_custom_world_regdomain();
+       wiphy->flags |= WIPHY_FLAG_CUSTOM_REGULATORY;
+   }
+   else if (is_world_regd(reg->reg_domain))
+   {
+       regd = vos_world_regdomain(reg);
+       wiphy->flags |= WIPHY_FLAG_CUSTOM_REGULATORY;
+   }
+   else
+   {
+       regd = vos_default_world_regdomain();
+       wiphy->flags |= WIPHY_FLAG_STRICT_REGULATORY;
    }
    wiphy_apply_custom_regulatory(wiphy, regd);
    vos_reg_apply_radar_flags(wiphy);
@@ -1046,7 +1061,7 @@ static int regd_init_wiphy(struct regulatory *reg,
    return 0;
 }
 
-static int reg_init_from_eeprom(struct regulatory *reg,
+static int reg_init_from_eeprom(hdd_context_t *pHddCtx, struct regulatory *reg,
       struct wiphy *wiphy)
 {
    int ret_val = 0;
@@ -1062,7 +1077,7 @@ static int reg_init_from_eeprom(struct regulatory *reg,
    pnvEFSTable->halnv.tables.defaultCountryTable.countryCode[1] =
       reg->alpha2[1];
 
-   regd_init_wiphy(reg, wiphy);
+   regd_init_wiphy(pHddCtx, reg, wiphy);
 
    return ret_val;
 }
@@ -1185,9 +1200,11 @@ VOS_STATUS vos_nv_open(void)
        vos_mem_free(pnvData);
     }
 
+#ifdef CONFIG_QCA_WIFI_ISOC
     VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
            "INFO: NV binary file version=%d Driver default NV version=%d, continue...",
            gnvEFSTable->halnv.fields.nvVersion, WLAN_NV_VERSION);
+#endif
 
      /* Copying the read nv data to the globa NV EFS table */
     {
@@ -1207,9 +1224,11 @@ VOS_STATUS vos_nv_open(void)
         if ( nvReadBufSize != bufSize)
         {
             pnvEFSTable->nvValidityBitmap = DEFAULT_NV_VALIDITY_BITMAP;
+#ifdef CONFIG_QCA_WIFI_ISOC
             VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                       "!!!WARNING: INVALID NV FILE, DRIVER IS USING DEFAULT CAL VALUES %d %d!!!",
                       nvReadBufSize, bufSize);
+#endif
             return VOS_STATUS_SUCCESS;
         }
 
@@ -2433,6 +2452,7 @@ static int bw20_ch_index_to_bw40_ch_index(int k)
    return m;
 }
 
+#ifndef CONFIG_ENABLE_LINUX_REG
 void crda_regulatory_entry_default(v_U8_t *countryCode, int domain_id)
 {
    int k;
@@ -2864,6 +2884,7 @@ static int create_crda_regulatory_entry_from_regd(struct wiphy *wiphy,
   crda_regulatory_entry_post_processing(wiphy, request, nBandCapability, domain_id);
   return 0;
 }
+#endif /* ndef CONFIG_ENABLE_LINUX_REG */
 
 #ifdef CONFIG_ENABLE_LINUX_REG
 static int create_linux_regulatory_entry(struct wiphy *wiphy,
@@ -3203,6 +3224,14 @@ static int create_linux_regulatory_entry(struct wiphy *wiphy,
                               __func__, wiphy->bands[i]->channels[j].center_freq);
                     wiphy->bands[i]->channels[j].flags &= ~IEEE80211_CHAN_PASSIVE_SCAN;
                 }
+
+                if (!(reg_rule->flags & NL80211_RRF_NO_IBSS))
+                {
+                    VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
+                              "%s: Remove no ibss restriction for %u",
+                              __func__, wiphy->bands[i]->channels[j].center_freq);
+                    wiphy->bands[i]->channels[j].flags &= ~IEEE80211_CHAN_NO_IBSS;
+                }
             }
 
             if (wiphy->bands[i]->channels[j].flags & IEEE80211_CHAN_DISABLED)
@@ -3225,18 +3254,6 @@ static int create_linux_regulatory_entry(struct wiphy *wiphy,
             {
                 pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].channels[k].enabled =
                     NV_CHANNEL_DFS;
-
-                /* This is a temporary change for getting the SAP functional on DFS channels
-                 * If the driver is using linux regulatory domain, the hostapd + cfg8211
-                 * reserve the right to allow whether the BSS can be started or not depending
-                 * on the current country, whether the radar is present on the channel and/or
-                 * also the DFS state of the current channel. This is done if the driver supplies
-                 * PASSIVE and DFS flags for DFS channels
-                 * Currently we will not advertise these capabilities until the fix is cleanly
-                 * done the hostapd and cfg80211
-                 */
-                wiphy->bands[i]->channels[j].flags &= ~(IEEE80211_CHAN_RADAR);
-                wiphy->bands[i]->channels[j].flags &= ~(IEEE80211_CHAN_PASSIVE_SCAN);
 
                 /* max_power is in mBm = 100 * dBm */
                 pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].channels[k].pwrLimit =
@@ -3467,7 +3484,7 @@ VOS_STATUS vos_init_wiphy_from_eeprom(void)
 
    wiphy = pHddCtx->wiphy;
 
-   if (reg_init_from_eeprom(&pHddCtx->reg, wiphy))
+   if (reg_init_from_eeprom(pHddCtx, &pHddCtx->reg, wiphy))
    {
       VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
             ("Error during regulatory init from EEPROM"));

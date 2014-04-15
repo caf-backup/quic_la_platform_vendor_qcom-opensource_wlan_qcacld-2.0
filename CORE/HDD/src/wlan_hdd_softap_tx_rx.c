@@ -458,6 +458,72 @@ xmit_done:
 
 #else
 
+#ifdef QCA_LL_TX_FLOW_CT
+/**============================================================================
+  @brief hdd_softap_tx_resume_timer_expired_handler() - Resume OS TX Q timer
+      expired handler for SAP and P2P GO interface.
+      If Blocked OS Q is not resumed during timeout period, to prevent
+      permanent stall, resume OS Q forcefully for SAP and P2P GO interface.
+
+  @param adapter_context : [in] pointer to vdev adapter
+
+  @return         : NONE
+  ===========================================================================*/
+void hdd_softap_tx_resume_timer_expired_handler(void *adapter_context)
+{
+   hdd_adapter_t *pAdapter = (hdd_adapter_t *)adapter_context;
+
+   if (!pAdapter)
+   {
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                "%s: INV ARG", __func__);
+      /* INVALID ARG */
+      return;
+   }
+
+   netif_tx_wake_all_queues(pAdapter->dev);
+   return;
+}
+
+/**============================================================================
+  @brief hdd_softap_tx_resume_cb() - Resume OS TX Q.
+      Q was stopped due to WLAN TX path low resource condition
+
+  @param adapter_context : [in] pointer to vdev adapter
+  @param tx_resume       : [in] TX Q resume trigger
+
+  @return         : NONE
+  ===========================================================================*/
+void hdd_softap_tx_resume_cb(void *adapter_context,
+                        v_BOOL_t tx_resume)
+{
+   hdd_adapter_t *pAdapter = (hdd_adapter_t *)adapter_context;
+
+   if (!pAdapter)
+   {
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                "%s: INV ARG", __func__);
+      /* INVALID ARG */
+      return;
+   }
+
+   /* Resume TX  */
+   if (VOS_TRUE == tx_resume)
+   {
+       if(VOS_TIMER_STATE_STOPPED !=
+          vos_timer_getCurrentState(&pAdapter->tx_flow_control_timer))
+       {
+          vos_timer_stop(&pAdapter->tx_flow_control_timer);
+       }
+
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                 "Resume DEV 0x%x", (unsigned int)pAdapter->dev);
+       netif_tx_wake_all_queues(pAdapter->dev);
+   }
+   return;
+}
+#endif /* QCA_LL_TX_FLOW_CT */
+
 /**============================================================================
   @brief hdd_softap_hard_start_xmit() - Function registered with the Linux OS
                                         for transmitting packets.
@@ -537,6 +603,22 @@ int hdd_softap_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
       }
    }
 
+#ifdef QCA_LL_TX_FLOW_CT
+   if (VOS_FALSE == WLANTL_GetTxResource((WLAN_HDD_GET_CTX(pAdapter))->pvosContext,
+                                         pAdapter->sessionId,
+                                         pAdapter->tx_flow_low_watermark,
+                                         pAdapter->tx_flow_high_watermark_offset))
+   {
+       netif_tx_stop_all_queues(dev);
+       if (VOS_TIMER_STATE_STOPPED ==
+           vos_timer_getCurrentState(&pAdapter->tx_flow_control_timer))
+       {
+          vos_timer_start(&pAdapter->tx_flow_control_timer,
+                          WLAN_HDD_TX_FLOW_CONTROL_OS_Q_BLOCK_TIME);
+       }
+   }
+#endif /* QCA_LL_TX_FLOW_CT */
+
    //Get TL AC corresponding to Qdisc queue index/AC.
    ac = hdd_QdiscAcToTlAC[skb->queue_mapping];
 
@@ -566,7 +648,7 @@ int hdd_softap_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
    {
       /* Proto Trace enabled */
       proto_type = vos_pkt_get_proto_type(skb,
-                      hddCtxt->cfg_ini->gEnableDebugLog);
+                      hddCtxt->cfg_ini->gEnableDebugLog, 0);
       if (VOS_PKT_TRAC_TYPE_EAPOL & proto_type)
       {
          vos_pkt_trace_buf_update("HA:T:EPL");
@@ -745,7 +827,7 @@ xmit_end:
   ===========================================================================*/
 void hdd_softap_tx_timeout(struct net_device *dev)
 {
-   VOS_TRACE( VOS_MODULE_ID_HDD_SOFTAP, VOS_TRACE_LEVEL_ERROR,
+   VOS_TRACE( VOS_MODULE_ID_HDD_SOFTAP, VOS_TRACE_LEVEL_DEBUG,
       "%s: Transmission timeout occurred", __func__);
    //Getting here implies we disabled the TX queues for too long. Queues are
    //disabled either because of disassociation or low resource scenarios. In
@@ -1642,7 +1724,6 @@ VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
    pAdapter = pHddCtx->sta_to_adapter[staId];
    if( NULL == pAdapter )
    {
-      VOS_ASSERT(0);
       return VOS_STATUS_E_FAILURE;
    }
 
@@ -1669,7 +1750,7 @@ VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
        (pHddCtx->cfg_ini->gEnableDebugLog & VOS_PKT_TRAC_TYPE_DHCP))
    {
       proto_type = vos_pkt_get_proto_type(skb,
-                        pHddCtx->cfg_ini->gEnableDebugLog);
+                        pHddCtx->cfg_ini->gEnableDebugLog, 0);
       if (VOS_PKT_TRAC_TYPE_EAPOL & proto_type)
       {
          vos_pkt_trace_buf_update("HA:R:EPL");

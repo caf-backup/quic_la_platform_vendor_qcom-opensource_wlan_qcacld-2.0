@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2547,9 +2547,16 @@ limTdlsPopulateMatchingRateSet(tpAniSirGlobal pMac,
 
     /**
      * Copy received rates in tempRateSet, the parser has ensured
-     * unicity of the rates so there cannot be more than 12 . Need to Check this
-     * TODO Sunil.
+     * unicity of the rates so there cannot be more than 12 .
      */
+    if (supporteRatesLength > SIR_MAC_RATESET_EID_MAX)
+    {
+        limLog( pMac, LOGW, FL("Supported rates length %d more than "
+                               "the Max limit, reset to Max"),
+                               supporteRatesLength);
+        supporteRatesLength = SIR_MAC_RATESET_EID_MAX;
+    }
+
     for (i = 0; i < supporteRatesLength; i++)
     {
         tempRateSet.rate[i] = pSupportedRateSet[i];
