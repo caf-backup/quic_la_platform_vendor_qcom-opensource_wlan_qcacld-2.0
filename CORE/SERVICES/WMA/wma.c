@@ -1010,6 +1010,29 @@ static void wma_delete_all_ibss_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 }
 #endif //#ifdef QCA_IBSS_SUPPORT
 
+static void wma_delete_all_ap_remote_peers(tp_wma_handle wma, A_UINT32 vdev_id)
+{
+		ol_txrx_vdev_handle vdev;
+		ol_txrx_peer_handle peer;
+
+		if (!wma || vdev_id > wma->max_bssid)
+			return;
+
+		vdev = wma->interfaces[vdev_id].handle;
+		if (!vdev)
+			return;
+
+		/* remove all remote peers of SAP */
+		TAILQ_FOREACH(peer, &vdev->peer_list, peer_list_elem) {
+		if (peer != TAILQ_FIRST(&vdev->peer_list)) {
+			adf_os_atomic_init(&peer->ref_cnt);
+			adf_os_atomic_inc(&peer->ref_cnt);
+			wma_remove_peer(wma, wma->interfaces[vdev_id].bssid,
+					vdev_id, peer);
+		}
+	}
+}
+
 static int wma_vdev_stop_resp_handler(void *handle, u_int8_t *cmd_param_info,
 				      u32 len)
 {
@@ -1063,11 +1086,15 @@ static int wma_vdev_stop_resp_handler(void *handle, u_int8_t *cmd_param_info,
 		iface = &wma->interfaces[resp_event->vdev_id];
 
 #ifdef QCA_IBSS_SUPPORT
-		if (wma_is_vdev_in_ibss_mode(wma, resp_event->vdev_id))
+		if ( wma_is_vdev_in_ibss_mode(wma, resp_event->vdev_id))
 			wma_delete_all_ibss_peers(wma, resp_event->vdev_id);
 		else
 #endif
 		{
+			if (wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id))
+			{
+				wma_delete_all_ap_remote_peers(wma, resp_event->vdev_id);
+			}
 			peer = ol_txrx_find_peer_by_addr(pdev, params->bssid,
 					&peer_id);
 			if (!peer)
@@ -5102,6 +5129,9 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
         scan_params->idle_time = scan_params->min_rest_time;
         scan_params->burst_duration = WMA_ROAM_DWELL_TIME_PASSIVE_DEFAULT;
     }
+    if (!pMac->roam.configParam.allowDFSChannelRoam) {
+        scan_params->scan_ctrl_flags |= WMI_SCAN_BYPASS_DFS_CHN;
+    }
     WMA_LOGI("%s: Rome roam scan parameters:"
              " dwell_time_active = %d, dwell_time_passive = %d",
              __func__,
@@ -5114,11 +5144,12 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
              scan_params->max_rest_time,
              scan_params->repeat_probe_time);
     WMA_LOGI("%s: max_scan_time = %d, idle_time = %d,"
-             " burst_duration = %d",
+             " burst_duration = %d, scan_ctrl_flags = 0x%x",
              __func__,
              scan_params->max_scan_time,
              scan_params->idle_time,
-             scan_params->burst_duration);
+             scan_params->burst_duration,
+             scan_params->scan_ctrl_flags);
 }
 
 /* function   : wma_roam_scan_offload_ap_profile
@@ -6229,6 +6260,10 @@ void wma_vdev_resp_timer(void *data)
 		else
 #endif
 		{
+			if (wma_is_vdev_in_ap_mode(wma, tgt_req->vdev_id))
+			{
+				wma_delete_all_ap_remote_peers(wma, tgt_req->vdev_id);
+			}
 			peer = ol_txrx_find_peer_by_addr(pdev, params->bssid,
 				&peer_id);
 			wma_remove_peer(wma, params->bssid, tgt_req->vdev_id,
@@ -16496,15 +16531,26 @@ u_int8_t wma_thermal_mgmt_get_level(void *handle, u_int32_t temp)
 {
 	tp_wma_handle wma = (tp_wma_handle) handle;
 	int i;
-	t_thermal_level_info thermal_info;
+	u_int8_t level;
 
-	for (i = 0; i < (WLAN_WMA_MAX_THERMAL_LEVELS - 1); i++) {
-		thermal_info = wma->thermal_mgmt_info.thermalLevels[i];
-		if (temp < thermal_info.maxTempThreshold) {
-			return i;
-		}
+	level = i = wma->thermal_mgmt_info.thermalCurrLevel;
+	while (temp < wma->thermal_mgmt_info.thermalLevels[i].minTempThreshold &&
+		   i > 0) {
+		i--;
+		level = i;
 	}
-	return (WLAN_WMA_MAX_THERMAL_LEVELS - 1);
+
+	i = wma->thermal_mgmt_info.thermalCurrLevel;
+	while (temp > wma->thermal_mgmt_info.thermalLevels[i].maxTempThreshold &&
+		   i < (WLAN_WMA_MAX_THERMAL_LEVELS - 1)) {
+		i++;
+		level = i;
+	}
+
+	WMA_LOGW("Change thermal level from %d -> %d\n",
+			  wma->thermal_mgmt_info.thermalCurrLevel, level);
+
+	return level;
 }
 
 /* function   : wma_thermal_mgmt_evt_handler
