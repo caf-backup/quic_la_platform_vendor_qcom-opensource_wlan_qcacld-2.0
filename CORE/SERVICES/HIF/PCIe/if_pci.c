@@ -68,6 +68,7 @@
 #define AR6320_FW_1_1  (0x11)
 #define AR6320_FW_1_3  (0x13)
 #define AR6320_FW_2_0  (0x20)
+#define AR6320_FW_3_0  (0x30)
 
 #define MAX_NUM_OF_RECEIVES 1000 /* Maximum number of Rx buf to process before break out */
 #define PCIE_WAKE_TIMEOUT 1000 /* Maximum ms timeout for host to wake up target */
@@ -110,7 +111,7 @@ hif_pci_interrupt_handler(int irq, void *arg)
     if (LEGACY_INTERRUPTS(sc)) {
 
         if (sc->hif_init_done == TRUE)
-           A_TARGET_ACCESS_BEGIN(hif_state->targid);
+           A_TARGET_ACCESS_BEGIN_RET(hif_state->targid);
 
         /* Clear Legacy PCI line interrupts */
         /* IMPORTANT: INTR_CLR regiser has to be set after INTR_ENABLE is set to 0, */
@@ -125,7 +126,7 @@ hif_pci_interrupt_handler(int irq, void *arg)
             VOS_BUG(0);
         }
         if (sc->hif_init_done == TRUE)
-          A_TARGET_ACCESS_END(hif_state->targid);
+          A_TARGET_ACCESS_END_RET(hif_state->targid);
     }
     /* TBDXXX: Add support for WMAC */
 
@@ -701,6 +702,7 @@ again:
             break;
 
         case AR6320_FW_2_0:
+        case AR6320_FW_3_0:
             hif_type = HIF_TYPE_AR6320V2;
             target_type = TARGET_TYPE_AR6320V2;
             break;
@@ -730,6 +732,7 @@ again:
 #if PCIE_BAR0_READY_CHECKING
         int wait_limit = 200;
 #endif
+        int targ_awake_limit = 500;
 
         /*
          * Verify that the Target was started cleanly.
@@ -744,7 +747,13 @@ again:
          */
         A_PCI_WRITE32(mem + PCIE_LOCAL_BASE_ADDRESS + PCIE_SOC_WAKE_ADDRESS, PCIE_SOC_WAKE_V_MASK);
         while (!hif_pci_targ_is_awake(sc, mem)) {
-            ;
+            if (0 == targ_awake_limit) {
+                printk(KERN_ERR "%s: target awake timeout\n", __func__);
+                ret = -EAGAIN;
+                goto err_tgtstate;
+            }
+            A_MDELAY(1);
+            targ_awake_limit--;
         }
 
 #if PCIE_BAR0_READY_CHECKING
@@ -1006,6 +1015,7 @@ again:
             break;
 
         case AR6320_FW_2_0:
+        case AR6320_FW_3_0:
             hif_type = HIF_TYPE_AR6320V2;
             target_type = TARGET_TYPE_AR6320V2;
             break;
@@ -1563,9 +1573,9 @@ hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
     u32 val;
     v_VOID_t * temp_module;
 
-    A_TARGET_ACCESS_BEGIN(targid);
+    A_TARGET_ACCESS_BEGIN_RET(targid);
     A_PCI_WRITE32(sc->mem + FW_INDICATOR_ADDRESS, (state.event << 16));
-    A_TARGET_ACCESS_END(targid);
+    A_TARGET_ACCESS_END_RET(targid);
 
     if (!txrx_pdev) {
         printk("%s: txrx_pdev is NULL\n", __func__);
@@ -1591,6 +1601,9 @@ hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
         printk("%s: Scan in progress. Aborting suspend\n", __func__);
         return (-1);
     }
+
+    printk("\n%s: wow mode %d event %d\n", __func__,
+       wma_is_wow_mode_selected(temp_module), state.event);
 
     if (wma_is_wow_mode_selected(temp_module)) {
           if(wma_enable_wow_in_fw(temp_module))
@@ -1622,7 +1635,11 @@ hif_pci_resume(struct pci_dev *pdev)
 
     err = pci_enable_device(pdev);
     if (err)
+    {
+        printk("\n%s %d : pci_enable_device returned failure %d\n",
+           __func__, __LINE__, err);
         return err;
+    }
 
     pci_read_config_dword(pdev, OL_ATH_PCI_PM_CONTROL, &val);
     if ((val & 0x000000ff) != 0) {
@@ -1641,9 +1658,9 @@ hif_pci_resume(struct pci_dev *pdev)
             pci_write_config_dword(pdev, 0x40, val & 0xffff00ff);
     }
 
-    A_TARGET_ACCESS_BEGIN(targid);
+    A_TARGET_ACCESS_BEGIN_RET(targid);
     val = A_PCI_READ32(sc->mem + FW_INDICATOR_ADDRESS) >> 16;
-    A_TARGET_ACCESS_END(targid);
+    A_TARGET_ACCESS_END_RET(targid);
 
     /* No need to send WMI_PDEV_RESUME_CMDID to FW if WOW is enabled */
     temp_module = vos_get_context(VOS_MODULE_ID_WDA, vos_context);
@@ -1651,6 +1668,10 @@ hif_pci_resume(struct pci_dev *pdev)
         printk("%s: WDA module is NULL\n", __func__);
         return (-1);
     }
+
+    printk("\n%s: wow mode %d val %d\n", __func__,
+       wma_is_wow_mode_selected(temp_module), val);
+
     if (!wma_is_wow_mode_selected(temp_module) &&
         (val == PM_EVENT_HIBERNATE || val == PM_EVENT_SUSPEND)) {
         return wma_resume_target(temp_module);

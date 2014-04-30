@@ -2137,7 +2137,7 @@ hdd_sendactionframe(hdd_adapter_t *pAdapter, const tANI_U8 *bssid,
 
    /* if the target bssid is different from currently associated AP,
       then no need to send action frame */
-   if (!memcmp(bssid, pHddStaCtx->conn_info.bssId, VOS_MAC_ADDR_SIZE)) {
+   if (memcmp(bssid, pHddStaCtx->conn_info.bssId, VOS_MAC_ADDR_SIZE)) {
       hddLog(VOS_TRACE_LEVEL_INFO, "%s: STA is not associated to this AP",
              __func__);
       ret = -EINVAL;
@@ -2879,7 +2879,7 @@ int wlan_hdd_set_mc_rate(hdd_adapter_t *pAdapter, int targetRate)
        (WLAN_HDD_INFRA_STATION != pAdapter->device_mode))
    {
       VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-         "%s: Received SETMCRATE command in invalid mode %d \n"
+         "%s: Received SETMCRATE command in invalid mode %d"
          "SETMCRATE command is only allowed in STA, IBSS or SOFTAP mode",
          __func__, pAdapter->device_mode);
       return -EINVAL;
@@ -4595,7 +4595,7 @@ int hdd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
               (WLAN_HDD_SOFTAP != pAdapter->device_mode))
           {
              VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "Received SETRMCTXRATE command in invalid mode %d \n"
+                "Received SETRMCTXRATE command in invalid mode %d"
                 "SETRMC command is only allowed in IBSS or SOFTAP mode",
                 pAdapter->device_mode);
              ret = -EINVAL;
@@ -4745,15 +4745,15 @@ int hdd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
            }
            VOS_TRACE( VOS_MODULE_ID_HDD,
                       VOS_TRACE_LEVEL_INFO,
-                      "UplinkPktQueueDly(%d)\n"
-                      "UplinkPktQueueDlyHist[0](%d)\n"
-                      "UplinkPktQueueDlyHist[1](%d)\n"
-                      "UplinkPktQueueDlyHist[2](%d)\n"
-                      "UplinkPktQueueDlyHist[3](%d)\n"
-                      "UplinkPktTxDly(%u)\n"
-                      "UplinkPktLoss(%d)\n"
-                      "UplinkPktCount(%d)\n"
-                      "RoamingCount(%d)\n"
+                      "UplinkPktQueueDly(%d)"
+                      "UplinkPktQueueDlyHist[0](%d)"
+                      "UplinkPktQueueDlyHist[1](%d)"
+                      "UplinkPktQueueDlyHist[2](%d)"
+                      "UplinkPktQueueDlyHist[3](%d)"
+                      "UplinkPktTxDly(%u)"
+                      "UplinkPktLoss(%d)"
+                      "UplinkPktCount(%d)"
+                      "RoamingCount(%d)"
                       "RoamingDly(%d)",
                       tsmMetrics.UplinkPktQueueDly,
                       tsmMetrics.UplinkPktQueueDlyHist[0],
@@ -6727,7 +6727,7 @@ void hdd_req_bmps_cbk(void *callbackContext, eHalStatus status)
 
    struct completion *completion_var = (struct completion*) callbackContext;
 
-   hddLog(VOS_TRACE_LEVEL_ERROR, "HDD BMPS request Callback, status = %d\n", status);
+   hddLog(VOS_TRACE_LEVEL_ERROR, "HDD BMPS request Callback, status = %d", status);
    if(completion_var != NULL)
    {
       complete(completion_var);
@@ -7260,7 +7260,7 @@ void hdd_cleanup_actionframe( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
       if(!rc)
       {
          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-              ("ERROR: HDD Wait for Action Confirmation Failed!!\n"));
+              ("ERROR: HDD Wait for Action Confirmation Failed!!"));
       }
    }
    return;
@@ -7549,7 +7549,7 @@ VOS_STATUS hdd_disable_bmps_imps(hdd_context_t *pHddCtx, tANI_U8 session_type)
                  if(eHAL_STATUS_SUCCESS != halStatus)
                  {
                     status = VOS_STATUS_E_FAILURE;
-                    hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Fail to Disable Power Save\n", __func__);
+                    hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Fail to Disable Power Save", __func__);
                     VOS_ASSERT(0);
                     return status;
                  }
@@ -7562,7 +7562,7 @@ VOS_STATUS hdd_disable_bmps_imps(hdd_context_t *pHddCtx, tANI_U8 session_type)
                  if(eHAL_STATUS_SUCCESS != halStatus)
                  {
                     status = VOS_STATUS_E_FAILURE;
-                    hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Fail to Stop Auto Bmps Timer\n", __func__);
+                    hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Fail to Stop Auto Bmps Timer", __func__);
                     VOS_ASSERT(0);
                     return status;
                  }
@@ -7588,7 +7588,7 @@ VOS_STATUS hdd_disable_bmps_imps(hdd_context_t *pHddCtx, tANI_U8 session_type)
                  else
                  {
                     status = VOS_STATUS_E_FAILURE;
-                    hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Request for Full Power failed\n", __func__);
+                    hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Request for Full Power failed", __func__);
                     VOS_ASSERT(0);
                     return status;
                  }
@@ -7611,6 +7611,7 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
    VOS_STATUS status = VOS_STATUS_E_FAILURE;
    VOS_STATUS exitbmpsStatus = VOS_STATUS_E_FAILURE;
    hdd_cfg80211_state_t *cfgState;
+   int ret;
 
    hddLog(VOS_TRACE_LEVEL_INFO_HIGH, "%s iface =%s type = %d\n",__func__,iface_name,session_type);
 
@@ -7853,7 +7854,6 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
 #ifdef QCA_WIFI_2_0
    if ((vos_get_conparam() != VOS_FTM_MODE) && (!pHddCtx->cfg_ini->enable2x2))
    {
-      int ret;
 #define HDD_DTIM_1CHAIN_RX_ID 0x5
 #define HDD_SMPS_PARAM_VALUE_S 29
 
@@ -7893,6 +7893,22 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
 #undef HDD_DTIM_1CHAIN_RX_ID
 #undef HDD_SMPS_PARAM_VALUE_S
    }
+
+  if (VOS_FTM_MODE != vos_get_conparam())
+  {
+       ret = process_wma_set_command((int)pAdapter->sessionId,
+                         (int)WMI_PDEV_PARAM_HYST_EN,
+                         (int)pHddCtx->cfg_ini->enableHystereticMode,
+                         PDEV_CMD);
+
+       if (ret != 0)
+       {
+           hddLog(VOS_TRACE_LEVEL_ERROR,"%s: WMI_PDEV_PARAM_HYST_EN set"
+                                 " failed %d", __func__, ret);
+           goto err_free_netdev;
+       }
+  }
+
 #endif
 
    return pAdapter;
@@ -8019,7 +8035,7 @@ void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter)
                             eANI_BOOLEAN_FALSE) )
     {
         hddLog(LOGE,
-           "Could not pass on WNI_CFG_PROBE_RSP_ADDNIE_DATA1 to CCM\n");
+           "Could not pass on WNI_CFG_PROBE_RSP_ADDNIE_DATA1 to CCM");
     }
 
     if ( eHAL_STATUS_FAILURE == ccmCfgSetStr((WLAN_HDD_GET_CTX(pHostapdAdapter))->hHal,
@@ -8027,7 +8043,7 @@ void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter)
                             eANI_BOOLEAN_FALSE) )
     {
         hddLog(LOGE,
-           "Could not pass on WNI_CFG_PROBE_RSP_ADDNIE_DATA2 to CCM\n");
+           "Could not pass on WNI_CFG_PROBE_RSP_ADDNIE_DATA2 to CCM");
     }
 
     if ( eHAL_STATUS_FAILURE == ccmCfgSetStr((WLAN_HDD_GET_CTX(pHostapdAdapter))->hHal,
@@ -8035,7 +8051,7 @@ void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter)
                             eANI_BOOLEAN_FALSE) )
     {
         hddLog(LOGE,
-           "Could not pass on WNI_CFG_PROBE_RSP_ADDNIE_DATA3 to CCM\n");
+           "Could not pass on WNI_CFG_PROBE_RSP_ADDNIE_DATA3 to CCM");
     }
 }
 
@@ -8095,6 +8111,16 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
                }
             }
          }
+#ifdef QCA_LL_TX_FLOW_CT
+         WLANTL_DeRegisterTXFlowControl(pHddCtx->pvosContext, pAdapter->sessionId);
+         if(VOS_TIMER_STATE_STOPPED !=
+            vos_timer_getCurrentState(&pAdapter->tx_flow_control_timer))
+         {
+            vos_timer_stop(&pAdapter->tx_flow_control_timer);
+         }
+         vos_timer_destroy(&pAdapter->tx_flow_control_timer);
+#endif /* QCA_LL_TX_FLOW_CT */
+
          if (test_bit(SME_SESSION_OPENED, &pAdapter->event_flags))
          {
             INIT_COMPLETION(pAdapter->session_close_comp_var);
@@ -8108,14 +8134,6 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
                           msecs_to_jiffies(WLAN_WAIT_TIME_SESSIONOPENCLOSE));
             }
          }
-#ifdef QCA_LL_TX_FLOW_CT
-         if(VOS_TIMER_STATE_STOPPED !=
-            vos_timer_getCurrentState(&pAdapter->tx_flow_control_timer))
-         {
-            vos_timer_stop(&pAdapter->tx_flow_control_timer);
-         }
-         vos_timer_destroy(&pAdapter->tx_flow_control_timer);
-#endif /* QCA_LL_TX_FLOW_CT */
          break;
 
       case WLAN_HDD_SOFTAP:
@@ -8140,6 +8158,7 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
          }
 
 #ifdef QCA_LL_TX_FLOW_CT
+         WLANTL_DeRegisterTXFlowControl(pHddCtx->pvosContext, pAdapter->sessionId);
          if(VOS_TIMER_STATE_STOPPED !=
             vos_timer_getCurrentState(&pAdapter->tx_flow_control_timer))
          {
@@ -8477,6 +8496,12 @@ void hdd_dump_concurrency_info(hdd_context_t *pHddCtx)
 
 #ifdef QCA_LL_TX_FLOW_CT
    v_U8_t targetChannel = 0;
+   v_U8_t preAdapterChannel = 0;
+   v_U8_t channel24;
+   v_U8_t channel5;
+   hdd_adapter_t *preAdapterContext = NULL;
+   hdd_adapter_t *pAdapter2_4 = NULL;
+   hdd_adapter_t *pAdapter5 = NULL;
 #endif /* QCA_LL_TX_FLOW_CT */
 
    status =  hdd_get_front_adapter ( pHddCtx, &pAdapterNode );
@@ -8536,34 +8561,10 @@ void hdd_dump_concurrency_info(hdd_context_t *pHddCtx)
 #ifdef QCA_LL_TX_FLOW_CT
       if (targetChannel)
       {
-          /* First stage implementation
-           * 2.4GHz band channels handle as low bandwidth adapter
-           * OS Q block will be done more aggressively
-           * TX PAUSE Q depth will be less */
-          if (targetChannel <= WLAN_HDD_TX_FLOW_CONTROL_MAX_24BAND_CH)
-          {
-             pAdapter->tx_flow_low_watermark =
-                       pHddCtx->cfg_ini->TxLbwFlowLowWaterMark;
-             pAdapter->tx_flow_high_watermark_offset =
-                       pHddCtx->cfg_ini->TxLbwFlowHighWaterMarkOffset;
-             WLANTL_SetAdapterMaxQDepth(pHddCtx->pvosContext,
-                                        pAdapter->sessionId,
-                                        pHddCtx->cfg_ini->TxLbwFlowMaxQueueDepth);
-             /* Temporary set log level as error
-              * TX Flow control feature settled down, will lower log level */
-             hddLog(VOS_TRACE_LEVEL_ERROR,
-                    "MODE %d, CH %d, LWM %d, HWM %d, TXQDEP %d",
-                    pAdapter->device_mode,
-                    targetChannel,
-                    pAdapter->tx_flow_low_watermark,
-                    pAdapter->tx_flow_low_watermark +
-                    pAdapter->tx_flow_high_watermark_offset,
-                    pHddCtx->cfg_ini->TxLbwFlowMaxQueueDepth);
-          }
-          /* First stage implementation
-           * 5GHz band channels handle as high bandwidth adapter */
-          else
-          {
+         /* This is first adapter detected as active
+          * set as default for none concurrency case */
+         if (!preAdapterChannel)
+         {
              pAdapter->tx_flow_low_watermark =
                        pHddCtx->cfg_ini->TxHbwFlowLowWaterMark;
              pAdapter->tx_flow_high_watermark_offset =
@@ -8581,7 +8582,125 @@ void hdd_dump_concurrency_info(hdd_context_t *pHddCtx)
                     pAdapter->tx_flow_low_watermark +
                     pAdapter->tx_flow_high_watermark_offset,
                     pHddCtx->cfg_ini->TxHbwFlowMaxQueueDepth);
-          }
+             preAdapterChannel = targetChannel;
+             preAdapterContext = pAdapter;
+         }
+         else
+         {
+            /* SCC, disable TX flow control for both
+             * SCC each adapter cannot reserve dedicated channel resource
+             * as a result, if any adapter blocked OS Q by flow control,
+             * blocked adapter will lost chance to recover  */
+            if (preAdapterChannel == targetChannel)
+            {
+                /* Current adapter */
+                pAdapter->tx_flow_low_watermark = 0;
+                pAdapter->tx_flow_high_watermark_offset = 0;
+                WLANTL_SetAdapterMaxQDepth(pHddCtx->pvosContext,
+                                           pAdapter->sessionId,
+                                           pHddCtx->cfg_ini->TxHbwFlowMaxQueueDepth);
+                hddLog(VOS_TRACE_LEVEL_ERROR,
+                      "SCC: MODE %d, CH %d, LWM %d, HWM %d, TXQDEP %d",
+                      pAdapter->device_mode,
+                      targetChannel,
+                      pAdapter->tx_flow_low_watermark,
+                      pAdapter->tx_flow_low_watermark +
+                      pAdapter->tx_flow_high_watermark_offset,
+                      pHddCtx->cfg_ini->TxHbwFlowMaxQueueDepth);
+
+                if (!preAdapterContext)
+                {
+                   hddLog(VOS_TRACE_LEVEL_ERROR,
+                      "SCC: Previous adapter context NULL");
+                   continue;
+                }
+
+                /* Previous adapter */
+                preAdapterContext->tx_flow_low_watermark = 0;
+                preAdapterContext->tx_flow_high_watermark_offset = 0;
+                WLANTL_SetAdapterMaxQDepth(pHddCtx->pvosContext,
+                                           preAdapterContext->sessionId,
+                                           pHddCtx->cfg_ini->TxHbwFlowMaxQueueDepth);
+                /* Temporary set log level as error
+                 * TX Flow control feature settled down, will lower log level */
+                hddLog(VOS_TRACE_LEVEL_ERROR,
+                      "SCC: MODE %d, CH %d, LWM %d, HWM %d, TXQDEP %d",
+                      preAdapterContext->device_mode,
+                      targetChannel,
+                      preAdapterContext->tx_flow_low_watermark,
+                      preAdapterContext->tx_flow_low_watermark +
+                      preAdapterContext->tx_flow_high_watermark_offset,
+                      pHddCtx->cfg_ini->TxHbwFlowMaxQueueDepth);
+            }
+            /* MCC, each adapter will have dedicated resource */
+            else
+            {
+                /* current channel is 2.4 */
+                if (targetChannel <= WLAN_HDD_TX_FLOW_CONTROL_MAX_24BAND_CH)
+                {
+                   channel24   = targetChannel;
+                   channel5    = preAdapterChannel;
+                   pAdapter2_4 = pAdapter;
+                   pAdapter5   = preAdapterContext;
+                }
+                /* Current channel is 5 */
+                else
+                {
+                   channel24   = preAdapterChannel;
+                   channel5    = targetChannel;
+                   pAdapter2_4 = preAdapterContext;
+                   pAdapter5   = pAdapter;
+                }
+
+                if (!pAdapter5)
+                {
+                   hddLog(VOS_TRACE_LEVEL_ERROR,
+                      "MCC: 5GHz adapter context NULL");
+                   continue;
+                }
+                pAdapter5->tx_flow_low_watermark =
+                       pHddCtx->cfg_ini->TxHbwFlowLowWaterMark;
+                pAdapter5->tx_flow_high_watermark_offset =
+                       pHddCtx->cfg_ini->TxHbwFlowHighWaterMarkOffset;
+                WLANTL_SetAdapterMaxQDepth(pHddCtx->pvosContext,
+                                        pAdapter5->sessionId,
+                                        pHddCtx->cfg_ini->TxHbwFlowMaxQueueDepth);
+                /* Temporary set log level as error
+                 * TX Flow control feature settled down, will lower log level */
+                hddLog(VOS_TRACE_LEVEL_ERROR,
+                    "MCC: MODE %d, CH %d, LWM %d, HWM %d, TXQDEP %d",
+                    pAdapter5->device_mode,
+                    channel5,
+                    pAdapter5->tx_flow_low_watermark,
+                    pAdapter5->tx_flow_low_watermark +
+                    pAdapter5->tx_flow_high_watermark_offset,
+                    pHddCtx->cfg_ini->TxHbwFlowMaxQueueDepth);
+
+                if (!pAdapter2_4)
+                {
+                   hddLog(VOS_TRACE_LEVEL_ERROR,
+                      "MCC: 2.4GHz adapter context NULL");
+                   continue;
+                }
+                pAdapter2_4->tx_flow_low_watermark =
+                       pHddCtx->cfg_ini->TxLbwFlowLowWaterMark;
+                pAdapter2_4->tx_flow_high_watermark_offset =
+                       pHddCtx->cfg_ini->TxLbwFlowHighWaterMarkOffset;
+                WLANTL_SetAdapterMaxQDepth(pHddCtx->pvosContext,
+                                        pAdapter2_4->sessionId,
+                                        pHddCtx->cfg_ini->TxLbwFlowMaxQueueDepth);
+                /* Temporary set log level as error
+                 * TX Flow control feature settled down, will lower log level */
+                hddLog(VOS_TRACE_LEVEL_ERROR,
+                    "MCC: MODE %d, CH %d, LWM %d, HWM %d, TXQDEP %d",
+                    pAdapter2_4->device_mode,
+                    channel24,
+                    pAdapter2_4->tx_flow_low_watermark,
+                    pAdapter2_4->tx_flow_low_watermark +
+                    pAdapter2_4->tx_flow_high_watermark_offset,
+                    pHddCtx->cfg_ini->TxLbwFlowMaxQueueDepth);
+            }
+         }
       }
       targetChannel = 0;
 #endif /* QCA_LL_TX_FLOW_CT */
@@ -8918,7 +9037,7 @@ static void hdd_set_multicast_list(struct net_device *dev)
             break;
          memset(&(pAdapter->mc_addr_list.addr[i][0]), 0, ETH_ALEN);
          memcpy(&(pAdapter->mc_addr_list.addr[i][0]), ha->addr, ETH_ALEN);
-         hddLog(VOS_TRACE_LEVEL_INFO, "\n%s: mlist[%d] = "MAC_ADDRESS_STR,
+         hddLog(VOS_TRACE_LEVEL_INFO, "%s: mlist[%d] = "MAC_ADDRESS_STR,
                __func__, i,
                MAC_ADDR_ARRAY(pAdapter->mc_addr_list.addr[i]));
          i++;
@@ -9339,8 +9458,8 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    //Clean up HDD Nlink Service
    send_btc_nlink_msg(WLAN_MODULE_DOWN_IND, 0);
 #ifdef WLAN_KD_READY_NOTIFIER
-   nl_srv_exit(pHddCtx->ptt_pid);
    cnss_diag_notify_wlan_close();
+   nl_srv_exit(pHddCtx->ptt_pid);
 #else
    nl_srv_exit();
 #endif /* WLAN_KD_READY_NOTIFIER */
@@ -9351,12 +9470,12 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
     * exited at this point
     */
    hddLog(VOS_TRACE_LEVEL_WARN, "In module exit: Cancel the vote for XO Core ON"
-                                    " when WLAN is turned OFF\n");
+                                    " when WLAN is turned OFF");
    if (vos_chipVoteXOCore(NULL, NULL, NULL, VOS_FALSE) != VOS_STATUS_SUCCESS)
    {
        hddLog(VOS_TRACE_LEVEL_ERROR, "Could not cancel the vote for XO Core ON."
                                         " Not returning failure."
-                                        " Power consumed will be high\n");
+                                        " Power consumed will be high");
    }
 
    hdd_close_all_adapters( pHddCtx );
@@ -9472,7 +9591,7 @@ int hdd_wlan_notify_modem_power_state(int state)
 
    vosStatus = sme_notify_modem_power_state(pHddCtx->hHal, state);
    if (VOS_STATUS_SUCCESS != vosStatus) {
-      hddLog(LOGE, "Fail to send notification with modem power state %d\n",
+      hddLog(LOGE, "Fail to send notification with modem power state %d",
              state);
       return -1;
    }
@@ -9500,20 +9619,20 @@ static VOS_STATUS hdd_update_config_from_nv(hdd_context_t* pHddCtx)
    status = vos_nv_getValidity(VNV_FIELD_IMAGE, &itemIsValid);
    if(status != VOS_STATUS_SUCCESS)
    {
-      hddLog(VOS_TRACE_LEVEL_ERROR," vos_nv_getValidity() failed\n ");
+      hddLog(VOS_TRACE_LEVEL_ERROR," vos_nv_getValidity() failed");
        return VOS_STATUS_E_FAILURE;
    }
 
    if (itemIsValid == VOS_TRUE)
    {
-        hddLog(VOS_TRACE_LEVEL_INFO_HIGH," Reading the Macaddress from NV\n ");
+        hddLog(VOS_TRACE_LEVEL_INFO_HIGH," Reading the Macaddress from NV");
       status = vos_nv_readMultiMacAddress((v_U8_t *)&macFromNV[0].bytes[0],
                                           VOS_MAX_CONCURRENCY_PERSONA);
         if(status != VOS_STATUS_SUCCESS)
         {
          /* Get MAC from NV fail, not update CFG info
           * INI MAC value will be used for MAC setting */
-         hddLog(VOS_TRACE_LEVEL_ERROR," vos_nv_readMacAddress() failed\n ");
+         hddLog(VOS_TRACE_LEVEL_ERROR," vos_nv_readMacAddress() failed");
             return VOS_STATUS_E_FAILURE;
         }
 
@@ -10762,8 +10881,8 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
 
 err_nl_srv:
 #ifdef WLAN_KD_READY_NOTIFIER
-   nl_srv_exit(pHddCtx->ptt_pid);
    cnss_diag_notify_wlan_close();
+   nl_srv_exit(pHddCtx->ptt_pid);
 #else
    nl_srv_exit();
 #endif /* WLAN_KD_READY_NOTIFIER */
@@ -11007,7 +11126,7 @@ static int hdd_driver_init( void)
       if (vos_chipVoteXOCore(NULL, NULL, NULL, VOS_FALSE) != VOS_STATUS_SUCCESS)
       {
           hddLog(VOS_TRACE_LEVEL_ERROR, "Could not cancel XO Core ON vote. Not returning failure."
-                                            " Power consumed will be high\n");
+                                            " Power consumed will be high");
       }
    } while (0);
 
@@ -11915,7 +12034,7 @@ void wlan_hdd_send_svc_nlink_msg(int type)
         break;
     default:
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "WLAN SVC: Attempt to send unknown nlink message %d\n", type);
+                "WLAN SVC: Attempt to send unknown nlink message %d", type);
         kfree_skb(skb);
         return;
     }

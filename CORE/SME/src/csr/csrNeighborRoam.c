@@ -95,23 +95,19 @@ static eHalStatus csrNeighborRoamIssuePreauthReq(tpAniSirGlobal pMac);
 VOS_STATUS csrNeighborRoamIssueNeighborRptRequest(tpAniSirGlobal pMac);
 #endif
 
-#define ROAM_STATE_RETURN_STRING( str )\
-        case ( ( str ) ): return( #str )
-
-
 v_U8_t *csrNeighborRoamStateToString(v_U8_t state)
 {
     switch(state)
     {
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_CLOSED );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_INIT );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_CONNECTED );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_CFG_CHAN_LIST_SCAN );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_REASSOCIATING );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_REPORT_QUERY );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_REPORT_SCAN );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_PREAUTHENTICATING );
-        ROAM_STATE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_PREAUTH_DONE );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_CLOSED );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_INIT );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_CONNECTED );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_CFG_CHAN_LIST_SCAN );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_REASSOCIATING );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_REPORT_QUERY );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_REPORT_SCAN );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_PREAUTHENTICATING );
+        CASE_RETURN_STRING( eCSR_NEIGHBOR_ROAM_STATE_PREAUTH_DONE );
             default:
         return "eCSR_NEIGHBOR_ROAM_STATE_UNKNOWN";
     }
@@ -2763,6 +2759,13 @@ eHalStatus csrNeighborRoamPerformBgScan(tpAniSirGlobal pMac, tANI_U32 sessionId)
     bgScanParams.ChannelInfo.ChannelList = &channel;
 
     csrNeighborRoamFillNonChannelBgScanParams(pMac, &bgScanParams);
+   /* Update the passive scan time for DFS channel */
+   if ((TRUE == CSR_IS_CHANNEL_DFS(channel)) &&
+       (TRUE == pMac->roam.configParam.allowDFSChannelRoam))
+   {
+        bgScanParams.minChnTime = pMac->roam.configParam.nPassiveMinChnTime;
+        bgScanParams.maxChnTime = pMac->roam.configParam.nPassiveMaxChnTime;
+   }
 
     status = csrNeighborRoamIssueBgScanRequest(pMac, &bgScanParams,
                                                sessionId, csrNeighborRoamScanRequestCallback);
@@ -3613,7 +3616,19 @@ VOS_STATUS csrNeighborRoamPrepareNonOccupiedChannelList(
         if (!csrIsChannelPresentInList(pOccupiedChannelList, numOccupiedChannels,
              pInputChannelList[i]))
         {
-            pOutputChannelList[outputNumOfChannels++] = pInputChannelList[i];
+           /* DFS channel will be added in the list only when the
+              DFS Roaming scan flag is enabled*/
+            if (CSR_IS_CHANNEL_DFS(pInputChannelList[i]))
+            {
+                if (pMac->roam.configParam.allowDFSChannelRoam == TRUE)
+                {
+                    pOutputChannelList[outputNumOfChannels++] = pInputChannelList[i];
+                }
+            }
+            else
+            {
+                pOutputChannelList[outputNumOfChannels++] = pInputChannelList[i];
+            }
         }
     }
 

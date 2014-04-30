@@ -987,6 +987,26 @@ typedef enum
 #define CFG_TL_DELAYED_TRGR_FRM_INT_MAX                     (4294967295UL)
 #define CFG_TL_DELAYED_TRGR_FRM_INT_DEFAULT                 3000
 
+#define CFG_REORDER_TIME_BK_NAME                           "BkReorderTime"
+#define CFG_REORDER_TIME_BK_MIN                            30
+#define CFG_REORDER_TIME_BK_MAX                            1000
+#define CFG_REORDER_TIME_BK_DEFAULT                        100
+
+#define CFG_REORDER_TIME_BE_NAME                           "BeReorderTime"
+#define CFG_REORDER_TIME_BE_MIN                            30
+#define CFG_REORDER_TIME_BE_MAX                            1000
+#define CFG_REORDER_TIME_BE_DEFAULT                        100
+
+#define CFG_REORDER_TIME_VI_NAME                           "ViReorderTime"
+#define CFG_REORDER_TIME_VI_MIN                            30
+#define CFG_REORDER_TIME_VI_MAX                            1000
+#define CFG_REORDER_TIME_VI_DEFAULT                        100
+
+#define CFG_REORDER_TIME_VO_NAME                           "VoReorderTime"
+#define CFG_REORDER_TIME_VO_MIN                            30
+#define CFG_REORDER_TIME_VO_MAX                            1000
+#define CFG_REORDER_TIME_VO_DEFAULT                        40
+
 #if defined WLAN_FEATURE_VOWIFI
 #define CFG_RRM_ENABLE_NAME                              "gRrmEnable"
 #define CFG_RRM_ENABLE_MIN                               (0)
@@ -1518,6 +1538,10 @@ typedef enum
 #define CFG_PPS_ENABLE_5G_EBT_FEATURE_MAX     ( 1 )
 #define CFG_PPS_ENABLE_5G_EBT_FEATURE_DEFAULT ( 0 )
 
+#define CFG_ENABLE_HYSTERETIC_MODE            "gEnableHystereticMode"
+#define CFG_ENABLE_HYSTERETIC_MODE_MIN        ( 0 )
+#define CFG_ENABLE_HYSTERETIC_MODE_MAX        ( 1 )
+#define CFG_ENABLE_HYSTERETIC_MODE_DEFAULT    ( 0 )
 /*
  * VOS Trace Enable Control
  * Notes:
@@ -2324,6 +2348,11 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_SAP_MAX_OFFLOAD_PEERS_DEFAULT          (2)
 #endif
 
+#define CFG_ROAMING_DFS_CHANNEL_NAME                "gAllowDFSChannelRoam"
+#define CFG_ROAMING_DFS_CHANNEL_MIN                 (0)
+#define CFG_ROAMING_DFS_CHANNEL_MAX                 (1)
+#define CFG_ROAMING_DFS_CHANNEL_DEFAULT             (0)
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -2807,6 +2836,9 @@ typedef struct
    char                        acsAllowedChnls[CFG_MAX_STR_LEN];
    v_U16_t                     acsBandSwitchThreshold;
    v_U8_t                      apMaxOffloadPeers;
+   v_BOOL_t                    enableHystereticMode;
+
+   v_BOOL_t                    allowDFSChannelRoam;
 } hdd_config_t;
 
 /*---------------------------------------------------------------------------
