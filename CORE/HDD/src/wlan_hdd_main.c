@@ -556,9 +556,6 @@ static int hdd_netdev_notifier_call(struct notifier_block * nb,
       (strncmp(dev->name, "p2p", 3)))
       return NOTIFY_DONE;
 
-   if (isWDresetInProgress())
-      return NOTIFY_DONE;
-
    if (!dev->ieee80211_ptr)
       return NOTIFY_DONE;
 
@@ -576,6 +573,9 @@ static int hdd_netdev_notifier_call(struct notifier_block * nb,
       VOS_ASSERT(0);
       return NOTIFY_DONE;
    }
+   if (pHddCtx->isLogpInProgress)
+      return NOTIFY_DONE;
+
 
    hddLog(VOS_TRACE_LEVEL_INFO, "%s: %s New Net Device State = %lu",
           __func__, dev->name, state);
@@ -8017,13 +8017,6 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
          if( NULL == pAdapter )
             return NULL;
 
-#ifdef FEATURE_WLAN_TDLS
-         /* A Mutex Lock is introduced while changing/initializing the mode to
-          * protect the concurrent access for the Adapters by TDLS module.
-          */
-         mutex_lock(&pHddCtx->tdls_lock);
-#endif
-
          pAdapter->wdev.iftype = (session_type == WLAN_HDD_P2P_CLIENT) ?
                                   NL80211_IFTYPE_P2P_CLIENT:
                                   NL80211_IFTYPE_STATION;
@@ -8031,9 +8024,6 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
          pAdapter->device_mode = session_type;
 
          status = hdd_init_station_mode( pAdapter );
-#ifdef FEATURE_WLAN_TDLS
-         mutex_unlock(&pHddCtx->tdls_lock);
-#endif
          if( VOS_STATUS_SUCCESS != status )
             goto err_free_netdev;
 
@@ -8443,6 +8433,8 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
 
    ENTER();
 
+   netif_tx_disable(pAdapter->dev);
+   netif_carrier_off(pAdapter->dev);
    switch(pAdapter->device_mode)
    {
       case WLAN_HDD_INFRA_STATION:
@@ -8653,11 +8645,7 @@ VOS_STATUS hdd_stop_all_adapters( hdd_context_t *pHddCtx )
    while ( NULL != pAdapterNode && VOS_STATUS_SUCCESS == status )
    {
       pAdapter = pAdapterNode->pAdapter;
-      netif_tx_disable(pAdapter->dev);
-      netif_carrier_off(pAdapter->dev);
-
       hdd_stop_adapter( pHddCtx, pAdapter );
-
       status = hdd_get_next_adapter ( pHddCtx, pAdapterNode, &pNext );
       pAdapterNode = pNext;
    }
@@ -10442,7 +10430,9 @@ static void hdd_bus_bw_compute_cbk(void *phddctx)
                "trigger level %d", vote_level_max);
         pHddCtx->bus_bw_triggered = 1;
         pHddCtx->cur_bus_bw = vote_level_max;
+#ifdef CONFIG_CNSS
         cnss_request_bus_bandwidth(vote_level_max);
+#endif
     }
 
 exit:
@@ -12473,7 +12463,9 @@ void hdd_ch_avoid_cb
        }
    }
 
+#ifdef CONFIG_CNSS
    cnss_set_wlan_unsafe_channel(hdd_ctxt->unsafe_channel_list, hdd_ctxt->unsafe_channel_count);
+#endif
 
    if (hdd_ctxt->unsafe_channel_count) {
        hostapd_adapter = hdd_get_adapter(hdd_ctxt, WLAN_HDD_SOFTAP);
