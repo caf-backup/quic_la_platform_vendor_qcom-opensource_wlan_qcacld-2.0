@@ -5413,7 +5413,7 @@ eHalStatus sme_ChangeCountryCode( tHalHandle hHal,
    {
       smsLog(pMac, LOG1, FL(" called"));
 
-      if ((csrGetInfraSessionId(pMac) != -1) &&
+      if ((pMac->roam.configParam.Is11dSupportEnabledOriginal == true) &&
           (!pMac->roam.configParam.fSupplicantCountryCodeHasPriority))
       {
 
@@ -7879,22 +7879,28 @@ eHalStatus sme_HandleChangeCountryCodeByUser(tpAniSirGlobal pMac,
         is11dCountry = VOS_TRUE;
     }
 
-    if ((!is11dCountry) && (!pMac->roam.configParam.fSupplicantCountryCodeHasPriority) &&
-        (csrGetInfraSessionId(pMac) != -1 ))
+    /* Set the country code given by userspace when 11dOriginal is FALSE
+     * when 11doriginal is True,is11dCountry =0 and
+     * fSupplicantCountryCodeHasPriority = 0, then revert the country code,
+     * and return failure
+     */
+    if(pMac->roam.configParam.Is11dSupportEnabledOriginal == true)
     {
+        if ((!is11dCountry) && (!pMac->roam.configParam.fSupplicantCountryCodeHasPriority))
+        {
 
-        smsLog( pMac, LOGW, FL(" incorrect country being set, nullify this request"));
+            smsLog( pMac, LOGW, FL(" incorrect country being set, nullify this request"));
 
-        /* we have got a request for a country that should not have been added since the
-           STA is associated; nullify this request */
-        status = csrGetRegulatoryDomainForCountry(pMac,
+            /* we have got a request for a country that should not have been added since the
+            STA is associated; nullify this request */
+            status = csrGetRegulatoryDomainForCountry(pMac,
                                                   pMac->scan.countryCode11d,
                                                   (v_REGDOMAIN_t *) &reg_domain_id,
                                                   COUNTRY_IE);
 
-        return eHAL_STATUS_FAILURE;
+            return eHAL_STATUS_FAILURE;
+        }
     }
-
     /* if Supplicant country code has priority, disable 11d */
     if (!is11dCountry && pMac->roam.configParam.fSupplicantCountryCodeHasPriority)
     {
@@ -10846,7 +10852,8 @@ VOS_STATUS sme_SelectCBMode(tHalHandle hHal, eCsrPhyMode eCsrPhyMode, tANI_U8 ch
    }
 
    /* If channel bonding mode is not required */
-   if ( !pMac->roam.configParam.channelBondingMode5GHz ) {
+   if ( !pMac->roam.configParam.channelBondingMode5GHz
+       && !pMac->roam.configParam.channelBondingMode24GHz) {
       return VOS_STATUS_SUCCESS;
    }
 
@@ -10857,57 +10864,80 @@ VOS_STATUS sme_SelectCBMode(tHalHandle hHal, eCsrPhyMode eCsrPhyMode, tANI_U8 ch
    if ( eCSR_DOT11_MODE_11ac == eCsrPhyMode ||
          eCSR_DOT11_MODE_11ac_ONLY == eCsrPhyMode )
    {
-      if ( channel== 36 || channel == 52 || channel == 100 ||
-            channel == 116 || channel == 149 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz =
-            PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_LOW - 1;
+      if (pMac->roam.configParam.channelBondingMode5GHz) {
+          if ( channel== 36 || channel == 52 || channel == 100 ||
+                channel == 116 || channel == 149 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz =
+                PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_LOW - 1;
+          }
+          else if ( channel == 40 || channel == 56 || channel == 104 ||
+                channel == 120 || channel == 153 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz =
+                PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_LOW - 1;
+          }
+          else if ( channel == 44 || channel == 60 || channel == 108 ||
+                channel == 124 || channel == 157 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz =
+                PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH -1;
+          }
+          else if ( channel == 48 || channel == 64 || channel == 112 ||
+                channel == 128 || channel == 144 || channel == 161 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz =
+                PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH - 1;
+          }
+          else if ( channel == 165 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz = 0;
+          }
       }
-      else if ( channel == 40 || channel == 56 || channel == 104 ||
-            channel == 120 || channel == 153 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz =
-            PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_LOW - 1;
+      /*TODO: Set HT40+ / HT40- for channel 5-7 based on ACS */
+      if (pMac->roam.configParam.channelBondingMode24GHz) {
+          if (channel >= 1 && channel <= 5)
+             smeConfig.csrConfig.channelBondingMode24GHz = 2;
+          else if (channel >= 6 && channel <= 13)
+             smeConfig.csrConfig.channelBondingMode24GHz = 1;
+          else if (channel ==14)
+             smeConfig.csrConfig.channelBondingMode24GHz = 0;
       }
-      else if ( channel == 44 || channel == 60 || channel == 108 ||
-            channel == 124 || channel == 157 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz =
-            PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH -1;
-      }
-      else if ( channel == 48 || channel == 64 || channel == 112 ||
-            channel == 128 || channel == 144 || channel == 161 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz =
-            PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH - 1;
-      }
-      else if ( channel == 165 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz = 0;
-      }
+
    }
 #endif
 
    if ( eCSR_DOT11_MODE_11n == eCsrPhyMode ||
          eCSR_DOT11_MODE_11n_ONLY == eCsrPhyMode )
    {
-      if ( channel== 40 || channel == 48 || channel == 56 ||
-            channel == 64 || channel == 104 || channel == 112 ||
-            channel == 120 || channel == 128 || channel == 136 ||
-            channel == 144 || channel == 153 || channel == 161 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz = 1;
+      if (pMac->roam.configParam.channelBondingMode5GHz) {
+          if ( channel== 40 || channel == 48 || channel == 56 ||
+                channel == 64 || channel == 104 || channel == 112 ||
+                channel == 120 || channel == 128 || channel == 136 ||
+                channel == 144 || channel == 153 || channel == 161 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz = 1;
+          }
+          else if ( channel== 36 || channel == 44 || channel == 52 ||
+                channel == 60 || channel == 100 || channel == 108 ||
+                channel == 116 || channel == 124 || channel == 132 ||
+                channel == 140 || channel == 149 || channel == 157 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz = 2;
+          }
+          else if ( channel == 165 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz = 0;
+          }
       }
-      else if ( channel== 36 || channel == 44 || channel == 52 ||
-            channel == 60 || channel == 100 || channel == 108 ||
-            channel == 116 || channel == 124 || channel == 132 ||
-            channel == 140 || channel == 149 || channel == 157 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz = 2;
-      }
-      else if ( channel == 165 )
-      {
-         smeConfig.csrConfig.channelBondingMode5GHz = 0;
+
+      if (pMac->roam.configParam.channelBondingMode24GHz) {
+          if (channel >= 1 && channel <= 5)
+             smeConfig.csrConfig.channelBondingMode24GHz = 2;
+          else if (channel >= 6 && channel <= 13)
+             smeConfig.csrConfig.channelBondingMode24GHz = 1;
+          else if (channel ==14)
+             smeConfig.csrConfig.channelBondingMode24GHz = 0;
       }
    }
 
@@ -10916,16 +10946,20 @@ VOS_STATUS sme_SelectCBMode(tHalHandle hHal, eCsrPhyMode eCsrPhyMode, tANI_U8 ch
       From default config, it is set as PHY_DOUBLE_CHANNEL_HIGH_PRIMARY = 3
       through csrChangeDefaultConfigParam function. We will override this
       value here.
+      for 802.11g only phy mode also channel bonding should be zero.
    */
    if (  eCSR_DOT11_MODE_11a == eCsrPhyMode ||
          eCSR_DOT11_MODE_11a_ONLY == eCsrPhyMode ||
          eCSR_DOT11_MODE_abg == eCsrPhyMode)
    {
       smeConfig.csrConfig.channelBondingMode5GHz = 0;
-   }
+   } else if ( eCSR_DOT11_MODE_11g_ONLY == eCsrPhyMode)
+      smeConfig.csrConfig.channelBondingMode24GHz = 0;
 
    VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
-         "cbmode selected=%d", smeConfig.csrConfig.channelBondingMode5GHz);
+         "%s cbmode selected=%d", (channel <= 14) ? "2G" : "5G",
+         (channel <= 14) ? smeConfig.csrConfig.channelBondingMode24GHz :
+                        smeConfig.csrConfig.channelBondingMode5GHz);
 
    sme_UpdateConfig (pMac, &smeConfig);
    return VOS_STATUS_SUCCESS;
