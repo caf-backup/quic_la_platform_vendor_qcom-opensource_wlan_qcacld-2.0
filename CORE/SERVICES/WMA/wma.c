@@ -790,15 +790,15 @@ static void wma_remove_peer(tp_wma_handle wma, u_int8_t *bssid,
 		ol_txrx_peer_detach(peer);
 
 	wma->peer_count--;
-	WMA_LOGD("%s: bssid %pM vdevid %d peer_count %d", __func__,
-		 bssid, vdev_id, wma->peer_count);
+	WMA_LOGE("%s: Removed peer with peer_addr %pM vdevid %d peer_count %d",
+                    __func__, bssid, vdev_id, wma->peer_count);
 	/* Flush all TIDs except MGMT TID for this peer in Target */
 	peer_tid_bitmap &= ~(0x1 << WMI_MGMT_TID);
 	wmi_unified_peer_flush_tids_send(wma->wmi_handle, bssid,
 					 peer_tid_bitmap, vdev_id);
 
 #if defined(QCA_IBSS_SUPPORT)
-	if (wma_is_vdev_in_ibss_mode(wma, vdev_id)) {
+	if ((peer) && (wma_is_vdev_in_ibss_mode(wma, vdev_id))) {
 		WMA_LOGD("%s: bssid %pM peer->mac_addr %pM", __func__,
 			bssid, peer->mac_addr.raw);
 		peer_addr = peer->mac_addr.raw;
@@ -995,14 +995,18 @@ static void wma_delete_all_ibss_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 		return;
 
 	/* remove all IBSS remote peers first */
+	adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
 	TAILQ_FOREACH(peer, &vdev->peer_list, peer_list_elem) {
 		if (peer != TAILQ_FIRST(&vdev->peer_list)) {
+			adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
 			adf_os_atomic_init(&peer->ref_cnt);
 			adf_os_atomic_inc(&peer->ref_cnt);
 			wma_remove_peer(wma, wma->interfaces[vdev_id].bssid,
 				vdev_id, peer);
+			adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
 		}
 	}
+	adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
 
 	/* remote IBSS bss peer last */
 	peer = TAILQ_FIRST(&vdev->peer_list);
@@ -1012,25 +1016,29 @@ static void wma_delete_all_ibss_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 
 static void wma_delete_all_ap_remote_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 {
-		ol_txrx_vdev_handle vdev;
-		ol_txrx_peer_handle peer;
+	ol_txrx_vdev_handle vdev;
+	ol_txrx_peer_handle peer;
 
-		if (!wma || vdev_id > wma->max_bssid)
-			return;
+	if (!wma || vdev_id > wma->max_bssid)
+		return;
 
-		vdev = wma->interfaces[vdev_id].handle;
-		if (!vdev)
-			return;
+	vdev = wma->interfaces[vdev_id].handle;
+	if (!vdev)
+		return;
 
-		/* remove all remote peers of SAP */
-		TAILQ_FOREACH(peer, &vdev->peer_list, peer_list_elem) {
+	/* remove all remote peers of SAP */
+	adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
+	TAILQ_FOREACH(peer, &vdev->peer_list, peer_list_elem) {
 		if (peer != TAILQ_FIRST(&vdev->peer_list)) {
+			adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
 			adf_os_atomic_init(&peer->ref_cnt);
 			adf_os_atomic_inc(&peer->ref_cnt);
 			wma_remove_peer(wma, peer->mac_addr.raw,
 					vdev_id, peer);
+			adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
 		}
 	}
+	adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
 }
 
 static int wma_vdev_stop_resp_handler(void *handle, u_int8_t *cmd_param_info,
@@ -1048,6 +1056,7 @@ static int wma_vdev_stop_resp_handler(void *handle, u_int8_t *cmd_param_info,
         ol_txrx_vdev_handle vdev;
 #endif
 	struct wma_txrx_node *iface;
+	int32_t status = 0;
 
 	WMA_LOGI("%s: Enter", __func__);
 	param_buf = (WMI_VDEV_STOPPED_EVENTID_param_tlvs *) cmd_param_info;
@@ -1067,7 +1076,9 @@ static int wma_vdev_stop_resp_handler(void *handle, u_int8_t *cmd_param_info,
 	pdev = vos_get_context(VOS_MODULE_ID_TXRX, wma->vos_context);
 	if (!pdev) {
 		WMA_LOGE("%s: pdev is NULL", __func__);
-		return -EINVAL;
+		status = -EINVAL;
+		vos_timer_stop(&req_msg->event_timeout);
+		goto free_req_msg;
 	}
 
 	vos_timer_stop(&req_msg->event_timeout);
@@ -1080,10 +1091,17 @@ static int wma_vdev_stop_resp_handler(void *handle, u_int8_t *cmd_param_info,
 		if (resp_event->vdev_id > wma->max_bssid) {
 			WMA_LOGE("%s: Invalid vdev_id %d", __func__,
 				resp_event->vdev_id);
-			return -EINVAL;
+			status = -EINVAL;
+			goto free_req_msg;
 		}
 
 		iface = &wma->interfaces[resp_event->vdev_id];
+		if (iface->handle == NULL) {
+			WMA_LOGE("%s vdev id %d is already deleted",
+				__func__, resp_event->vdev_id);
+			status = -EINVAL;
+			goto free_req_msg;
+		}
 
 #ifdef QCA_IBSS_SUPPORT
 		if ( wma_is_vdev_in_ibss_mode(wma, resp_event->vdev_id))
@@ -1142,17 +1160,27 @@ static int wma_vdev_stop_resp_handler(void *handle, u_int8_t *cmd_param_info,
 			wma_vdev_detach(wma, &del_sta_param, 0);
 		}
 #endif
+		/* Timeout status means its WMA generated DEL BSS REQ when ADD
+		BSS REQ was timed out to stop the VDEV in this case no need to
+		send response to UMAC */
+		if (params->status == eHAL_STATUS_FW_MSG_TIMEDOUT){
+			vos_mem_free(params);
+			WMA_LOGE("%s: DEL BSS from ADD BSS timeout do not send "
+				"resp to UMAC", __func__);
+		} else {
+			params->status = VOS_STATUS_SUCCESS;
+			wma_send_msg(wma, WDA_DELETE_BSS_RSP, (void *)params, 0);
+		}
 
-		params->status = VOS_STATUS_SUCCESS;
-		wma_send_msg(wma, WDA_DELETE_BSS_RSP, (void *)params, 0);
 		if (iface->del_staself_req) {
 			WMA_LOGD("%s: scheduling defered deletion", __func__);
 			wma_vdev_detach(wma, iface->del_staself_req, 1);
 		}
 	}
+free_req_msg:
 	vos_timer_destroy(&req_msg->event_timeout);
 	adf_os_mem_free(req_msg);
-	return 0;
+	return status;
 }
 
 static void wma_update_pdev_stats(tp_wma_handle wma,
@@ -2804,6 +2832,11 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	wdi_in_set_cfg_rx_fwd_disabled((ol_pdev_handle)((pVosContextType)vos_context)->cfg_ctx,
 		(u_int8_t)mac_params->apDisableIntraBssFwd);
 
+	/* adjust the packet log enable default value based on CFG INI setting */
+	wdi_in_set_cfg_pakcet_log_enabled((ol_pdev_handle)
+		((pVosContextType)vos_context)->cfg_ctx, (u_int8_t)vos_is_packet_log_enabled());
+
+
 	/* Allocate dfs_ic and initialize DFS */
 	wma_handle->dfs_ic = wma_dfs_attach(wma_handle->dfs_ic);
 	if(wma_handle->dfs_ic == NULL) {
@@ -3297,7 +3330,6 @@ static VOS_STATUS wma_vdev_detach(tp_wma_handle wma_handle,
 		return status;
 	}
 
-
         adf_os_spin_lock_bh(&wma_handle->vdev_detach_lock);
         if(!iface->handle) {
                 WMA_LOGE("handle of vdev_id %d is NULL vdev is already freed",
@@ -3394,7 +3426,6 @@ static VOS_STATUS wma_create_peer(tp_wma_handle wma, ol_txrx_pdev_handle pdev,
 {
 	ol_txrx_peer_handle peer;
 
-	WMA_LOGD("%s: peer_addr %pM vdev_id %d", __func__, peer_addr, vdev_id);
 	if (++wma->peer_count > wma->wlan_resource_config.num_peers) {
 		WMA_LOGP("%s, the peer count exceeds the limit %d",
 			 __func__, wma->peer_count - 1);
@@ -3410,7 +3441,10 @@ static VOS_STATUS wma_create_peer(tp_wma_handle wma, ol_txrx_pdev_handle pdev,
 		ol_txrx_peer_detach(peer);
 		goto err;
 	}
-	return VOS_STATUS_SUCCESS;
+	WMA_LOGE("%s: Created peer with peer_addr %pM vdev_id %d, peer_count - %d",
+                    __func__, peer_addr, vdev_id, wma->peer_count);
+
+   return VOS_STATUS_SUCCESS;
 err:
 	wma->peer_count--;
 	return VOS_STATUS_E_FAILURE;
@@ -4121,9 +4155,14 @@ bool wma_check_scan_in_progress(WMA_HANDLE handle)
 	tp_wma_handle wma_handle = handle;
 	int i;
 
-	for (i = 0; i < wma_handle->max_bssid; i++)
-		if (wma_handle->interfaces[i].scan_info.scan_id)
+	for (i = 0; i < wma_handle->max_bssid; i++){
+		if (wma_handle->interfaces[i].scan_info.scan_id){
+
+			WMA_LOGE("%s: scan in progress on interface[%d],scanid = %d",
+			__func__, i, wma_handle->interfaces[i].scan_info.scan_id );
 			return true;
+		}
+	}
 	return false;
 }
 
@@ -4414,6 +4453,12 @@ VOS_STATUS wma_start_scan(tp_wma_handle wma_handle,
 	int status = 0;
 	int len;
 	tSirScanOffloadEvent *scan_event;
+
+	if (scan_req->sessionId > wma_handle->max_bssid) {
+		WMA_LOGE("%s: Invalid vdev_id %d", __func__,
+			scan_req->sessionId);
+		goto error1;
+	}
 
 	/* Sanity check to find whether vdev id active or not */
 	if (!wma_handle->interfaces[scan_req->sessionId].handle) {
@@ -5058,6 +5103,12 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
                                    wmi_start_scan_cmd_fixed_param *scan_params)
 {
     tANI_U8 channels_per_burst = 0;
+
+    if (NULL == pMac) {
+        WMA_LOGE("%s: pMac is NULL", __func__);
+        return;
+    }
+
     vos_mem_zero(scan_params, sizeof(wmi_start_scan_cmd_fixed_param));
     if (roam_req != NULL) {
         /* Parameters updated after association is complete */
@@ -5296,6 +5347,12 @@ VOS_STATUS wma_roam_scan_offload_end_connect(tp_wma_handle wma_handle)
                 wma_handle->vos_context);
     wmi_start_scan_cmd_fixed_param scan_params;
 
+    if (NULL == pMac)
+    {
+        WMA_LOGE("%s: pMac is NULL", __func__);
+        return VOS_STATUS_E_FAILURE;
+    }
+
     /* If roam scan is running, stop it */
     if (wma_handle->roam_offload_enabled) {
 
@@ -5322,6 +5379,13 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
     u_int32_t mode = 0;
 
     WMA_LOGI("%s: command 0x%x", __func__, roam_req->Command);
+
+    if (NULL == pMac)
+    {
+        WMA_LOGE("%s: pMac is NULL", __func__);
+        return VOS_STATUS_E_FAILURE;
+    }
+
     if (!wma_handle->roam_offload_enabled) {
 	/* roam scan offload is not enabled in firmware.
 	 * Cannot initialize it in the middle of connection.
@@ -6134,13 +6198,13 @@ static VOS_STATUS wma_vdev_start(tp_wma_handle wma,
     * set the WMI_CHAN_FLAG_DFS flag
     */
    if (req->is_dfs) {
-      /* provide the current channel to DFS*/
-      wma->dfs_ic->ic_curchan =
-               wma_dfs_configure_channel(wma->dfs_ic,chan,chanmode,req);
 		WMI_SET_CHANNEL_FLAG(chan, WMI_CHAN_FLAG_DFS);
 		cmd->disable_hw_ack = VOS_TRUE;
 
 		/*
+		 * Configure the current operating channel
+		 * to DFS module only if the device operating
+		 * mode is AP.
 		 * Enable/Disable Phyerr filtering offload
 		 * depending on dfs_phyerr_filter_offload
 		 * flag status as set in ini for SAP mode.
@@ -6150,6 +6214,30 @@ static VOS_STATUS wma_vdev_start(tp_wma_handle wma,
 		 */
 		if (intr[cmd->vdev_id].type == WMI_VDEV_TYPE_AP &&
 			 intr[cmd->vdev_id].sub_type == 0) {
+			/*
+			 * If DFS regulatory domain is invalid,
+			 * then, DFS radar filters intialization
+			 * will fail. So, do not configure the
+			 * channel in to DFS modlue, do not
+			 * indicate if phyerror filtering offload
+			 * is enabled or not to the firmware, simply
+			 * fail the VDEV start on the DFS channel
+			 * early on, to protect the DFS module from
+			 * processing phyerrors without being intialized.
+			 */
+			if (DFS_UNINIT_DOMAIN == wma->dfs_ic->current_dfs_regdomain) {
+				WMA_LOGE("%s[%d]:DFS Configured with Invalid regdomain"
+							" Failed to send VDEV START command",
+							__func__, __LINE__);
+
+				adf_nbuf_free(buf);
+				return VOS_STATUS_E_FAILURE;
+			}
+
+			/* provide the current channel to DFS */
+			wma->dfs_ic->ic_curchan =
+				wma_dfs_configure_channel(wma->dfs_ic,chan,chanmode,req);
+
 			wma_unified_dfs_phyerr_filter_offload_enable(wma);
 		}
 	}
@@ -6232,7 +6320,8 @@ void wma_vdev_resp_timer(void *data)
 
 	if (NULL == pdev) {
 		WMA_LOGE("%s: Failed to get pdev", __func__);
-		return;
+		vos_timer_stop(&tgt_req->event_timeout);
+		goto free_tgt_req;
 	}
 
 	WMA_LOGA("%s: request %d is timed out", __func__, tgt_req->msg_type);
@@ -6255,10 +6344,18 @@ void wma_vdev_resp_timer(void *data)
 		if (tgt_req->vdev_id > wma->max_bssid) {
 			WMA_LOGE("%s: Invalid vdev_id %d", __func__,
 				tgt_req->vdev_id);
-			return;
+			vos_timer_stop(&tgt_req->event_timeout);
+			goto free_tgt_req;
 		}
 
 		iface = &wma->interfaces[tgt_req->vdev_id];
+		if (iface->handle == NULL) {
+			WMA_LOGE("%s vdev id %d is already deleted",
+				__func__, tgt_req->vdev_id);
+			vos_timer_stop(&tgt_req->event_timeout);
+			goto free_tgt_req;
+		}
+
 #ifdef QCA_IBSS_SUPPORT
 		if (wma_is_vdev_in_ibss_mode(wma, tgt_req->vdev_id))
 			wma_delete_all_ibss_peers(wma, tgt_req->vdev_id);
@@ -6338,8 +6435,22 @@ void wma_vdev_resp_timer(void *data)
 		vos_mem_zero(iface, sizeof(*iface));
 	} else if (tgt_req->msg_type == WDA_ADD_BSS_REQ) {
 		tpAddBssParams params = (tpAddBssParams)tgt_req->user_data;
+		tDeleteBssParams *del_bss_params =
+			vos_mem_malloc(sizeof(tDeleteBssParams));
+		if (NULL == del_bss_params) {
+			WMA_LOGE("Failed to allocate memory for del_bss_params");
+			peer = ol_txrx_find_peer_by_addr(pdev, params->bssId,
+					&peer_id);
+			goto error0;
+		}
 
-		params->status = VOS_STATUS_E_TIMEOUT;
+		del_bss_params->status = params->status =
+			eHAL_STATUS_FW_MSG_TIMEDOUT;
+		del_bss_params->sessionId = params->sessionId;
+		del_bss_params->bssIdx = params->bssIdx;
+		vos_mem_copy(del_bss_params->bssid, params->bssId,
+			sizeof(tSirMacAddr));
+
 		WMA_LOGA("%s: WDA_ADD_BSS_REQ timedout", __func__);
                 peer = ol_txrx_find_peer_by_addr(pdev, params->bssId,
                                          &peer_id);
@@ -6347,8 +6458,9 @@ void wma_vdev_resp_timer(void *data)
                         WMA_LOGP("%s: Failed to find peer %pM", __func__,
                                  params->bssId);
                 }
-                msg = wma_fill_vdev_req(wma, params->sessionId, WDA_DELETE_BSS_REQ,
-                                WMA_TARGET_REQ_TYPE_VDEV_STOP, params, 1000);
+                msg = wma_fill_vdev_req(wma, params->sessionId,
+			WDA_DELETE_BSS_REQ, WMA_TARGET_REQ_TYPE_VDEV_STOP,
+			 del_bss_params, 1000);
                 if (!msg) {
                         WMA_LOGP("%s: Failed to fill vdev request for vdev_id %d",
                                  __func__, params->sessionId);
@@ -6370,6 +6482,7 @@ error0:
 					params->sessionId, peer);
 		wma_send_msg(wma, WDA_ADD_BSS_RSP, (void *)params, 0);
 	}
+free_tgt_req:
 	vos_timer_destroy(&tgt_req->event_timeout);
 	adf_os_mem_free(tgt_req);
 }
@@ -6980,6 +7093,20 @@ static int32_t wmi_unified_send_peer_assoc(tp_wma_handle wma,
 	*/
 #else
 	ol_txrx_peer_state_update(pdev, params->bssId, ol_txrx_peer_state_auth);
+#endif
+
+#ifdef FEATURE_WLAN_WAPI
+	if (params->encryptType == eSIR_ED_WPI) {
+		ret = wmi_unified_vdev_set_param_send(wma->wmi_handle,
+						params->smesessionId,
+						WMI_VDEV_PARAM_DROP_UNENCRY,
+						FALSE);
+		if (ret) {
+			WMA_LOGE("Set WMI_VDEV_PARAM_DROP_UNENCRY Param status:%d\n", ret);
+			adf_nbuf_free(buf);
+			return ret;
+		}
+	}
 #endif
 
 	cmd->peer_caps = params->capab_info;
@@ -9012,6 +9139,14 @@ static void wma_add_sta_req_ap_mode(tp_wma_handle wma, tpAddStaParams add_sta)
 		goto send_rsp;
 	}
 
+	peer = ol_txrx_find_peer_by_addr(pdev, add_sta->staMac,
+					 &peer_id);
+	if (peer) {
+		wma_remove_peer(wma, add_sta->staMac, add_sta->smesessionId, peer);
+		WMA_LOGE("%s: Peer already exists, Deleted peer with peer_addr %pM",
+			 __func__, add_sta->staMac);
+	}
+
 	status = wma_create_peer(wma, pdev, vdev, add_sta->staMac,
 		         WMI_PEER_TYPE_DEFAULT, add_sta->smesessionId);
 	if (status != VOS_STATUS_SUCCESS) {
@@ -9662,9 +9797,15 @@ static wmi_buf_t wma_setup_install_key_cmd(tp_wma_handle wma_handle,
 					   0x36,0x5c};
 		unsigned char rx_iv[16] = {0x5c,0x36,0x5c,0x36,0x5c,0x36,0x5c,
 					   0x36,0x5c,0x36,0x5c,0x36,0x5c,0x36,
-					   0x5c,0x36};
+					   0x5c,0x37};
 		cmd->key_txmic_len = WMA_TXMIC_LEN;
 		cmd->key_rxmic_len = WMA_RXMIC_LEN;
+		/*Authenticator initializes the value of PN as
+		 *0x5C365C365C365C365C365C365C365C36 for multicast key update.
+		 */
+		if (!key_params->unicast)
+			rx_iv[WPI_IV_LEN - 1] = 0x36;
+
 		vos_mem_copy(&cmd->wpi_key_rsc_counter, &rx_iv, WPI_IV_LEN);
 		vos_mem_copy(&cmd->wpi_key_tsc_counter, &tx_iv, WPI_IV_LEN);
 		cmd->key_cipher = WMI_CIPHER_WAPI;
@@ -9801,7 +9942,12 @@ static void wma_set_bsskey(tp_wma_handle wma_handle, tpSetBssKeyParams key_info)
 		if (key_params.key_type != eSIR_ED_NONE &&
 		    !key_info->key[i].keyLength)
 			continue;
-		key_params.key_idx = key_info->key[i].keyId;
+		if (key_info->encType == eSIR_ED_WPI) {
+			key_params.key_idx = key_info->key[i].keyId;
+			key_params.def_key_idx = key_info->key[i].keyId;
+		} else
+			key_params.key_idx = key_info->key[i].keyId;
+
 		key_params.key_len = key_info->key[i].keyLength;
 		if (key_info->encType == eSIR_ED_TKIP) {
 			vos_mem_copy(key_params.key_data,
@@ -9986,7 +10132,12 @@ static void wma_set_stakey(tp_wma_handle wma_handle, tpSetStaKeyParams key_info,
 		} else
 			vos_mem_copy(key_params.key_data, key_info->key[i].key,
 				     key_info->key[i].keyLength);
-		key_params.key_idx = i;
+		if (key_info->encType == eSIR_ED_WPI) {
+			key_params.key_idx = key_info->key[i].keyId;
+			key_params.def_key_idx = key_info->key[i].keyId;
+		} else
+			key_params.key_idx = i;
+
 		key_params.key_len = key_info->key[i].keyLength;
 		buf = wma_setup_install_key_cmd(wma_handle, &key_params, &len);
 		if (!buf) {
@@ -10867,6 +11018,14 @@ static VOS_STATUS wma_pktlog_wmi_send_cmd(WMA_HANDLE handle,
 	wmi_pdev_pktlog_disable_cmd_fixed_param *disable_cmd;
 	int len = 0;
 	wmi_buf_t buf;
+
+	/*Check if packet log is enabled in cfg.ini*/
+	if (! vos_is_packet_log_enabled())
+	{
+		WMA_LOGE("%s:pkt log is not enabled in cfg.ini", __func__);
+		return VOS_STATUS_E_FAILURE;
+	}
+
 
 	PKTLOG_EVENT = params->pktlog_event;
 	CMD_ID = params->cmd_id;
@@ -12252,7 +12411,9 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 	tp_wma_handle wma = (tp_wma_handle) handle;
 	WMI_WOW_WAKEUP_HOST_EVENTID_param_tlvs *param_buf;
 	WOW_EVENT_INFO_fixed_param *wake_info;
+#ifdef FEATURE_WLAN_SCAN_PNO
 	struct wma_txrx_node *node;
+#endif
 	u_int32_t wake_lock_duration = 0;
 
 	param_buf = (WMI_WOW_WAKEUP_HOST_EVENTID_param_tlvs *) event;
@@ -13237,11 +13398,13 @@ static VOS_STATUS wma_suspend_req(tp_wma_handle wma, tpSirWlanSuspendParam info)
 			connected = TRUE;
 			break;
 		}
+#ifdef FEATURE_WLAN_SCAN_PNO
 		if (wma->interfaces[i].pno_in_progress) {
 			WMA_LOGD("PNO is in progress, enabling wow");
 			pno_in_progress = TRUE;
 			break;
 		}
+#endif
 	}
 	if (!connected && !pno_in_progress) {
 		WMA_LOGD("All vdev are in disconnected state, skipping wow");
@@ -13503,7 +13666,9 @@ static void wma_get_stats_req(WMA_HANDLE handle,
 	if (wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
 				WMI_REQUEST_STATS_CMDID)) {
 
-		vos_mem_free(buf);
+		WMA_LOGE("%s: Failed to send WMI_REQUEST_STATS_CMDID",
+			__func__);
+		wmi_buf_free(buf);
 		goto failed;
 	}
 
@@ -13613,6 +13778,10 @@ static void wma_start_oem_data_req(tp_wma_handle wma_handle,
 	}
 
 out:
+	/* free oem data req buffer received from UMAC */
+	if (startOemDataReq)
+		vos_mem_free(startOemDataReq);
+
 	/* Now send data resp back to PE/SME with message sub-type of
 	 * WMI_OEM_INTERNAL_RSP. This is required so that PE/SME clears
 	 * up pending active command. Later when desired oem response(s)
@@ -14363,6 +14532,7 @@ static VOS_STATUS wma_enable_arp_ns_offload(tp_wma_handle wma, tpSirHostOffloadR
 		   ((pHostOffloadParams->enableOrDisable & SIR_OFFLOAD_ENABLE) && i==0)) {
 			ns_tuple->flags |= WMI_NSOFF_FLAGS_VALID;
 
+#ifdef WLAN_NS_OFFLOAD
 			/*Copy the target/solicitation/remote ip addr */
 			if(pHostOffloadParams->nsOffloadInfo.targetIPv6AddrValid[0])
 				A_MEMCPY(&ns_tuple->target_ipaddr[0],
@@ -14380,6 +14550,7 @@ static VOS_STATUS wma_enable_arp_ns_offload(tp_wma_handle wma, tpSirHostOffloadR
 			* the target will use the known local MAC address rather than the tuple */
 			WMI_CHAR_ARRAY_TO_MAC_ADDR(pHostOffloadParams->nsOffloadInfo.selfMacAddr,
 					&ns_tuple->target_mac);
+#endif
 			if ((ns_tuple->target_mac.mac_addr31to0 != 0) ||
 				(ns_tuple->target_mac.mac_addr47to32 != 0))
 			{
@@ -15808,6 +15979,7 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
 		case WDA_CLI_SET_CMD:
 			wma_process_cli_set_cmd(wma_handle,
 					(wda_cli_set_cmd_t *)msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
 			break;
 #if !defined(REMOVE_PKT_LOG) && !defined(QCA_WIFI_ISOC)
 		case WDA_PKTLOG_ENABLE_REQ:
@@ -19664,66 +19836,73 @@ struct ieee80211com* wma_dfs_attach(struct ieee80211com *dfs_ic)
 void
 wma_dfs_configure(struct ieee80211com *ic)
 {
-    struct ath_dfs_radar_tab_info rinfo;
-    int dfsdomain;
-    if(ic == NULL)
-    {
-        WMA_LOGE("%s: DFS ic is Invalid",__func__);
-        return;
-    }
+	struct ath_dfs_radar_tab_info rinfo;
+	int dfsdomain;
+	int radar_enabled_status = 0;
+	if(ic == NULL) {
+		WMA_LOGE("%s: DFS ic is Invalid",__func__);
+		return;
+	}
 
-    dfsdomain = ic->current_dfs_regdomain;
+	dfsdomain = ic->current_dfs_regdomain;
 
-    /* Fetch current radar patterns from the lmac */
-    OS_MEMZERO(&rinfo, sizeof(rinfo));
+	/* Fetch current radar patterns from the lmac */
+	OS_MEMZERO(&rinfo, sizeof(rinfo));
 
-    /*
-     * Look up the current DFS
-     * regulatory domain and decide
-     * which radar pulses to use.
-     */
-    switch (dfsdomain)
-    {
-    case DFS_FCC_DOMAIN:
-        WMA_LOGI("%s: DFS-FCC domain",__func__);
-        rinfo.dfsdomain = DFS_FCC_DOMAIN;
-        rinfo.dfs_radars = dfs_fcc_radars;
-        rinfo.numradars = ARRAY_LENGTH(dfs_fcc_radars);
-        rinfo.b5pulses = dfs_fcc_bin5pulses;
-        rinfo.numb5radars = ARRAY_LENGTH(dfs_fcc_bin5pulses);
-    break;
-    case DFS_ETSI_DOMAIN:
-        WMA_LOGI("%s: DFS-ETSI domain",__func__);
-        rinfo.dfsdomain = DFS_ETSI_DOMAIN;
-        rinfo.dfs_radars = dfs_etsi_radars;
-        rinfo.numradars = ARRAY_LENGTH(dfs_etsi_radars);
-        rinfo.b5pulses = NULL;
-        rinfo.numb5radars = 0;
-    break;
-    case DFS_MKK4_DOMAIN:
-        WMA_LOGI("%s: DFS-MKK4 domain",__func__);
-        rinfo.dfsdomain = DFS_MKK4_DOMAIN;
-        rinfo.dfs_radars = dfs_mkk4_radars;
-        rinfo.numradars = ARRAY_LENGTH(dfs_mkk4_radars);
-        rinfo.b5pulses = dfs_jpn_bin5pulses;
-        rinfo.numb5radars = ARRAY_LENGTH(dfs_jpn_bin5pulses);
-    break;
-    default:
-        WMA_LOGI("%s: DFS-UNINT domain",__func__);
-        rinfo.dfsdomain = DFS_UNINIT_DOMAIN;
-        rinfo.dfs_radars = NULL;
-        rinfo.numradars = 0;
-        rinfo.b5pulses = NULL;
-        rinfo.numb5radars = 0;
-    break;
-    }
+	/*
+	 * Look up the current DFS
+	 * regulatory domain and decide
+	 * which radar pulses to use.
+	 */
+	switch (dfsdomain)
+	{
+	case DFS_FCC_DOMAIN:
+		WMA_LOGI("%s: DFS-FCC domain",__func__);
+		rinfo.dfsdomain = DFS_FCC_DOMAIN;
+		rinfo.dfs_radars = dfs_fcc_radars;
+		rinfo.numradars = ARRAY_LENGTH(dfs_fcc_radars);
+		rinfo.b5pulses = dfs_fcc_bin5pulses;
+		rinfo.numb5radars = ARRAY_LENGTH(dfs_fcc_bin5pulses);
+		break;
+	case DFS_ETSI_DOMAIN:
+		WMA_LOGI("%s: DFS-ETSI domain",__func__);
+		rinfo.dfsdomain = DFS_ETSI_DOMAIN;
+		rinfo.dfs_radars = dfs_etsi_radars;
+		rinfo.numradars = ARRAY_LENGTH(dfs_etsi_radars);
+		rinfo.b5pulses = NULL;
+		rinfo.numb5radars = 0;
+		break;
+	case DFS_MKK4_DOMAIN:
+		WMA_LOGI("%s: DFS-MKK4 domain",__func__);
+		rinfo.dfsdomain = DFS_MKK4_DOMAIN;
+		rinfo.dfs_radars = dfs_mkk4_radars;
+		rinfo.numradars = ARRAY_LENGTH(dfs_mkk4_radars);
+		rinfo.b5pulses = dfs_jpn_bin5pulses;
+		rinfo.numb5radars = ARRAY_LENGTH(dfs_jpn_bin5pulses);
+		break;
+	default:
+		WMA_LOGI("%s: DFS-UNINT domain",__func__);
+		rinfo.dfsdomain = DFS_UNINIT_DOMAIN;
+		rinfo.dfs_radars = NULL;
+		rinfo.numradars = 0;
+		rinfo.b5pulses = NULL;
+		rinfo.numb5radars = 0;
+		break;
+	}
 
-    /*
-     * Set the regulatory domain,
-     * radar pulse table and enable
-     * radar events if required.
-     */
-    dfs_radar_enable(ic, &rinfo);
+	/*
+	 * Set the regulatory domain,
+	 * radar pulse table and enable
+	 * radar events if required.
+	 * dfs_radar_enable() returns
+	 * 0 on success and non-zero
+	 * failure.
+	 */
+	radar_enabled_status = dfs_radar_enable(ic, &rinfo);
+	if (radar_enabled_status != DFS_STATUS_SUCCESS) {
+		WMA_LOGE("%s[%d]: DFS- Radar Detection Enabling Failed",
+			__func__, __LINE__);
+	}
 }
 
 /*
@@ -19813,6 +19992,12 @@ wma_set_dfs_regdomain(tp_wma_handle wma)
 	if (regdmn < 0)
 	{
 		WMA_LOGE("%s:DFS-Invalid regdomain",__func__);
+		/*
+		 * Set the DFS reg domain to unintlialized domain
+		 * to indicate dfs regdomain configuration failure
+		 */
+		wma->dfs_ic->current_dfs_regdomain = DFS_UNINIT_DOMAIN;
+		return;
 	}
 
 	regdmn5G = get_regdmn_5g(regdmn);
@@ -19821,6 +20006,12 @@ wma_set_dfs_regdomain(tp_wma_handle wma)
 	if (!ctl)
 	{
 		WMA_LOGI("%s:DFS-Invalid CTL",__func__);
+		/*
+		 * Set the DFS reg domain to unintlialized domain
+		 * to indicate dfs regdomain configuration failure
+		 */
+		wma->dfs_ic->current_dfs_regdomain = DFS_UNINIT_DOMAIN;
+		return;
 	}
 	if (ctl == FCC)
 	{

@@ -105,6 +105,7 @@
 #include "qc_sap_ioctl.h"
 #include "sme_Api.h"
 #include "wlan_qct_wda.h"
+#include "vos_trace.h"
 
 #ifdef QCA_PKT_PROTO_TRACE
 #include "vos_packet.h"
@@ -120,6 +121,7 @@ extern void hdd_resume_wlan(struct early_suspend *wlan_suspend);
 #endif
 
 #define HDD_FINISH_ULA_TIME_OUT    800
+
 
 extern int wlan_hdd_cfg80211_update_band(struct wiphy *wiphy, eCsrBand eBand);
 
@@ -383,6 +385,10 @@ static const hdd_freq_chan_map_t freq_chan_map[] = { {2412, 1}, {2417, 2},
 #ifdef FEATURE_WLAN_TDLS
 #define WE_TDLS_CONFIG_PARAMS   5
 #endif
+
+#define WE_MTRACE_DUMP_CMD    8
+#define WE_MTRACE_SELECTIVE_MODULE_LOG_ENABLE_CMD    9
+
 #ifdef FEATURE_WLAN_TDLS
 #undef  MAX_VAR_ARGS
 #ifdef QCA_WIFI_2_0
@@ -614,7 +620,7 @@ void hdd_wlan_get_version(hdd_adapter_t *pAdapter, union iwreq_data *wrqu,
     tSirVersionString wcnss_SW_version;
     const char *pSWversion;
     const char *pHWversion;
-    v_U32_t CBId = 0, CBSId = 0, CRMId = 0;
+    v_U32_t MSPId = 0, mSPId = 0, SIId = 0, CRMId = 0;
 #ifndef QCA_WIFI_2_0
     VOS_STATUS status;
     tSirVersionString wcnss_HW_version;
@@ -636,8 +642,9 @@ void hdd_wlan_get_version(hdd_adapter_t *pAdapter, union iwreq_data *wrqu,
         pHddContext->target_fw_version);
 
     pSWversion = wcnss_SW_version;
-    CBId = (pHddContext->target_fw_version & 0xf8000000) >> 27;
-    CBSId = (pHddContext->target_fw_version & 0x07000000) >> 24;
+    MSPId = (pHddContext->target_fw_version & 0xf0000000) >> 28;
+    mSPId = (pHddContext->target_fw_version & 0xf000000) >> 24;
+    SIId = (pHddContext->target_fw_version & 0xf00000) >> 20;
     CRMId = pHddContext->target_fw_version & 0x7fff;
 
     for (i = 0; i < ARRAY_SIZE(qwlan_hw_list); i++) {
@@ -675,17 +682,19 @@ void hdd_wlan_get_version(hdd_adapter_t *pAdapter, union iwreq_data *wrqu,
 
     if (wrqu) {
         wrqu->data.length = scnprintf(extra, WE_MAX_STR_LEN,
-                                     "Host SW:%s, FW:%d.%d.%d, HW:%s",
+                                     "Host SW:%s, FW:%d.%d.%d.%d, HW:%s",
                                      QWLAN_VERSIONSTR,
-                                     CBId,
-                                     CBSId,
+                                     MSPId,
+                                     mSPId,
+                                     SIId,
                                      CRMId,
                                      pHWversion);
     } else {
-        pr_info("Host SW:%s, FW:%d.%d.%d, HW:%s\n",
+        pr_info("Host SW:%s, FW:%d.%d.%d.%d, HW:%s\n",
                 QWLAN_VERSIONSTR,
-                CBId,
-                CBSId,
+                MSPId,
+                mSPId,
+                SIId,
                 CRMId,
                 pHWversion);
     }
@@ -980,7 +989,7 @@ VOS_STATUS wlan_hdd_get_rssi(hdd_adapter_t *pAdapter, v_S7_t *rssi_value)
 
    hstatus = sme_GetRssi(pHddCtx->hHal, hdd_GetRssiCB,
                          pHddStaCtx->conn_info.staId[ 0 ],
-                         pHddStaCtx->conn_info.bssId,
+                         pHddStaCtx->conn_info.bssId, pAdapter->rssi,
                          &context, pHddCtx->pvosContext);
    if (eHAL_STATUS_SUCCESS != hstatus)
    {
@@ -7122,6 +7131,7 @@ static int iw_setnone_getnone(struct net_device *dev, struct iw_request_info *in
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
                                   "%s:LOGP in Progress. Ignore!!!", __func__);
+        msleep(1000);
         return -EBUSY;
     }
 
@@ -7450,6 +7460,26 @@ int iw_set_var_ints_getnone(struct net_device *dev, struct iw_request_info *info
                        apps_args[3], apps_args[4], apps_args[5], apps_args[6]);
 
                 hdd_setP2pPs(dev, &p2pNoA);
+
+            }
+            break;
+
+        case WE_MTRACE_SELECTIVE_MODULE_LOG_ENABLE_CMD:
+            {
+                hddLog(LOG1, "%s: SELECTIVE_MODULE_LOG %d arg1 %d arg2",
+                        __func__, apps_args[0], apps_args[1]);
+                vosTraceEnable(apps_args[0], apps_args[1]);
+            }
+            break;
+
+        case WE_MTRACE_DUMP_CMD:
+            {
+                hddLog(LOG1, "%s: MTRACE_DUMP code %d session %d count %d "
+                       "bitmask_of_module %d ",
+                        __func__, apps_args[0], apps_args[1], apps_args[2],
+                        apps_args[3]);
+                vosTraceDumpAll((void*)hHal , apps_args[0], apps_args[1],
+                                apps_args[2], apps_args[3]);
 
             }
             break;
@@ -9368,10 +9398,24 @@ int hdd_setBand(struct net_device *dev, u8 ui_band)
                 "%s: Current band value = %u, new setting %u ",
                  __func__, currBand, band);
 
+        /* We need to change the band and flush the scan results here itself
+         * as we may get timeout for disconnection in which we will return
+         * with out doing any of these
+         */
+        if (eHAL_STATUS_SUCCESS != sme_SetFreqBand(hHal, (eCsrBand)band))
+        {
+             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+                     "%s: failed to set the band value to %u ",
+                        __func__, band);
+             return -EINVAL;
+        }
+        wlan_hdd_cfg80211_update_band(pHddCtx->wiphy, (eCsrBand)band);
         hdd_abort_mac_scan(pHddCtx, pAdapter->sessionId,
                            eCSR_SCAN_ABORT_DUE_TO_BAND_CHANGE);
+        sme_FilterScanResults(hHal, pAdapter->sessionId);
 
-        if (hdd_connIsConnected(WLAN_HDD_GET_STATION_CTX_PTR(pAdapter)))
+        if (band != eCSR_BAND_ALL &&
+            hdd_connIsConnected(WLAN_HDD_GET_STATION_CTX_PTR(pAdapter)))
         {
              hdd_station_ctx_t *pHddStaCtx = &(pAdapter)->sessionCtx.station;
              eHalStatus status = eHAL_STATUS_SUCCESS;
@@ -9410,16 +9454,6 @@ int hdd_setBand(struct net_device *dev, u8 ui_band)
                 return (0 == lrc) ? -ETIMEDOUT : -EINTR;
              }
         }
-
-        sme_ScanFlushResult(hHal, pAdapter->sessionId);
-        if (eHAL_STATUS_SUCCESS != sme_SetFreqBand(hHal, (eCsrBand)band))
-        {
-             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-                     "%s: failed to set the band value to %u ",
-                        __func__, band);
-             return -EINVAL;
-        }
-        wlan_hdd_cfg80211_update_band(pHddCtx->wiphy, (eCsrBand)band);
     }
     return 0;
 }
@@ -10687,6 +10721,18 @@ static const struct iw_priv_args we_private_args[] = {
         IW_PRIV_TYPE_INT | MAX_VAR_ARGS,
         0,
         "dump" },
+
+    /* handlers for sub-ioctl */
+    {   WE_MTRACE_SELECTIVE_MODULE_LOG_ENABLE_CMD,
+        IW_PRIV_TYPE_INT | MAX_VAR_ARGS,
+        0,
+        "setdumplog" },
+
+    {   WE_MTRACE_DUMP_CMD,
+        IW_PRIV_TYPE_INT | MAX_VAR_ARGS,
+        0,
+        "dumplog" },
+
     /* handlers for sub ioctl */
    {
        WE_MCC_CONFIG_CREDENTIAL,
