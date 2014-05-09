@@ -2047,13 +2047,13 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
    }
 
    /* Initialize the adf_ctx handle */
-   adf_ctx = vos_mem_malloc(sizeof(adf_os_device_t));
+   adf_ctx = vos_mem_malloc(sizeof(*adf_ctx));
 
    if (!adf_ctx) {
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: Failed to allocate adf_ctx", __func__);
       goto err_re_init;
    }
-   vos_mem_zero(adf_ctx, sizeof(adf_os_device_t));
+   vos_mem_zero(adf_ctx, sizeof(*adf_ctx));
 
    hif_init_adf_ctx(adf_ctx, hif_sc);
    ((VosContextType*)pVosContext)->pHIFContext = hif_sc;
@@ -2243,6 +2243,8 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
    }
 #endif
 
+   wlan_hdd_send_svc_nlink_msg(WLAN_SVC_FW_CRASHED_IND);
+
    /* Allow the phone to go to sleep */
    hdd_allow_suspend();
    /* register for riva power on lock */
@@ -2253,8 +2255,6 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
       goto err_unregister_pmops;
    }
    vos_set_reinit_in_progress(VOS_MODULE_ID_VOSS, FALSE);
-
-   wlan_hdd_send_svc_nlink_msg(WLAN_SVC_FW_CRASHED_IND);
 
    goto success;
 

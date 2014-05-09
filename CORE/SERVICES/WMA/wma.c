@@ -199,6 +199,7 @@ wma_process_ftm_command(tp_wma_handle wma_handle,
 
 /*DFS Attach*/
 struct ieee80211com* wma_dfs_attach(struct ieee80211com *ic);
+static void wma_dfs_detach(struct ieee80211com *ic);
 static void wma_set_bss_rate_flags(struct wma_txrx_node *iface,
 							tpAddBssParams add_bss);
 /*Configure DFS with radar tables and regulatory domain*/
@@ -1028,16 +1029,20 @@ static void wma_delete_all_ap_remote_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 
 	/* remove all remote peers of SAP */
 	adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
-	TAILQ_FOREACH(peer, &vdev->peer_list, peer_list_elem) {
-		if (peer != TAILQ_FIRST(&vdev->peer_list)) {
-			adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
-			adf_os_atomic_init(&peer->ref_cnt);
-			adf_os_atomic_inc(&peer->ref_cnt);
-			wma_remove_peer(wma, peer->mac_addr.raw,
-					vdev_id, peer);
-			adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
+	while ((peer = TAILQ_LAST(&vdev->peer_list, peer_list_t))) {
+		/* self peer is deleted by caller */
+		if (peer == TAILQ_FIRST(&vdev->peer_list)){
+			WMA_LOGE("%s: self peer removed by caller ", __func__);
+			break;
 		}
+		adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
+		adf_os_atomic_init(&peer->ref_cnt);
+		adf_os_atomic_inc(&peer->ref_cnt);
+		wma_remove_peer(wma, peer->mac_addr.raw,
+					vdev_id, peer);
+		adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
 	}
+
 	adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
 }
 
@@ -2805,7 +2810,7 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	if (!wmi_handle) {
 		WMA_LOGP("%s: failed to attach WMI", __func__);
 		vos_status = VOS_STATUS_E_NOMEM;
-		goto err_wmi_attach;
+		goto err_wma_handle;
 	}
 
 	WMA_LOGA("WMA --> wmi_unified_attach - success");
@@ -2825,7 +2830,7 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	if (!(((pVosContextType) vos_context)->cfg_ctx)) {
 		WMA_LOGP("%s: failed to init cfg handle", __func__);
 		vos_status = VOS_STATUS_E_NOMEM;
-		goto err_wmi_attach;
+		goto err_wmi_handle;
 	}
 
 	/* adjust the cfg_ctx default value based on setting */
@@ -2840,7 +2845,8 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	/* Allocate dfs_ic and initialize DFS */
 	wma_handle->dfs_ic = wma_dfs_attach(wma_handle->dfs_ic);
 	if(wma_handle->dfs_ic == NULL) {
-		WMA_LOGP("%s: Memory allocation failed for dfs_ic", __func__);
+		WMA_LOGE("%s: Memory allocation failed for dfs_ic", __func__);
+		goto err_wmi_handle;
 	}
 
 #if defined(QCA_WIFI_FTM) && !defined(QCA_WIFI_ISOC)
@@ -2854,7 +2860,7 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	if (NULL == scn) {
 		WMA_LOGE("%s: Failed to get scn",__func__);
 		vos_status = VOS_STATUS_E_NOMEM;
-		goto err_wmi_attach;
+		goto err_scn_context;
 	}
 
 	mac_params->maxStation = ol_get_number_of_peers_supported(scn);
@@ -2888,7 +2894,7 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	if (!wma_handle->interfaces) {
 		WMA_LOGP("%s: failed to allocate interface table", __func__);
 		vos_status = VOS_STATUS_E_NOMEM;
-		goto err_wmi_attach;
+		goto err_scn_context;
 	}
 	vos_mem_zero(wma_handle->interfaces, sizeof(struct wma_txrx_node) *
 					wma_handle->max_bssid);
@@ -2997,7 +3003,7 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	vos_status = dbglog_init(wma_handle->wmi_handle);
 	if (vos_status != VOS_STATUS_SUCCESS) {
 		WMA_LOGP("%s: Firmware Dbglog initialization failed", __func__);
-		goto err_event_init;
+		goto err_dbglog_init;
 	}
 
 	/*
@@ -3037,10 +3043,23 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 
 	return VOS_STATUS_SUCCESS;
 
+err_dbglog_init:
+	adf_os_spinlock_destroy(&wma_handle->vdev_respq_lock);
+	adf_os_spinlock_destroy(&wma_handle->vdev_detach_lock);
 err_event_init:
 	wmi_unified_unregister_event_handler(wma_handle->wmi_handle,
 					     WMI_DEBUG_PRINT_EVENTID);
-err_wmi_attach:
+	vos_mem_free(wma_handle->interfaces);
+err_scn_context:
+	wma_dfs_detach(wma_handle->dfs_ic);
+#if defined(QCA_WIFI_FTM) && !(defined(QCA_WIFI_ISOC))
+	wma_utf_detach(wma_handle);
+#endif
+err_wmi_handle:
+	adf_os_mem_free(((pVosContextType) vos_context)->cfg_ctx);
+	OS_FREE(wmi_handle);
+
+err_wma_handle:
 
 	if (vos_get_conparam() != VOS_FTM_MODE) {
 #ifdef FEATURE_WLAN_SCAN_PNO
@@ -3048,8 +3067,6 @@ err_wmi_attach:
 #endif
 		vos_wake_lock_destroy(&wma_handle->wow_wake_lock);
 	}
-
-	vos_mem_free(wma_handle->interfaces);
 	vos_free_context(vos_context, VOS_MODULE_ID_WDA, wma_handle);
 
 	WMA_LOGD("%s: Exit", __func__);
@@ -9652,6 +9669,28 @@ out:
 	wma_send_msg(wma, WDA_ADD_STA_RSP, (void *)params, 0);
 }
 
+static void wma_prevent_suspend_check(tp_wma_handle wma)
+{
+	wma->ap_client_cnt++;
+	if (wma->ap_client_cnt ==
+	    wma->wlan_resource_config.num_offload_peers) {
+		vos_wake_lock_acquire(&wma->wow_wake_lock);
+		WMA_LOGW("%s: %d clients connected, prevent suspend",
+			 __func__, wma->ap_client_cnt);
+	}
+}
+
+static void wma_allow_suspend_check(tp_wma_handle wma)
+{
+	wma->ap_client_cnt--;
+	if (wma->ap_client_cnt ==
+	    wma->wlan_resource_config.num_offload_peers - 1) {
+		vos_wake_lock_release(&wma->wow_wake_lock);
+		WMA_LOGW("%s: %d clients connected, allow suspend",
+			 __func__, wma->ap_client_cnt);
+	}
+}
+
 static void wma_add_sta(tp_wma_handle wma, tpAddStaParams add_sta)
 {
 	tANI_U8 oper_mode = BSS_OPERATIONAL_MODE_STA;
@@ -9661,8 +9700,10 @@ static void wma_add_sta(tp_wma_handle wma, tpAddStaParams add_sta)
                  add_sta->bssId[0], add_sta->bssId[1], add_sta->bssId[2],
                  add_sta->bssId[3], add_sta->bssId[4], add_sta->bssId[5]);
 
-	if (wma_is_vdev_in_ap_mode(wma, add_sta->smesessionId))
+	if (wma_is_vdev_in_ap_mode(wma, add_sta->smesessionId)) {
+		wma_prevent_suspend_check(wma);
 		oper_mode = BSS_OPERATIONAL_MODE_AP;
+	}
 #ifdef QCA_IBSS_SUPPORT
         else if (wma_is_vdev_in_ibss_mode(wma, add_sta->smesessionId))
 		oper_mode = BSS_OPERATIONAL_MODE_IBSS;
@@ -10290,8 +10331,10 @@ static void wma_delete_sta(tp_wma_handle wma, tpDeleteStaParams del_sta)
 {
 	tANI_U8 oper_mode = BSS_OPERATIONAL_MODE_STA;
 
-	if (wma_is_vdev_in_ap_mode(wma, del_sta->smesessionId))
+	if (wma_is_vdev_in_ap_mode(wma, del_sta->smesessionId)) {
+		wma_allow_suspend_check(wma);
 		oper_mode = BSS_OPERATIONAL_MODE_AP;
+	}
 #ifdef QCA_IBSS_SUPPORT
 	if (wma_is_vdev_in_ibss_mode(wma, del_sta->smesessionId)) {
 		oper_mode = BSS_OPERATIONAL_MODE_IBSS;
@@ -18518,40 +18561,92 @@ VOS_STATUS WDA_TxPacket(void *wma_context, void *tx_frame, u_int16_t frmLen,
 		return VOS_STATUS_E_FAILURE;
 	}
 #ifdef WLAN_FEATURE_11W
-	if ((iface && iface->rmfEnabled && pFc->wep) &&
+	if ((iface && iface->rmfEnabled) &&
 		(frmType == HAL_TXRX_FRM_802_11_MGMT) &&
 		(pFc->subType == SIR_MAC_MGMT_DISASSOC ||
 			pFc->subType == SIR_MAC_MGMT_DEAUTH ||
 			pFc->subType == SIR_MAC_MGMT_ACTION)) {
 		struct ieee80211_frame *wh =
-			(struct ieee80211_frame *)adf_nbuf_data(tx_frame);
-		/* Allocate extra bytes for privacy header and trailer */
-		newFrmLen = frmLen + IEEE80211_CCMP_HEADERLEN + IEEE80211_CCMP_MICLEN;
-		vos_status = palPktAlloc( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
-				( tANI_U16 )newFrmLen, ( void** ) &pFrame,
-				( void** ) &pPacket );
+				(struct ieee80211_frame *)adf_nbuf_data(tx_frame);
+		if(!IEEE80211_IS_BROADCAST(wh->i_addr1) &&
+		   !IEEE80211_IS_MULTICAST(wh->i_addr1)) {
+			if (pFc->wep) {
+				/* Allocate extra bytes for privacy header and trailer */
+				newFrmLen = frmLen + IEEE80211_CCMP_HEADERLEN +
+							IEEE80211_CCMP_MICLEN;
+				vos_status = palPktAlloc( pMac->hHdd,
+							  HAL_TXRX_FRM_802_11_MGMT,
+							  ( tANI_U16 )newFrmLen,
+							  ( void** ) &pFrame,
+							  ( void** ) &pPacket );
 
-		if (!VOS_IS_STATUS_SUCCESS(vos_status)) {
-			WMA_LOGP("%s: Failed to allocate %d bytes for RMF status "
-				"code (%x)", __func__, newFrmLen, vos_status);
-			/* Free the original packet memory */
+				if (!VOS_IS_STATUS_SUCCESS(vos_status)) {
+					WMA_LOGP("%s: Failed to allocate %d bytes for RMF status "
+							 "code (%x)", __func__, newFrmLen, vos_status);
+					/* Free the original packet memory */
+					palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
+								( void* ) pData, ( void* ) tx_frame );
+					goto error;
+				}
+
+				/*
+				 * Initialize the frame with 0's and only fill
+				 * MAC header and data, Keep the CCMP header and
+				 * trailer as 0's, firmware shall fill this
+				 */
+				vos_mem_set(  pFrame, newFrmLen , 0 );
+				vos_mem_copy( pFrame, wh, sizeof(*wh));
+				vos_mem_copy( pFrame + sizeof(*wh) + IEEE80211_CCMP_HEADERLEN,
+							  pData + sizeof(*wh), frmLen - sizeof(*wh));
+
+				palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
+							( void* ) pData, ( void* ) tx_frame );
+				tx_frame = pPacket;
+				frmLen = newFrmLen;
+			}
+		} else {
+			/* Allocate extra bytes for MMIE */
+			newFrmLen = frmLen + IEEE80211_MMIE_LEN;
+			vos_status = palPktAlloc( pMac->hHdd,
+						  HAL_TXRX_FRM_802_11_MGMT,
+						  ( tANI_U16 )newFrmLen,
+						  ( void** ) &pFrame,
+						  ( void** ) &pPacket );
+
+			if (!VOS_IS_STATUS_SUCCESS(vos_status)) {
+				WMA_LOGP("%s: Failed to allocate %d bytes for RMF status "
+						 "code (%x)", __func__, newFrmLen, vos_status);
+				/* Free the original packet memory */
+				palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
+							( void* ) pData, ( void* ) tx_frame );
+				goto error;
+			}
+			/*
+			 * Initialize the frame with 0's and only fill
+			 * MAC header and data. MMIE field will be
+			 * filled by vos_attach_mmie API
+			 */
+			vos_mem_set(  pFrame, newFrmLen , 0 );
+			vos_mem_copy( pFrame, wh, sizeof(*wh));
+			vos_mem_copy( pFrame + sizeof(*wh),
+						  pData + sizeof(*wh), frmLen - sizeof(*wh));
+			if (!vos_attach_mmie(iface->key.key,
+					iface->key.key_id[0].ipn,
+					WMA_IGTK_KEY_INDEX_4,
+					pFrame,
+					pFrame+newFrmLen, newFrmLen)) {
+				WMA_LOGP("%s: Failed to attach MMIE at the end of "
+						 "frame", __func__);
+				/* Free the original packet memory */
+				palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
+					( void* ) pData, ( void* ) tx_frame );
+					goto error;
+			}
 			palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
-	                    ( void* ) pData, ( void* ) tx_frame );
-			goto error;
+						( void* ) pData, ( void* ) tx_frame );
+			tx_frame = pPacket;
+			frmLen = newFrmLen;
 		}
-
-		/* Initialize the frame with 0's and only fill
-		   MAC header and data, Keep the CCMP header and
-		   trailer as 0's, firmware shall fill this */
-		vos_mem_set(  pFrame, newFrmLen , 0 );
-		vos_mem_copy( pFrame, wh, sizeof(*wh));
-		vos_mem_copy( pFrame + sizeof(*wh) + IEEE80211_CCMP_HEADERLEN,
-				pData + sizeof(*wh), frmLen - sizeof(*wh));
-
-		palPktFree( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
-			( void* ) pData, ( void* ) tx_frame );
-		tx_frame = pPacket;
-		frmLen = newFrmLen;
 	}
 #endif /* WLAN_FEATURE_11W */
 
