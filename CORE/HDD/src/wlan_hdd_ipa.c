@@ -156,6 +156,7 @@ struct hdd_ipa_iface_context {
 
 	uint8_t iface_id; /* This iface ID */
 	uint8_t sta_id; /* This iface station ID */
+	vos_spin_lock_t interface_lock;
 };
 
 
@@ -605,6 +606,13 @@ static void hdd_ipa_process_evt(int evt, void *priv)
 
 		iface_context =
 			(struct hdd_ipa_iface_context *) adapter->ipa_context;
+		if (iface_context) {
+			vos_spin_lock_acquire(&iface_context->interface_lock);
+		}
+		else {
+			return;
+		}
+
 		/* send_desc_head is a anchor node */
 		send_desc_head = hdd_ipa_get_desc_from_freeq();
 		if (!send_desc_head) {
@@ -626,6 +634,7 @@ static void hdd_ipa_process_evt(int evt, void *priv)
 #ifdef HDD_IPA_EXTRA_DP_COUNTERS
 			hdd_ipa->stats.rxt_dh_drop++;
 #endif
+			vos_spin_lock_release(&iface_context->interface_lock);
 			return;
 		}
 
@@ -674,6 +683,7 @@ static void hdd_ipa_process_evt(int evt, void *priv)
 #endif
 			buf = next_buf;
 		}
+		vos_spin_lock_release(&iface_context->interface_lock);
 
 #ifdef HDD_IPA_EXTRA_DP_COUNTERS
 		if (cur_cnt == 0)
@@ -867,6 +877,7 @@ static void hdd_ipa_i2w_cb(void *priv, enum ipa_dp_evt_type evt,
 	struct ipa_rx_data *ipa_tx_desc;
 	struct hdd_ipa_iface_context *iface_context;
 	adf_nbuf_t skb;
+	v_U8_t interface_id;
 
 	if (evt == IPA_RECEIVE) {
 
@@ -887,8 +898,20 @@ static void hdd_ipa_i2w_cb(void *priv, enum ipa_dp_evt_type evt,
 
 		hdd_ipa->stats.tx_ipa_recv++;
 
+		vos_spin_lock_acquire(&iface_context->interface_lock);
+		if (iface_context->adapter) {
+			interface_id = iface_context->adapter->sessionId;
+		}
+		else{
+			HDD_IPA_LOG(VOS_TRACE_LEVEL_WARN, "Interface Down");
+			ipa_free_skb(ipa_tx_desc);
+			vos_spin_lock_release(&iface_context->interface_lock);
+			return;
+		}
+		vos_spin_lock_release(&iface_context->interface_lock);
+
 		skb = WLANTL_SendIPA_DataFrame(hdd_ipa->hdd_ctx->pvosContext,
-				iface_context->tl_context, ipa_tx_desc->skb);
+				iface_context->tl_context, ipa_tx_desc->skb, interface_id);
 		if (skb) {
 			HDD_IPA_LOG(VOS_TRACE_LEVEL_DEBUG, "TLSHIM tx fail");
 			ipa_free_skb(ipa_tx_desc);
@@ -1252,9 +1275,11 @@ static void hdd_ipa_cleanup_iface(struct hdd_ipa_iface_context *iface_context)
 
 	hdd_ipa_clean_hdr(iface_context->adapter);
 
+	vos_spin_lock_acquire(&iface_context->interface_lock);
 	iface_context->adapter->ipa_context = NULL;
 	iface_context->adapter = NULL;
 	iface_context->tl_context = NULL;
+	vos_spin_lock_release(&iface_context->interface_lock);
 }
 
 
@@ -1677,6 +1702,7 @@ VOS_STATUS hdd_ipa_init(hdd_context_t *hdd_ctx)
 		iface_context->prod_client =
 			hdd_ipa_adapter_2_client[i].prod_client;
 		iface_context->iface_id = i;
+		vos_spin_lock_init(&iface_context->interface_lock);
 	}
 
 	ret = hdd_ipa_setup_rm(hdd_ipa);
@@ -1710,9 +1736,17 @@ fail_setup_rm:
 VOS_STATUS hdd_ipa_cleanup(hdd_context_t *hdd_ctx)
 {
 	struct hdd_ipa_priv *hdd_ipa = hdd_ctx->hdd_ipa;
+	int i;
+	struct hdd_ipa_iface_context *iface_context = NULL;
 
 	if (!hdd_ipa_is_enabled(hdd_ctx))
 		return VOS_STATUS_SUCCESS;
+
+	/* destory the interface lock */
+	for (i = 0; i < HDD_IPA_MAX_IFACE; i++) {
+		iface_context = &hdd_ipa->iface_context[i];
+		vos_spin_lock_destroy(&iface_context->interface_lock);
+	}
 
 	hdd_ipa_debugfs_remove(hdd_ipa);
 

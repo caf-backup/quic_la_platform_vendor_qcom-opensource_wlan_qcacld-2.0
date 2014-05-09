@@ -234,15 +234,6 @@
 #define HDD_MAC_ADDR_LEN    6
 #define HDD_SESSION_ID_ANY  50 //This should be same as CSR_SESSION_ID_ANY
 
-#ifdef MSM_PLATFORM
-/* Threshold value for number of packets recevied in 3sec */
-#define HDD_HIGH_BUS_BANDWIDTH_THRESHOLD_RX 40000
-#define HDD_HIGH_BUS_BANDWIDTH_THRESHOLD_TX 40000
-#define HDD_MEDIUM_BUS_BANDWIDTH_THRESHOLD_TX 5000
-#define HDD_MEDIUM_BUS_BANDWIDTH_THRESHOLD_RX 5000
-#define HDD_BUS_BANDWIDTH_COMPUTE_INTERVAL  3000
-#endif
-
 #define HDD_MIN_TX_POWER (-100) // minimum tx power
 #define HDD_MAX_TX_POWER (+100)  // maximum tx power
 
@@ -957,10 +948,8 @@ struct hdd_adapter_s
    /* completion variable for cancel remain on channel Event */
    struct completion cancel_rem_on_chan_var;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
    /* completion variable for off channel  remain on channel Event */
    struct completion offchannel_tx_event;
-#endif
    /* Completion variable for action frame */
    struct completion tx_action_cnf_event;
    /* Completion variable for remain on channel ready */
@@ -1098,6 +1087,7 @@ struct hdd_adapter_s
     unsigned int tx_flow_low_watermark;
     unsigned int tx_flow_high_watermark_offset;
 #endif /* QCA_LL_TX_FLOW_CT */
+    v_BOOL_t offloads_configured;
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(pAdapter) (&(pAdapter)->sessionCtx.station)
@@ -1413,10 +1403,8 @@ struct hdd_context_s
    /* DDR bus bandwidth compute timer
     */
     vos_timer_t    bus_bw_timer;
-    int            cur_bus_bw;
-    v_BOOL_t       bus_bw_triggered;
+    int            cur_vote_level;
     spinlock_t     bus_bw_lock;
-    int            sta_cnt;
 #endif
 
     v_U8_t         drvr_miracast;

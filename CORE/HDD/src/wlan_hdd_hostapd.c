@@ -89,6 +89,9 @@
 extern int process_wma_set_command(int sessid, int paramid,
                                    int sval, int vpdev);
 #endif /* QCA_WIFI_2_0 */
+#include "wlan_hdd_trace.h"
+#include "vos_types.h"
+#include "vos_trace.h"
 
 #define    IS_UP(_dev) \
     (((_dev)->flags & (IFF_RUNNING|IFF_UP)) == (IFF_RUNNING|IFF_UP))
@@ -127,6 +130,9 @@ int hdd_hostapd_open (struct net_device *dev)
    hdd_adapter_t *pAdapter = netdev_priv(dev);
 
    ENTER();
+
+   MTRACE(vos_trace(VOS_MODULE_ID_HDD,
+                    TRACE_CODE_HDD_HOSTAPD_OPEN_REQUEST, NO_SESSION, 0));
 
    if (WLAN_HDD_GET_CTX(pAdapter)->isLoadInProgress ||
         WLAN_HDD_GET_CTX(pAdapter)->isUnloadInProgress)
@@ -618,6 +624,9 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                             pSapEvent->sapevt.sapStartBssCompleteEvent.operatingChannel,
                               pSapEvent->sapevt.sapStartBssCompleteEvent.staId);
 
+            pHostapdAdapter->sessionId =
+                    pSapEvent->sapevt.sapStartBssCompleteEvent.sessionId;
+
             pHostapdState->vosStatus = pSapEvent->sapevt.sapStartBssCompleteEvent.status;
             vos_status = vos_event_set(&pHostapdState->vosEvent);
 
@@ -631,6 +640,17 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                 pHddApCtx->uBCStaId = pSapEvent->sapevt.sapStartBssCompleteEvent.staId;
                 pHostapdAdapter->sessionId =
                         pSapEvent->sapevt.sapStartBssCompleteEvent.sessionId;
+
+#ifdef QCA_LL_TX_FLOW_CT
+                vos_timer_init(&pHostapdAdapter->tx_flow_control_timer,
+                               VOS_TIMER_TYPE_SW,
+                               hdd_tx_resume_timer_expired_handler,
+                               pHostapdAdapter);
+                WLANTL_RegisterTXFlowControl(pHddCtx->pvosContext,
+                               hdd_tx_resume_cb,
+                               pHostapdAdapter->sessionId,
+                               (void *)pHostapdAdapter);
+#endif
                 //@@@ need wep logic here to set privacy bit
                 vos_status = hdd_softap_Register_BC_STA(pHostapdAdapter, pHddApCtx->uPrivacy);
                 if (!VOS_IS_STATUS_SUCCESS(vos_status))
@@ -892,6 +912,18 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                vos_pkt_trace_buf_update("HA:ASSOC");
             }
 #endif /* QCA_PKT_PROTO_TRACE */
+
+#ifdef MSM_PLATFORM
+            /* start timer in sap/p2p_go */
+            if (pHddApCtx->bApActive == VOS_FALSE)
+            {
+                spin_lock_irqsave(&pHddCtx->bus_bw_lock, flags);
+                pHostapdAdapter->prev_tx_packets = pHostapdAdapter->stats.tx_packets;
+                pHostapdAdapter->prev_rx_packets = pHostapdAdapter->stats.rx_packets;
+                hdd_start_bus_bw_compute_timer(pHostapdAdapter);
+                spin_unlock_irqrestore(&pHddCtx->bus_bw_lock, flags);
+            }
+#endif
             pHddApCtx->bApActive = VOS_TRUE;
             // Stop AP inactivity timer
             if (pHddApCtx->hdd_ap_inactivity_timer.state == VOS_TIMER_STATE_RUNNING)
@@ -905,30 +937,29 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
 #endif
             vos_wake_lock_timeout_acquire(&pHddCtx->sap_wake_lock,
                                           HDD_SAP_WAKE_LOCK_DURATION);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
             {
-                struct station_info staInfo;
-                v_U16_t iesLen =  pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.iesLen;
+               struct station_info staInfo;
+               v_U16_t iesLen =  pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.iesLen;
 
-                memset(&staInfo, 0, sizeof(staInfo));
-                if (iesLen <= MAX_ASSOC_IND_IE_LEN )
-                {
-                    staInfo.assoc_req_ies =
-                        (const u8 *)&pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.ies[0];
-                    staInfo.assoc_req_ies_len = iesLen;
+               memset(&staInfo, 0, sizeof(staInfo));
+               if (iesLen <= MAX_ASSOC_IND_IE_LEN )
+               {
+                  staInfo.assoc_req_ies =
+                     (const u8 *)&pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.ies[0];
+                  staInfo.assoc_req_ies_len = iesLen;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,31))
-                    staInfo.filled |= STATION_INFO_ASSOC_REQ_IES;
+                  staInfo.filled |= STATION_INFO_ASSOC_REQ_IES;
 #endif
-                    cfg80211_new_sta(dev,
-                                 (const u8 *)&pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.staMac.bytes[0],
-                                 &staInfo, GFP_KERNEL);
-                }
-                else
-                {
-                    hddLog(LOGE, FL(" Assoc Ie length is too long"));
-                }
-             }
-#endif
+                  cfg80211_new_sta(dev,
+                        (const u8 *)&pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.staMac.bytes[0],
+                        &staInfo, GFP_KERNEL);
+               }
+               else
+               {
+                  hddLog(LOGE, FL(" Assoc Ie length is too long"));
+               }
+            }
+
             pScanInfo =  &pHostapdAdapter->scan_info;
             // Lets do abort scan to ensure smooth authentication for client
             if ((pScanInfo != NULL) && pScanInfo->mScanPending)
@@ -946,20 +977,6 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                   pSapEvent->sapevt.sapStationAssocReassocCompleteEvent.timingMeasCap,
                   pHostapdAdapter->sessionId, pHddApCtx->operatingChannel);
             }
-#endif
-
-#ifdef MSM_PLATFORM
-            /* start timer in sap/p2p_go */
-            spin_lock_irqsave(&pHddCtx->bus_bw_lock, flags);
-            pHddCtx->sta_cnt++;
-            pHostapdAdapter->connection++;
-            if (1 == pHostapdAdapter->connection) {
-                pHostapdAdapter->prev_tx_packets = pHostapdAdapter->stats.tx_packets;
-                pHostapdAdapter->prev_rx_packets = pHostapdAdapter->stats.rx_packets;
-            }
-            if (1 == pHddCtx->sta_cnt)
-                hdd_start_bus_bw_compute_timer(pHostapdAdapter);
-            spin_unlock_irqrestore(&pHddCtx->bus_bw_lock, flags);
 #endif
 
 #ifdef FEATURE_GREEN_AP
@@ -1035,11 +1052,10 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             wlan_hdd_auto_shutdown_enable(pHddCtx, VOS_TRUE);
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
             cfg80211_del_sta(dev,
                             (const u8 *)&pSapEvent->sapevt.sapStationDisassocCompleteEvent.staMac.bytes[0],
                             GFP_KERNEL);
-#endif
+
             //Update the beacon Interval if it is P2P GO
             vos_status = hdd_change_mcc_go_beacon_interval(pHostapdAdapter);
             if (VOS_STATUS_SUCCESS != vos_status)
@@ -1060,16 +1076,14 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
 
 #ifdef MSM_PLATFORM
             /*stop timer in sap/p2p_go */
-            spin_lock_irqsave(&pHddCtx->bus_bw_lock, flags);
-            pHddCtx->sta_cnt--;
-            pHostapdAdapter->connection--;
-            if (0 == pHostapdAdapter->connection) {
+            if (pHddApCtx->bApActive == FALSE)
+            {
+                spin_lock_irqsave(&pHddCtx->bus_bw_lock, flags);
                 pHostapdAdapter->prev_tx_packets = 0;
                 pHostapdAdapter->prev_rx_packets = 0;
-            }
-            if (0 == pHddCtx->sta_cnt)
                 hdd_stop_bus_bw_compute_timer(pHostapdAdapter);
-            spin_unlock_irqrestore(&pHddCtx->bus_bw_lock, flags);
+                spin_unlock_irqrestore(&pHddCtx->bus_bw_lock, flags);
+            }
 #endif
 #ifdef FEATURE_GREEN_AP
             hdd_wlan_green_ap_mc(pHddCtx, GREEN_AP_DEL_STA_EVENT);
@@ -4444,7 +4458,7 @@ const struct iw_handler_def hostapd_handler_def = {
    .private_args     = hostapd_private_args,
    .get_wireless_stats = NULL,
 };
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,29)
+
 struct net_device_ops net_ops_struct  = {
     .ndo_open = hdd_hostapd_open,
     .ndo_stop = hdd_hostapd_stop,
@@ -4457,7 +4471,6 @@ struct net_device_ops net_ops_struct  = {
     .ndo_change_mtu = hdd_hostapd_change_mtu,
     .ndo_select_queue = hdd_hostapd_select_queue,
  };
-#endif
 
 int hdd_set_hostapd(hdd_adapter_t *pAdapter)
 {
@@ -4466,18 +4479,7 @@ int hdd_set_hostapd(hdd_adapter_t *pAdapter)
 
 void hdd_set_ap_ops( struct net_device *pWlanHostapdDev )
 {
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,29)
   pWlanHostapdDev->netdev_ops = &net_ops_struct;
-#else
-  pWlanHostapdDev->open = hdd_hostapd_open;
-  pWlanHostapdDev->stop = hdd_hostapd_stop;
-  pWlanHostapdDev->uninit = hdd_hostapd_uninit;
-  pWlanHostapdDev->hard_start_xmit = hdd_softap_hard_start_xmit;
-  pWlanHostapdDev->tx_timeout = hdd_softap_tx_timeout;
-  pWlanHostapdDev->get_stats = hdd_softap_stats;
-  pWlanHostapdDev->set_mac_address = hdd_hostapd_set_mac_address;
-  pWlanHostapdDev->do_ioctl = hdd_hostapd_ioctl;
-#endif
 }
 
 VOS_STATUS hdd_init_ap_mode( hdd_adapter_t *pAdapter )
@@ -4626,6 +4628,7 @@ hdd_adapter_t* hdd_wlan_create_ap_dev( hdd_context_t *pHddCtx, tSirMacAddr macAd
         vos_mem_copy(pWlanHostapdDev->dev_addr, (void *)macAddr,sizeof(tSirMacAddr));
         vos_mem_copy(pHostapdAdapter->macAddressCurrent.bytes, (void *)macAddr, sizeof(tSirMacAddr));
 
+        pHostapdAdapter->offloads_configured = FALSE;
         pWlanHostapdDev->destructor = free_netdev;
         pWlanHostapdDev->ieee80211_ptr = &pHostapdAdapter->wdev ;
         pHostapdAdapter->wdev.wiphy = pHddCtx->wiphy;
@@ -4633,9 +4636,7 @@ hdd_adapter_t* hdd_wlan_create_ap_dev( hdd_context_t *pHddCtx, tSirMacAddr macAd
         init_completion(&pHostapdAdapter->tx_action_cnf_event);
         init_completion(&pHostapdAdapter->cancel_rem_on_chan_var);
         init_completion(&pHostapdAdapter->rem_on_chan_ready_event);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
         init_completion(&pHostapdAdapter->offchannel_tx_event);
-#endif
         init_completion(&pHostapdAdapter->scan_info.scan_req_completion_event);
         init_completion(&pHostapdAdapter->scan_info.abortscan_event_var);
         vos_event_init(&pHostapdAdapter->scan_info.scan_finished_event);
