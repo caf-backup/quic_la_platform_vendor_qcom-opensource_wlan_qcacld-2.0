@@ -54,6 +54,7 @@ typedef enum
 #define LIM_STA_ID_MASK                        0x00FF
 #define LIM_AID_MASK                              0xC000
 #define LIM_SPECTRUM_MANAGEMENT_BIT_MASK          0x0100
+#define LIM_RRM_BIT_MASK                          0x1000
 #if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
 #define LIM_MAX_REASSOC_RETRY_LIMIT            2
 #endif
@@ -390,8 +391,10 @@ tANI_BOOLEAN limIsconnectedOnDFSChannel(tANI_U8 currentChannel);
 tANI_U8 limGetCurrentOperatingChannel(tpAniSirGlobal pMac);
 
 #ifdef WLAN_FEATURE_11AC
-tANI_BOOLEAN limCheckVHTOpModeChange( tpAniSirGlobal pMac,
-                                      tpPESession psessionEntry, tANI_U8 chanWidth, tANI_U8 staId);
+tANI_BOOLEAN limCheckVHTOpModeChange( tpAniSirGlobal pMac, tpPESession psessionEntry,
+                                      tANI_U8 chanWidth, tANI_U8 staId, tANI_U8 *peerMac);
+tANI_BOOLEAN limSetNssChange( tpAniSirGlobal pMac, tpPESession psessionEntry,
+                              tANI_U8 rxNss, tANI_U8 staId, tANI_U8 *peerMac);
 tANI_BOOLEAN limCheckMembershipUserPosition( tpAniSirGlobal pMac, tpPESession psessionEntry,
                                              tANI_U32 membership, tANI_U32 userPosition,
                                              tANI_U8 staId);
