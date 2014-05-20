@@ -1066,6 +1066,18 @@ int wlan_hdd_cfg80211_init(struct device *dev,
     return 0;
 }
 
+/*
+ * In this function, wiphy structure is updated after VOSS
+ * initialization. In wlan_hdd_cfg80211_init, only the
+ * default values will be initialized. The final initialization
+ * of all required members can be done here.
+ */
+void wlan_hdd_update_wiphy(struct wiphy *wiphy,
+                           hdd_config_t *pCfg)
+{
+    wiphy->max_ap_assoc_sta = pCfg->maxNumberOfPeers;
+}
+
 /* In this function we are registering wiphy. */
 int wlan_hdd_cfg80211_register(struct wiphy *wiphy)
 {
@@ -1145,11 +1157,8 @@ void wlan_hdd_cfg80211_update_reg_info(struct wiphy *wiphy)
     }
 }
 
-/* In this function we will do all post VOS start initialization.
-   In this function we will register for all frame in which supplicant
-   is interested.
-*/
-void wlan_hdd_cfg80211_post_voss_start(hdd_adapter_t* pAdapter)
+/* This function registers for all frame which supplicant is interested in */
+void wlan_hdd_cfg80211_register_frames(hdd_adapter_t* pAdapter)
 {
     tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(pAdapter);
     /* Register for all P2P action, public action etc frames */
@@ -1192,7 +1201,7 @@ void wlan_hdd_cfg80211_post_voss_start(hdd_adapter_t* pAdapter)
                                   WNM_BSS_ACTION_FRAME_SIZE );
 }
 
-void wlan_hdd_cfg80211_pre_voss_stop(hdd_adapter_t* pAdapter)
+void wlan_hdd_cfg80211_deregister_frames(hdd_adapter_t* pAdapter)
 {
     tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(pAdapter);
     /* Register for all P2P action, public action etc frames */
@@ -1258,7 +1267,7 @@ void wlan_hdd_cfg80211_set_key_wapi(hdd_adapter_t* pAdapter, u8 key_index,
     else
     {
         isConnected = hdd_connIsConnected(pHddStaCtx);
-        vos_mem_copy(setKey.peerMac,&pHddStaCtx->conn_info.bssId,WNI_CFG_BSSID_LEN);
+        vos_mem_copy(setKey.peerMac,&pHddStaCtx->conn_info.bssId, VOS_MAC_ADDR_SIZE);
     }
     setKey.keyLength = key_Len;
     pKeyPtr = setKey.Key;
@@ -3240,9 +3249,8 @@ static int __wlan_hdd_cfg80211_change_iface(struct wiphy *wiphy,
                         return -EINVAL;
                     }
                 }
-
-#endif
                 break;
+#endif
 
 #else
                 vstatus = wlan_hdd_change_iface_to_sta_mode(ndev, type);
@@ -3924,7 +3932,7 @@ static int wlan_hdd_cfg80211_add_key( struct wiphy *wiphy,
 {
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR( ndev );
     tCsrRoamSetKey  setKey;
-    u8 groupmacaddr[WNI_CFG_BSSID_LEN] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+    u8 groupmacaddr[VOS_MAC_ADDR_SIZE] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
     int status;
     v_U32_t roamId= 0xFF;
 #ifndef WLAN_FEATURE_MBSSID
@@ -4068,7 +4076,7 @@ static int wlan_hdd_cfg80211_add_key( struct wiphy *wiphy,
                 "%s- %d: setting Broadcast key",
                 __func__, __LINE__);
         setKey.keyDirection = eSIR_RX_ONLY;
-        vos_mem_copy(setKey.peerMac,groupmacaddr,WNI_CFG_BSSID_LEN);
+        vos_mem_copy(setKey.peerMac,groupmacaddr, VOS_MAC_ADDR_SIZE);
     }
     else
     {
@@ -4077,7 +4085,7 @@ static int wlan_hdd_cfg80211_add_key( struct wiphy *wiphy,
                 "%s- %d: setting pairwise key",
                 __func__, __LINE__);
         setKey.keyDirection = eSIR_TX_RX;
-        vos_mem_copy(setKey.peerMac, mac_addr,WNI_CFG_BSSID_LEN);
+        vos_mem_copy(setKey.peerMac, mac_addr, VOS_MAC_ADDR_SIZE);
     }
     if ((WLAN_HDD_IBSS == pAdapter->device_mode) && !pairwise)
     {
@@ -4243,7 +4251,7 @@ static int wlan_hdd_cfg80211_add_key( struct wiphy *wiphy,
            )
         {
             setKey.keyDirection = eSIR_RX_ONLY;
-            vos_mem_copy(setKey.peerMac,groupmacaddr,WNI_CFG_BSSID_LEN);
+            vos_mem_copy(setKey.peerMac,groupmacaddr, VOS_MAC_ADDR_SIZE);
 
             hddLog(VOS_TRACE_LEVEL_INFO_MED,
                     "%s: set key peerMac %2x:%2x:%2x:%2x:%2x:%2x, direction %d",
@@ -4359,7 +4367,7 @@ static int wlan_hdd_cfg80211_del_key( struct wiphy *wiphy,
 #if 0
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR( ndev );
     v_CONTEXT_t pVosContext = (WLAN_HDD_GET_CTX(pAdapter))->pvosContext;
-    u8 groupmacaddr[WNI_CFG_BSSID_LEN] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+    u8 groupmacaddr[VOS_MAC_ADDR_SIZE] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
     tCsrRoamSetKey  setKey;
     v_U32_t roamId= 0xFF;
 
@@ -4380,9 +4388,9 @@ static int wlan_hdd_cfg80211_del_key( struct wiphy *wiphy,
     setKey.keyId = key_index;
 
     if (mac_addr)
-        vos_mem_copy(setKey.peerMac, mac_addr,WNI_CFG_BSSID_LEN);
+        vos_mem_copy(setKey.peerMac, mac_addr, VOS_MAC_ADDR_SIZE);
     else
-        vos_mem_copy(setKey.peerMac, groupmacaddr, WNI_CFG_BSSID_LEN);
+        vos_mem_copy(setKey.peerMac, groupmacaddr, VOS_MAC_ADDR_SIZE);
 
     setKey.encType = eCSR_ENCRYPT_TYPE_NONE;
 
@@ -4536,7 +4544,7 @@ static int wlan_hdd_cfg80211_set_default_key( struct wiphy *wiphy,
 
             vos_mem_copy(setKey.peerMac,
                     &pHddStaCtx->conn_info.bssId[0],
-                    WNI_CFG_BSSID_LEN);
+                    VOS_MAC_ADDR_SIZE);
 
             if (Keys->KeyLength[key_index] == CSR_WEP40_KEY_LEN &&
                pWextState->roamProfile.EncryptionType.encryptionType[0] ==
@@ -4817,7 +4825,7 @@ wlan_hdd_cfg80211_inform_bss_frame( hdd_adapter_t *pAdapter,
              pAdapter->sessionCtx.station.conn_info.connState ) &&
              ( VOS_TRUE == vos_mem_compare(bss_desc->bssId,
                              pAdapter->sessionCtx.station.conn_info.bssId,
-                             WNI_CFG_BSSID_LEN)) &&
+                             VOS_MAC_ADDR_SIZE)) &&
                              (pHddCtx->hdd_wlan_suspended == FALSE))
     {
        /* supplicant takes the signal strength in terms of mBm(100*dBm) */
@@ -5855,17 +5863,17 @@ int wlan_hdd_cfg80211_connect_start( hdd_adapter_t  *pAdapter,
         {
             pRoamProfile->BSSIDs.numOfBSSIDs = 1;
             vos_mem_copy((void *)(pRoamProfile->BSSIDs.bssid), bssid,
-                    WNI_CFG_BSSID_LEN);
+                    VOS_MAC_ADDR_SIZE);
             /* Save BSSID in seperate variable as well, as RoamProfile
                BSSID is getting zeroed out in the association process. And in
                case of join failure we should send valid BSSID to supplicant
              */
             vos_mem_copy((void *)(pWextState->req_bssId), bssid,
-                    WNI_CFG_BSSID_LEN);
+                    VOS_MAC_ADDR_SIZE);
         }
         else
         {
-            vos_mem_zero((void *)(pRoamProfile->BSSIDs.bssid),WNI_CFG_BSSID_LEN);
+            vos_mem_zero((void *)(pRoamProfile->BSSIDs.bssid), VOS_MAC_ADDR_SIZE);
         }
 
         hddLog(LOG1, FL("Connect to SSID: %.*s operating Channel: %u"),
@@ -7891,10 +7899,11 @@ static int wlan_hdd_cfg80211_get_station(struct wiphy *wiphy, struct net_device 
             maxRate = (currentRate > maxRate)?currentRate:maxRate;
         }
         /* Get MCS Rate Set --
-           Only if we are always reporting max speed  (or)
+           Only if we are connected in non legacy mode and always reporting max speed  (or)
            if we have good rssi */
-         if ((0 == rssidx) ||
-              (eHDD_LINK_SPEED_REPORT_MAX == pCfg->reportMaxLinkSpeed))
+         if (((0 == rssidx) ||
+              (eHDD_LINK_SPEED_REPORT_MAX == pCfg->reportMaxLinkSpeed)) &&
+              !(rate_flags & eHAL_TX_RATE_LEGACY))
         {
             if (0 != ccmCfgGetStr(WLAN_HDD_GET_HAL_CTX(pAdapter), WNI_CFG_CURRENT_MCS_SET,
                                  MCSRates, &MCSLeng))
@@ -8428,12 +8437,12 @@ static int wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *d
     for (j = 0; j < PMKIDCacheIndex; j++)
     {
         if(vos_mem_compare(PMKIDCache[j].BSSID,
-                    pmksa->bssid, WNI_CFG_BSSID_LEN))
+                    pmksa->bssid, VOS_MAC_ADDR_SIZE))
         {
             /* BSSID matched previous entry.  Overwrite it. */
             BSSIDMatched = 1;
             vos_mem_copy(PMKIDCache[j].BSSID,
-                    pmksa->bssid, WNI_CFG_BSSID_LEN);
+                    pmksa->bssid, VOS_MAC_ADDR_SIZE);
             vos_mem_copy(PMKIDCache[j].PMKID,
                     pmksa->pmkid,
                     CSR_RSN_PMKID_SIZE);
@@ -8530,7 +8539,7 @@ static int wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *d
     {
           if (vos_mem_compare(PMKIDCache[j].BSSID,
                              pmksa->bssid,
-                             WNI_CFG_BSSID_LEN))
+                             VOS_MAC_ADDR_SIZE))
           {
              /* BSSID matched entry */
              BSSIDMatched = 1;
@@ -8540,14 +8549,14 @@ static int wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *d
                  /*replace the matching entry with the last entry in HDD local cache*/
                  vos_mem_copy(PMKIDCache[j].BSSID,
                               PMKIDCache[PMKIDCacheIndex-1].BSSID,
-                              WNI_CFG_BSSID_LEN);
+                              VOS_MAC_ADDR_SIZE);
                  vos_mem_copy(PMKIDCache[j].PMKID,
                               PMKIDCache[PMKIDCacheIndex-1].PMKID,
                               CSR_RSN_PMKID_SIZE);
               }
 
              /*clear the last entry in HDD cache ---[index-1]*/
-             vos_mem_zero(PMKIDCache[PMKIDCacheIndex-1].BSSID, WNI_CFG_BSSID_LEN);
+             vos_mem_zero(PMKIDCache[PMKIDCacheIndex-1].BSSID, VOS_MAC_ADDR_SIZE);
              vos_mem_zero(PMKIDCache[PMKIDCacheIndex-1].PMKID, CSR_RSN_PMKID_SIZE);
 
              /*reduce the PMKID array index*/
@@ -8638,7 +8647,7 @@ static int wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device 
              status = -EINVAL;
           }
           /*clear the entry in HDD cache 0--index-1 */
-          vos_mem_zero(PMKIDCache[j].BSSID, WNI_CFG_BSSID_LEN);
+          vos_mem_zero(PMKIDCache[j].BSSID, VOS_MAC_ADDR_SIZE);
           vos_mem_zero(PMKIDCache[j].PMKID, CSR_RSN_PMKID_SIZE);
     }
 
@@ -9757,7 +9766,7 @@ int wlan_hdd_cfg80211_set_rekey_data(struct wiphy *wiphy, struct net_device *dev
     memcpy(pHddStaCtx->gtkOffloadReqParams.aKCK, data->kck, NL80211_KCK_LEN);
     memcpy(pHddStaCtx->gtkOffloadReqParams.aKEK, data->kek, NL80211_KEK_LEN);
     memcpy(pHddStaCtx->gtkOffloadReqParams.bssId, &pHddStaCtx->conn_info.bssId,
-          WNI_CFG_BSSID_LEN);
+          VOS_MAC_ADDR_SIZE);
     {
         /* changing from big to little endian since driver
          * works on little endian format
