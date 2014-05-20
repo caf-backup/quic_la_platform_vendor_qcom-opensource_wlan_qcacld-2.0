@@ -269,6 +269,7 @@ struct completion wlan_start_comp;
 extern void hif_init_adf_ctx(adf_os_device_t adf_ctx, v_VOID_t *hif_sc);
 extern int hif_register_driver(void);
 extern void hif_unregister_driver(void);
+extern void hif_get_hw_info(void *ol_sc, u32 *version, u32 *revision);
 #ifdef QCA_WIFI_FTM
 extern int hdd_ftm_start(hdd_context_t *pHddCtx);
 extern int hdd_ftm_stop(hdd_context_t *pHddCtx);
@@ -6222,8 +6223,7 @@ void hdd_dfs_indicate_radar(void *context, void *param)
             pAdapter = pAdapterNode->pAdapter;
             if (WLAN_HDD_SOFTAP == pAdapter->device_mode)
             {
-                netif_tx_stop_all_queues(pAdapter->dev);
-                return;
+                WLAN_HDD_GET_AP_CTX_PTR(pAdapter)->dfs_cac_block_tx = VOS_TRUE;
             }
             else
             {
@@ -9706,7 +9706,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
 
          if (pAdapter != NULL)
          {
-            wlan_hdd_cfg80211_pre_voss_stop(pAdapter);
+            wlan_hdd_cfg80211_deregister_frames(pAdapter);
             hdd_UnregisterWext(pAdapter->dev);
          }
       }
@@ -10734,7 +10734,7 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    ((VosContextType*)(pVosContext))->adf_ctx = adf_ctx;
 #endif /* QCA_WIFI_2_0 */
 
-   pHddCtx->nEnableStrictRegulatoryForFCC = TRUE;
+   pHddCtx->nEnableStrictRegulatoryForFCC = FALSE;
    // Load all config first as TL config is needed during vos_open
    pHddCtx->cfg_ini = (hdd_config_t*) kmalloc(sizeof(hdd_config_t), GFP_KERNEL);
    if(pHddCtx->cfg_ini == NULL)
@@ -10763,7 +10763,7 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
 #endif
 
    pHddCtx->current_intf_count=0;
-   pHddCtx->max_intf_count = WLAN_MAX_INTERFACES;
+   pHddCtx->max_intf_count = CSR_ROAM_SESSION_MAX;
 
 #ifndef QCA_WIFI_2_0
    pHddCtx->cfg_ini->maxWoWFilters = WOWL_MAX_PTRNS_ALLOWED;
@@ -10904,6 +10904,8 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
       hddLog(VOS_TRACE_LEVEL_FATAL, "%s: vos_open failed", __func__);
       goto err_vos_nv_close;
    }
+
+   wlan_hdd_update_wiphy(wiphy, pHddCtx->cfg_ini);
 
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC) && \
     !defined(REMOVE_PKT_LOG)
@@ -11195,9 +11197,9 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
 
 #ifdef QCA_WIFI_2_0
 
-   /* target hw version would only be retrieved after firmware donwload */
-   pHddCtx->target_hw_version =
-       ((struct ol_softc *)hif_sc)->target_version;
+   /* target hw version/revision would only be retrieved after firmware donwload */
+   hif_get_hw_info(hif_sc, &pHddCtx->target_hw_version,
+                   &pHddCtx->target_hw_revision);
 
    /* Get the wlan hw/fw version */
    hdd_wlan_get_version(pAdapter, NULL, NULL);
@@ -11380,7 +11382,7 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
       /* Action frame registered in one adapter which will
        * applicable to all interfaces
        */
-      wlan_hdd_cfg80211_post_voss_start(pAdapter);
+      wlan_hdd_cfg80211_register_frames(pAdapter);
    }
 
    mutex_init(&pHddCtx->sap_lock);
