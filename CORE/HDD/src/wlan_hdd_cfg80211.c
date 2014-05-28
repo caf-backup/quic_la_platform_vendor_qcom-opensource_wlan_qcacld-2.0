@@ -433,16 +433,6 @@ wlan_hdd_iface_limit[] = {
     },
 };
 
-/* By default, only single channel concurrency is allowed */
-static struct ieee80211_iface_combination
-wlan_hdd_iface_combination = {
-        .limits = wlan_hdd_iface_limit,
-        .num_different_channels = 1,
-        .max_interfaces = WLAN_MAX_INTERFACES,
-        .n_limits = ARRAY_SIZE(wlan_hdd_iface_limit),
-        .beacon_int_infra_match = false,
-};
-
 #else
 
 static const struct ieee80211_iface_limit
@@ -489,6 +479,8 @@ wlan_hdd_iface_limit[] = {
     },
 };
 
+#endif /* WLAN_FEATURE_MBSSID */
+
 /* By default, only single channel concurrency is allowed */
 static struct ieee80211_iface_combination
 wlan_hdd_iface_combination = {
@@ -508,8 +500,6 @@ wlan_hdd_iface_combination = {
         .n_limits = ARRAY_SIZE(wlan_hdd_iface_limit),
         .beacon_int_infra_match = false,
 };
-
-#endif /* WLAN_FEATURE_MBSSID */
 
 #endif
 
@@ -2096,8 +2086,8 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
     hdd_config_t *iniConfig;
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pHostapdAdapter);
     tSmeConfigParams *psmeConfig;
-    v_BOOL_t MFPCapable;
-    v_BOOL_t MFPRequired;
+    v_BOOL_t MFPCapable =  VOS_FALSE;
+    v_BOOL_t MFPRequired =  VOS_FALSE;
 
     ENTER();
 
@@ -9932,7 +9922,7 @@ static int wlan_hdd_cfg80211_set_mac_acl(struct wiphy *wiphy,
         }
 
 #ifdef WLAN_FEATURE_MBSSID
-        vos_status = WLANSAP_SetMacACL(WLAN_HDD_GET_SAP_CTX_PTR(pAdapter),pConfig);
+        vos_status = WLANSAP_SetMacACL(WLAN_HDD_GET_SAP_CTX_PTR(pAdapter), pConfig);
 #else
         vos_status = WLANSAP_SetMacACL(pVosContext, pConfig);
 #endif
