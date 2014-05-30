@@ -79,7 +79,6 @@
 #include "wlan_hdd_p2p.h"
 #include "wlan_hdd_cfg80211.h"
 #include "wlan_hdd_hostapd.h"
-#include "sapInternal.h"
 #include "wlan_hdd_softap_tx_rx.h"
 #include "wlan_hdd_main.h"
 #include "wlan_hdd_assoc.h"
@@ -101,6 +100,7 @@
 #ifdef CONFIG_CNSS
 #include <net/cnss.h>
 #endif
+#include "wlan_hdd_misc.h"
 
 #define g_mode_rates_size (12)
 #define a_mode_rates_size (8)
@@ -685,9 +685,9 @@ int wlan_hdd_send_avoid_freq_event(hdd_context_t *pHddCtx,
     }
 
     vendor_event = cfg80211_vendor_event_alloc(pHddCtx->wiphy,
-                       sizeof(tHddAvoidFreqList),
-                       QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_INDEX,
-                       GFP_KERNEL);
+                              sizeof(tHddAvoidFreqList),
+                              QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_INDEX,
+                              GFP_KERNEL);
     if (!vendor_event)
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
@@ -714,6 +714,13 @@ static const struct nl80211_vendor_cmd_info wlan_hdd_cfg80211_vendor_events[] =
         .subcmd = QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY
     },
 #endif /* FEATURE_WLAN_CH_AVOID */
+
+#ifdef WLAN_FEATURE_STATS_EXT
+    {
+        .vendor_id = QCA_NL80211_VENDOR_ID,
+        .subcmd = QCA_NL80211_VENDOR_SUBCMD_STATS_EXT
+    },
+#endif /* WLAN_FEATURE_STATS_EXT */
 };
 
 int is_driver_dfs_capable(struct wiphy *wiphy, struct wireless_dev *wdev,
@@ -751,6 +758,84 @@ int is_driver_dfs_capable(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 }
 
+#ifdef WLAN_FEATURE_STATS_EXT
+static int wlan_hdd_cfg80211_stats_ext_request(struct wiphy *wiphy,
+                                        struct wireless_dev *wdev,
+                                        void *data, int data_len)
+{
+    tStatsExtRequestReq stats_ext_req;
+    struct net_device *dev = wdev->netdev;
+    hdd_adapter_t *pAdapter =  WLAN_HDD_GET_PRIV_PTR(dev);
+    int ret_val = -1;
+    eHalStatus status;
+
+    stats_ext_req.request_data_len = data_len;
+    stats_ext_req.request_data = data;
+
+    status = sme_StatsExtRequest(pAdapter->sessionId, &stats_ext_req);
+
+    if (eHAL_STATUS_SUCCESS == status)
+        ret_val = 0;
+
+    return ret_val;
+}
+
+static void wlan_hdd_cfg80211_stats_ext_callback(void* ctx, tStatsExtEvent* msg)
+{
+
+    hdd_context_t *pHddCtx = (hdd_context_t *)ctx;
+    struct sk_buff *vendor_event;
+    int status;
+    int ret_val;
+    tStatsExtEvent *data = msg;
+
+    status = wlan_hdd_validate_context(pHddCtx);
+
+    if (0 != status)
+    {
+        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                   "%s: HDD context is not valid", __func__);
+        return;
+    }
+
+
+    vendor_event = cfg80211_vendor_event_alloc(pHddCtx->wiphy,
+                                               data->event_data_len +
+                                               NLMSG_HDRLEN,
+                                               QCA_NL80211_VENDOR_SUBCMD_STATS_EXT_INDEX,
+                                               GFP_KERNEL);
+
+    if (!vendor_event)
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: cfg80211_vendor_event_alloc failed", __func__);
+        return;
+    }
+
+    ret_val = nla_put(vendor_event, QCA_WLAN_VENDOR_ATTR_STATS_EXT,
+                      data->event_data_len, data->event_data);
+
+    if (ret_val)
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: QCA_WLAN_VENDOR_ATTR_NAN put fail", __func__);
+        kfree_skb(vendor_event);
+
+        return;
+    }
+
+    cfg80211_vendor_event(vendor_event, GFP_KERNEL);
+
+}
+
+
+void wlan_hdd_cfg80211_stats_ext_init(hdd_context_t *pHddCtx)
+{
+    sme_StatsExtRegisterCallback(pHddCtx->hHal,
+                                 wlan_hdd_cfg80211_stats_ext_callback);
+}
+
+#endif
 
 const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
 {
@@ -761,7 +846,19 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
                  WIPHY_VENDOR_CMD_NEED_NETDEV |
                  WIPHY_VENDOR_CMD_NEED_RUNNING,
         .doit = is_driver_dfs_capable
+    },
+
+#ifdef WLAN_FEATURE_STATS_EXT
+    {
+        .info.vendor_id = QCA_NL80211_VENDOR_ID,
+        .info.subcmd = QCA_NL80211_VENDOR_SUBCMD_STATS_EXT,
+        .flags = WIPHY_VENDOR_CMD_NEED_WDEV |
+                 WIPHY_VENDOR_CMD_NEED_NETDEV |
+                 WIPHY_VENDOR_CMD_NEED_RUNNING,
+        .doit = wlan_hdd_cfg80211_stats_ext_request
     }
+#endif
+
 };
 
 
@@ -3087,7 +3184,9 @@ static int wlan_hdd_change_iface_to_sta_mode(struct net_device *ndev,
                                   WLAN_HDD_INFRA_STATION : WLAN_HDD_P2P_CLIENT;
     }
 
-    hdd_set_conparam(0);
+    // set con_mode to STA only when no SAP concurrency mode
+    if (!(hdd_get_concurrency_mode() & (VOS_SAP | VOS_P2P_GO)))
+        hdd_set_conparam(0);
     pHddCtx->change_iface = type;
     memset(&pAdapter->sessionCtx, 0, sizeof(pAdapter->sessionCtx));
     hdd_set_station_ops(pAdapter->dev);

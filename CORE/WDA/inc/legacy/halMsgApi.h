@@ -1444,6 +1444,14 @@ typedef struct sTdlsLinkEstablishParams
    tANI_U32  status;
 }tTdlsLinkEstablishParams, *tpTdlsLinkEstablishParams;
 
+#ifdef QCA_WIFI_2_0
+typedef struct tHalHiddenSsidVdevRestart
+{
+   tANI_U8   ssidHidden;
+   tANI_U8 sessionId;
+}tHalHiddenSsidVdevRestart,*tpHalHiddenSsidVdevRestart;
+#endif /* QCA_WIFI_2_0 */
+
 static inline void halGetTxTSFtimer(tpAniSirGlobal pMac,
                                                 tSirMacTimeStamp *pTime)
 {
@@ -1491,5 +1499,18 @@ typedef __ani_attr_pre_packed struct sDisableIntraBssFwd
    tANI_U16  sessionId;
    tANI_BOOLEAN disableintrabssfwd;
 } __ani_attr_packed tDisableIntraBssFwd, *tpDisableIntraBssFwd;
+
+
+#ifdef WLAN_FEATURE_STATS_EXT
+
+typedef struct sStatsExtRequest
+{
+    tANI_U32 vdev_id;
+    tANI_U32 request_data_len;
+    tANI_U8 request_data[];
+} tStatsExtRequest, *tpStatsExtRequest;
+
+
+#endif
 
 #endif /* _HALMSGAPI_H_ */

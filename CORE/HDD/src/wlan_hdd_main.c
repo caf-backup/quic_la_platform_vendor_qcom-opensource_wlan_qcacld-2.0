@@ -115,8 +115,6 @@ int wlan_hdd_ftm_start(hdd_context_t *pAdapter);
 #endif
 #ifdef FEATURE_WLAN_CH_AVOID
 #include <net/cnss.h>
-/* Channle/Freqency table */
-extern const tRfChannelProps rfChannels[NUM_RF_CHANNELS];
 extern int hdd_hostapd_stop (struct net_device *dev);
 void hdd_ch_avoid_cb(void *hdd_context,void *indi_param);
 #endif /* FEATURE_WLAN_CH_AVOID */
@@ -7697,7 +7695,10 @@ void hdd_deinit_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
          hdd_cleanup_actionframe(pHddCtx, pAdapter);
 
          hdd_unregister_hostapd(pAdapter);
-         hdd_set_conparam( 0 );
+
+         // set con_mode to STA only when no SAP concurrency mode
+         if (!(hdd_get_concurrency_mode() & (VOS_SAP | VOS_P2P_GO)))
+             hdd_set_conparam( 0 );
          wlan_hdd_set_monitor_tx_adapter( WLAN_HDD_GET_CTX(pAdapter), NULL );
          break;
       }
@@ -8873,6 +8874,12 @@ VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
                                        WLAN_STATUS_ASSOC_DENIED_UNSPEC,
                                        GFP_KERNEL);
             }
+
+#ifdef QCA_LL_TX_FLOW_CT
+            WLANTL_RegisterTXFlowControl(pHddCtx->pvosContext, hdd_tx_resume_cb,
+                                         pAdapter->sessionId, (void *)pAdapter);
+#endif
+
             break;
 
          case WLAN_HDD_SOFTAP:
@@ -10519,6 +10526,10 @@ static void hdd_bus_bw_compute_cbk(void *priv)
 
     hdd_cnss_request_bus_bandwidth(pHddCtx, tx_packets, rx_packets);
 
+#ifdef IPA_OFFLOAD
+    hdd_ipa_set_perf_level(pHddCtx, tx_packets, rx_packets);
+#endif
+
     vos_timer_start(&pHddCtx->bus_bw_timer,
             pHddCtx->cfg_ini->busBandwidthComputeInterval);
 }
@@ -11499,6 +11510,10 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
                      VOS_TIMER_TYPE_SW,
                      hdd_bus_bw_compute_cbk,
                      (void *)pHddCtx);
+#endif
+
+#ifdef WLAN_FEATURE_STATS_EXT
+   wlan_hdd_cfg80211_stats_ext_init(pHddCtx);
 #endif
 
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC)
@@ -12901,6 +12916,7 @@ void wlan_hdd_check_sta_ap_concurrent_ch_intf(void *data)
 {
     hdd_adapter_t *ap_pAdapter = NULL, *sta_pAdapter = (hdd_adapter_t *)data;
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(sta_pAdapter);
+    tHalHandle hHal;
     hdd_ap_ctx_t *pHddApCtx;
     v_U16_t intf_ch = 0;
 
@@ -12913,6 +12929,10 @@ void wlan_hdd_check_sta_ap_concurrent_ch_intf(void *data)
     if (ap_pAdapter == NULL)
         return;
     pHddApCtx = WLAN_HDD_GET_AP_CTX_PTR(ap_pAdapter);
+    hHal = WLAN_HDD_GET_HAL_CTX(ap_pAdapter);
+
+    if (hHal == NULL)
+        return;
 
 #ifdef WLAN_FEATURE_MBSSID
     intf_ch = WLANSAP_CheckCCIntf(pHddApCtx->sapContext);
@@ -12923,6 +12943,9 @@ void wlan_hdd_check_sta_ap_concurrent_ch_intf(void *data)
         return;
 
     pHddApCtx->sapConfig.channel = intf_ch;
+    sme_SelectCBMode(hHal,
+            sapConvertSapPhyModeToCsrPhyMode(pHddApCtx->sapConfig.SapHw_mode),
+                                             pHddApCtx->sapConfig.channel);
     wlan_hdd_restart_sap(ap_pAdapter);
 }
 
