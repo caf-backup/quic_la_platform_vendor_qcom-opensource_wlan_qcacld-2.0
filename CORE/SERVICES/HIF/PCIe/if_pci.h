@@ -86,6 +86,7 @@ struct hif_pci_softc {
     atomic_t tasklet_from_intr;
     atomic_t wow_done;
     atomic_t ce_suspend;
+    atomic_t pci_link_suspended;
     bool hif_init_done;
     bool recovery;
     int htc_endpoint;
@@ -129,6 +130,7 @@ extern int pktlogmod_init(void *context);
 extern void pktlogmod_exit(void *context);
 #endif
 
+int hif_pci_check_fw_reg(struct hif_pci_softc *sc);
 int hif_pci_check_soc_status(struct hif_pci_softc *sc);
 void dump_CE_debug_register(struct hif_pci_softc *sc);
 

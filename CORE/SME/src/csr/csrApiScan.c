@@ -733,6 +733,14 @@ eHalStatus csrScanRequest(tpAniSirGlobal pMac, tANI_U16 sessionId,
                     }
                 }
 #endif
+                /* Increase dwell time in case P2P Search and Miracast is not present*/
+                if(pScanRequest->p2pSearch &&
+                    pScanRequest->ChannelInfo.numOfChannels == P2P_SOCIAL_CHANNELS
+                    && (!IS_MIRACAST_SESSION_PRESENT(pMac)))
+                {
+                    pScanRequest->maxChnTime += P2P_SEARCH_DWELL_TIME_INCREASE;
+                }
+
                  /*For Standalone wlan : channel time will remain the same.
                    For BTC with A2DP up: Channel time = Channel time * 2, if station is not already associated.
                    This has been done to provide a larger scan window for faster connection during btc.Else Scan is seen
@@ -5089,7 +5097,9 @@ static tANI_BOOLEAN csrScanProcessScanResults( tpAniSirGlobal pMac, tSmeCmd *pCo
     }while(0);
     if ( eSIR_SME_MORE_SCAN_RESULTS_FOLLOW != pScanRsp->statusCode )
     {
-        smsLog(pMac, LOG1, " Scan received %d unique BSS scan reason is %d", csrLLCount(&pMac->scan.tempScanResults), pCommand->u.scanCmd.reason);
+        smsLog(pMac, LOGE, "Found %d BSS",
+                           csrLLCount(&pMac->scan.tempScanResults));
+        smsLog(pMac, LOG1, "scan reason is %d", pCommand->u.scanCmd.reason);
         fRemoveCommand = csrScanComplete( pMac, pScanRsp );
         fRet = eANI_BOOLEAN_TRUE;
     }//if ( eSIR_SME_MORE_SCAN_RESULTS_FOLLOW != pScanRsp->statusCode )
@@ -5673,7 +5683,7 @@ eHalStatus csrSendMBScanReq( tpAniSirGlobal pMac, tANI_U16 sessionId,
             //hidden SSID option
             pMsg->hiddenSsid = pScanReqParam->hiddenSsid;
             //rest time
-            //pMsg->restTime = pScanReq->restTime;
+            pMsg->restTime = pScanReq->restTime;
             pMsg->returnAfterFirstMatch = pScanReqParam->bReturnAfter1stMatch;
             // All the scan results caching will be done by Roaming
             // We do not want LIM to do any caching of scan results,

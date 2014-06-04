@@ -131,6 +131,22 @@ ol_tx_desc_pool_size_hl(ol_pdev_handle ctrl_pdev)
     return desc_pool_size;
 }
 #ifdef QCA_SUPPORT_TXRX_LOCAL_PEER_ID
+ol_txrx_peer_handle
+ol_txrx_find_peer_by_addr_and_vdev(ol_txrx_pdev_handle pdev,
+                                   ol_txrx_vdev_handle vdev,
+                                   u_int8_t *peer_addr,
+                                   u_int8_t *peer_id)
+{
+    struct ol_txrx_peer_t *peer;
+
+    peer = ol_txrx_peer_vdev_find_hash(pdev, vdev, peer_addr, 0, 1);
+    if (!peer)
+        return NULL;
+    *peer_id = peer->local_id;
+    adf_os_atomic_dec(&peer->ref_cnt);
+    return peer;
+}
+
 ol_txrx_peer_handle ol_txrx_find_peer_by_addr(ol_txrx_pdev_handle pdev,
 					 u_int8_t *peer_addr,
 					 u_int8_t *peer_id)
@@ -619,9 +635,7 @@ ol_txrx_pdev_attach(
 
 #ifdef QCA_SUPPORT_TXRX_VDEV_LL_TXQ
     /* Thermal Mitigation */
-    if (!pdev->cfg.is_high_latency) {
-        ol_tx_throttle_init(pdev);
-    }
+    ol_tx_throttle_init(pdev);
 #endif
     return pdev; /* success */
 
@@ -686,12 +700,10 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
     }
 #ifdef QCA_SUPPORT_TXRX_VDEV_LL_TXQ
     /* Thermal Mitigation */
-    if (!pdev->cfg.is_high_latency) {
-        adf_os_timer_cancel(&pdev->tx_throttle_ll.phase_timer);
-        adf_os_timer_free(&pdev->tx_throttle_ll.phase_timer);
-        adf_os_timer_cancel(&pdev->tx_throttle_ll.tx_timer);
-        adf_os_timer_free(&pdev->tx_throttle_ll.tx_timer);
-    }
+    adf_os_timer_cancel(&pdev->tx_throttle.phase_timer);
+    adf_os_timer_free(&pdev->tx_throttle.phase_timer);
+    adf_os_timer_cancel(&pdev->tx_throttle.tx_timer);
+    adf_os_timer_free(&pdev->tx_throttle.tx_timer);
 #endif
     if (force) {
         /*
@@ -745,9 +757,7 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
     adf_os_spinlock_destroy(&pdev->rx.mutex);
 #ifdef QCA_SUPPORT_TXRX_VDEV_LL_TXQ
     /* Thermal Mitigation */
-    if (!pdev->cfg.is_high_latency) {
-        adf_os_spinlock_destroy(&pdev->tx_throttle_ll.mutex);
-    }
+    adf_os_spinlock_destroy(&pdev->tx_throttle.mutex);
 #endif
     OL_TXRX_PEER_STATS_MUTEX_DESTROY(pdev);
 

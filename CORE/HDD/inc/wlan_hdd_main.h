@@ -305,6 +305,9 @@ extern spinlock_t hdd_context_lock;
 #define WLAN_HDD_TX_FLOW_CONTROL_MAX_24BAND_CH   14
 #endif /* QCA_LL_TX_FLOW_CT */
 
+/* Max PMKSAIDS available in cache */
+#define MAX_PMKSAIDS_IN_CACHE 8
+
 typedef struct hdd_tx_rx_stats_s
 {
    // start_xmit stats
@@ -680,6 +683,10 @@ struct hdd_station_ctx
    /*Save the wep/wpa-none keys*/
    tCsrRoamSetKey ibss_enc_key;
    v_BOOL_t hdd_ReassocScenario;
+
+   /* PMKID Cache */
+   tPmkidCacheInfo PMKIDCache[MAX_PMKSAIDS_IN_CACHE];
+   tANI_U32 PMKIDCacheIndex;
 };
 
 #define BSS_STOP    0
@@ -882,6 +889,7 @@ typedef enum
 
 
 #define WLAN_HDD_ADAPTER_MAGIC 0x574c414e //ASCII "WLAN"
+
 struct hdd_adapter_s
 {
    void *pHddCtx;
@@ -1206,13 +1214,8 @@ struct hdd_context_s
 
    hdd_list_t hddAdapters; //List of adapters
 
-#ifdef WLAN_FEATURE_MBSSID
-   /* One per STA: 1 for RX_BCMC_STA_ID, 2 for SAP_SELF_STA_ID */
-   hdd_adapter_t *sta_to_adapter[WLAN_MAX_STA_COUNT + 4]; //One per sta. For quick reference.
-#else
-   /* One per STA: 1 for RX_BCMC_STA_ID, 1 for SAP_SELF_STA_ID */
-   hdd_adapter_t *sta_to_adapter[WLAN_MAX_STA_COUNT + 3]; //One per sta. For quick reference.
-#endif
+   /* One per STA: 1 for BCMC_STA_ID, 1 for each SAP_SELF_STA_ID, 1 for WDS_STAID */
+   hdd_adapter_t *sta_to_adapter[WLAN_MAX_STA_COUNT + VOS_MAX_NO_OF_SAP_MODE + 2]; //One per sta. For quick reference.
 
    /** Pointer for firmware image data */
    const struct firmware *fw;
@@ -1289,6 +1292,7 @@ struct hdd_context_s
 
 
    v_BOOL_t hdd_wlan_suspended;
+   v_BOOL_t suspended;
 
    spinlock_t filter_lock;
 
@@ -1404,7 +1408,6 @@ struct hdd_context_s
     spinlock_t     bus_bw_lock;
 #endif
 
-    v_U8_t         drvr_miracast;
     v_U8_t         issplitscan_enabled;
 
     /* VHT80 allowed*/

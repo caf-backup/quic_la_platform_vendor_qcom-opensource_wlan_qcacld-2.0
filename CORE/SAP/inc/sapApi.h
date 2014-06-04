@@ -106,7 +106,11 @@ when           who                what, where, why
 #define       MAX_TEXT_SIZE                32
 
 #define       MAX_CHANNEL_LIST_LEN         256
+#ifdef WLAN_FEATURE_MBSSID
 #define       VOS_MAX_NO_OF_SAP_MODE       2 // max # of SAP
+#else
+#define       VOS_MAX_NO_OF_SAP_MODE       1 // max # of SAP
+#endif
 
 /*--------------------------------------------------------------------------
   reasonCode take form 802.11 standard Table 7-22 to be passed to WLANSAP_DisassocSta api.
@@ -601,6 +605,9 @@ int sapSetPreferredChannel
 #endif
     tANI_U8* ptr
 );
+
+/* Channel/Frequency table */
+extern const tRfChannelProps rfChannels[NUM_RF_CHANNELS];
 
 #ifdef FEATURE_WLAN_CH_AVOID
 /* Store channel safety information */
@@ -1733,6 +1740,50 @@ VOS_STATUS WLANSAP_StartBeaconReq(v_PVOID_t pSapCtx);
 ============================================================================*/
 VOS_STATUS
 WLANSAP_DfsSendCSAIeRequest(v_PVOID_t pSapCtx);
+
+/*==========================================================================
+  FUNCTION    WLANSAP_Set_Dfs_Ignore_CAC
+
+  DESCRIPTION
+   This API is used to set ignore_cac flag, used for ignoring the CAC operation for DFS channel.
+   If the flag set to 1 or TRUE then it will avoid CAC.
+
+  DEPENDENCIES
+   NA.
+
+  PARAMETERS
+  IN
+  pvosGCtx: Pointer to vos global context structure
+
+  PARAMETERS
+  IN
+  ignore_cac: value to be set
+
+  RETURN VALUE
+  The VOS_STATUS code associated with performing the operation
+
+  VOS_STATUS_SUCCESS:  Success
+
+  SIDE EFFECTS
+============================================================================*/
+
+VOS_STATUS
+WLANSAP_Set_Dfs_Ignore_CAC(v_PVOID_t pvosGCtx, v_U8_t ignore_cac);
+
+/*==========================================================================
+FUNCTION  sapConvertSapPhyModeToCsrPhyMode
+
+DESCRIPTION Function to implement selection of CSR PhyMode using SAP PhyMode
+
+DEPENDENCIES PARAMETERS
+
+IN sapPhyMode : SAP Phy Module
+
+RETURN VALUE If SUCCESS or FAILURE
+
+SIDE EFFECTS
+============================================================================*/
+eCsrPhyMode sapConvertSapPhyModeToCsrPhyMode( eSapPhyMode sapPhyMode );
 
 
 #ifdef __cplusplus

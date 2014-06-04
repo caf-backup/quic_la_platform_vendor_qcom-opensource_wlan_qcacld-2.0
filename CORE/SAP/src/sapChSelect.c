@@ -166,6 +166,14 @@ sapAcsChannelInfo acsHT80Channels[ ] = {
     {149,  ACS_WEIGHT_MAX},
 };
 
+sapAcsChannelInfo acsHT40Channels24G[ ] = {
+    {1,    ACS_WEIGHT_MAX},
+    {2,    ACS_WEIGHT_MAX},
+    {3,    ACS_WEIGHT_MAX},
+    {4,    ACS_WEIGHT_MAX},
+    {9,    ACS_WEIGHT_MAX},
+};
+
 typedef enum {
     CHWIDTH_HT20,
     CHWIDTH_HT40,
@@ -1907,12 +1915,14 @@ void sapSortChlWeight(tSapChSelSpectInfo *pSpectInfoParams)
 ============================================================================*/
 void sapSortChlWeightHT80(tSapChSelSpectInfo *pSpectInfoParams)
 {
-    v_U8_t i, j;
+    v_U8_t i, j, n;
     tSapSpectChInfo *pSpectInfo;
+    v_U32_t minWeight;
+    v_U8_t minIdx;
 
     pSpectInfo = pSpectInfoParams->pSpectCh;
-    /* for each HT40 channel, calculate the combined weight of the
-       two 20MHz weight */
+    /* for each HT80 channel, calculate the combined weight of the
+       four 20MHz weight */
     for (i = 0; i < ARRAY_SIZE(acsHT80Channels); i++)
     {
         for (j = 0; j < pSpectInfoParams->numSpectChans; j++)
@@ -1932,12 +1942,25 @@ void sapSortChlWeightHT80(tSapChSelSpectInfo *pSpectInfoParams)
                                            pSpectInfo[j+1].weight +
                                            pSpectInfo[j+2].weight +
                                            pSpectInfo[j+3].weight;
-            pSpectInfo[j].weight = acsHT80Channels[i].weight;
-            /*mark the adjacent channel's weight as max value so
-              that it will be sorted to the bottom */
-            pSpectInfo[j+1].weight = ACS_WEIGHT_MAX;
-            pSpectInfo[j+2].weight = ACS_WEIGHT_MAX;
-            pSpectInfo[j+3].weight = ACS_WEIGHT_MAX;
+            /* find best channel among 4 channels as the primary channel */
+            minWeight = pSpectInfo[j].weight;
+            minIdx = 0;
+            for (n=1; n<4; n++)
+            {
+                if (minWeight > pSpectInfo[j+n].weight)
+                {
+                    minWeight = pSpectInfo[j+n].weight;
+                    minIdx = n;
+                }
+            }
+
+            /* set all 4 channels to max value first, then reset the
+               best channel as the selected primary channel, update its
+               weightage with the combined weight value */
+            for (n=0; n<4; n++)
+                pSpectInfo[j+n].weight = ACS_WEIGHT_MAX;
+
+            pSpectInfo[j+minIdx].weight = acsHT80Channels[i].weight;
         }
         else
         {
@@ -1976,7 +1999,7 @@ void sapSortChlWeightHT80(tSapChSelSpectInfo *pSpectInfoParams)
 }
 
 /*==========================================================================
-  FUNCTION    sapSortChlWeightHT40
+  FUNCTION    sapSortChlWeightHT40_24G
 
   DESCRIPTION
     Funtion to sort the channels with the least weight first for HT40 channels
@@ -1994,8 +2017,106 @@ void sapSortChlWeightHT80(tSapChSelSpectInfo *pSpectInfoParams)
 
   SIDE EFFECTS
 ============================================================================*/
-void sapSortChlWeightHT40(tSapChSelSpectInfo *pSpectInfoParams,
-                                         v_U32_t operatingBand)
+void sapSortChlWeightHT40_24G(tSapChSelSpectInfo *pSpectInfoParams)
+{
+    v_U8_t i, j;
+    tSapSpectChInfo *pSpectInfo;
+    v_U32_t tmpWeight1, tmpWeight2;
+
+    pSpectInfo = pSpectInfoParams->pSpectCh;
+    /*for each HT40 channel, calculate the combined weight of the
+      two 20MHz weight */
+    for (i = 0; i < ARRAY_SIZE(acsHT40Channels24G); i++)
+    {
+        for (j = 0; j < pSpectInfoParams->numSpectChans; j++)
+        {
+            if (pSpectInfo[j].chNum == acsHT40Channels24G[i].chStartNum)
+                break;
+        }
+        if (j == pSpectInfoParams->numSpectChans)
+            continue;
+
+        if ((pSpectInfo[j].chNum +4) == pSpectInfo[j+4].chNum)
+        {
+            /* check if there is another channel combination possiblity
+               e.g., {1, 5} & {5, 9} */
+            if ((pSpectInfo[j+4].chNum + 4)== pSpectInfo[j+8].chNum)
+            {
+                /* need to compare two channel pairs */
+                tmpWeight1 = pSpectInfo[j].weight + pSpectInfo[j+4].weight;
+                tmpWeight2 = pSpectInfo[j+4].weight + pSpectInfo[j+8].weight;
+                if (tmpWeight1 <= tmpWeight2)
+                {
+                    if (pSpectInfo[j].weight <= pSpectInfo[j+4].weight)
+                    {
+                        pSpectInfo[j].weight = tmpWeight1;
+                        pSpectInfo[j+4].weight = ACS_WEIGHT_MAX;
+                        pSpectInfo[j+8].weight = ACS_WEIGHT_MAX;
+                    }
+                    else
+                    {
+                        pSpectInfo[j+4].weight = tmpWeight1;
+                        pSpectInfo[j].weight = ACS_WEIGHT_MAX;
+                        pSpectInfo[j+8].weight = ACS_WEIGHT_MAX;
+                    }
+                }
+                else
+                {
+                    if (pSpectInfo[j+4].weight <= pSpectInfo[j+8].weight)
+                    {
+                        pSpectInfo[j+4].weight = tmpWeight2;
+                        pSpectInfo[j].weight = ACS_WEIGHT_MAX;
+                        pSpectInfo[j+8].weight = ACS_WEIGHT_MAX;
+                    }
+                    else
+                    {
+                        pSpectInfo[j+8].weight = tmpWeight2;
+                        pSpectInfo[j].weight = ACS_WEIGHT_MAX;
+                        pSpectInfo[j+4].weight = ACS_WEIGHT_MAX;
+                    }
+                }
+            }
+            else
+            {
+                tmpWeight1 = pSpectInfo[j].weight + pSpectInfo[j+4].weight;
+                if (pSpectInfo[j].weight <= pSpectInfo[j+4].weight)
+                {
+                    pSpectInfo[j].weight = tmpWeight1;
+                    pSpectInfo[j+4].weight = ACS_WEIGHT_MAX;
+                }
+                else
+                {
+                    pSpectInfo[j+4].weight = tmpWeight1;
+                    pSpectInfo[j].weight = ACS_WEIGHT_MAX;
+                }
+            }
+        }
+        else
+            pSpectInfo[j].weight = ACS_WEIGHT_MAX;
+    }
+}
+
+
+/*==========================================================================
+  FUNCTION    sapSortChlWeightHT40_5G
+
+  DESCRIPTION
+    Funtion to sort the channels with the least weight first for HT40 channels
+
+  DEPENDENCIES
+    NA.
+
+  PARAMETERS
+
+    IN
+    pSpectInfoParams       : Pointer to the tSapChSelSpectInfo structure
+
+  RETURN VALUE
+    void     : NULL
+
+  SIDE EFFECTS
+============================================================================*/
+void sapSortChlWeightHT40_5G(tSapChSelSpectInfo *pSpectInfoParams)
 {
     v_U8_t i, j;
     tSapSpectChInfo *pSpectInfo;
@@ -2018,10 +2139,22 @@ void sapSortChlWeightHT40(tSapChSelSpectInfo *pSpectInfoParams,
         {
             acsHT40Channels5G[i].weight = pSpectInfo[j].weight +
                                            pSpectInfo[j+1].weight;
-            pSpectInfo[j].weight = acsHT40Channels5G[i].weight;
-            /* mark the adjacent channel's weight as max value so
-               that it will be sorted to the bottom */
-            pSpectInfo[j+1].weight = ACS_WEIGHT_MAX;
+            /* select better of the adjact channel as the primary channel */
+            if (pSpectInfo[j].weight <= pSpectInfo[j+1].weight)
+            {
+                pSpectInfo[j].weight = acsHT40Channels5G[i].weight;
+                /* mark the adjacent channel's weight as max value so
+                   that it will be sorted to the bottom */
+                pSpectInfo[j+1].weight = ACS_WEIGHT_MAX;
+            }
+            else
+            {
+                pSpectInfo[j+1].weight = acsHT40Channels5G[i].weight;
+                /* mark the adjacent channel's weight as max value so
+                   that it will be sorted to the bottom */
+                pSpectInfo[j].weight = ACS_WEIGHT_MAX;
+            }
+
         }
         else
            pSpectInfo[j].weight = ACS_WEIGHT_MAX;
@@ -2087,7 +2220,10 @@ void sapSortChlWeightAll(ptSapContext pSapCtx,
     switch (chWidth)
     {
     case CHWIDTH_HT40:
-        sapSortChlWeightHT40(pSpectInfoParams, operatingBand);
+        if (eSAP_RF_SUBBAND_2_4_GHZ == operatingBand)
+            sapSortChlWeightHT40_24G(pSpectInfoParams);
+        else
+            sapSortChlWeightHT40_5G(pSpectInfoParams);
         break;
 
     case CHWIDTH_HT80:

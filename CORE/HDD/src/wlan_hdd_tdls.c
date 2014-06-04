@@ -43,7 +43,7 @@
 #include <net/ieee80211_radiotap.h>
 #include "wlan_hdd_tdls.h"
 #include "wlan_hdd_cfg80211.h"
-
+#include "vos_sched.h"
 
 #ifdef TDLS_USE_SEPARATE_DISCOVERY_TIMER
 static tANI_S32 wlan_hdd_get_tdls_discovery_peer_cnt(tdlsCtx_t *pHddTdlsCtx);
@@ -811,6 +811,14 @@ int wlan_hdd_tdls_init(hdd_adapter_t *pAdapter)
     {
         hddLog(VOS_TRACE_LEVEL_ERROR,
                "%s: vos_mem_alloc failed for tInfo", __func__);
+        vos_timer_destroy(&pHddTdlsCtx->peerDiscoveryTimeoutTimer);
+#ifndef QCA_WIFI_2_0
+        vos_timer_destroy(&pHddTdlsCtx->peerUpdateTimer);
+#endif
+#ifdef TDLS_USE_SEPARATE_DISCOVERY_TIMER
+        vos_timer_destroy(&pHddTdlsCtx->peerDiscoverTimer);
+#endif
+        vos_mem_free(pHddTdlsCtx);
         return -1;
     }
 
@@ -854,6 +862,14 @@ int wlan_hdd_tdls_init(hdd_adapter_t *pAdapter)
     if (eHAL_STATUS_SUCCESS != halStatus)
     {
         vos_mem_free(tInfo);
+        vos_timer_destroy(&pHddTdlsCtx->peerDiscoveryTimeoutTimer);
+#ifndef QCA_WIFI_2_0
+        vos_timer_destroy(&pHddTdlsCtx->peerUpdateTimer);
+#endif
+#ifdef TDLS_USE_SEPARATE_DISCOVERY_TIMER
+        vos_timer_destroy(&pHddTdlsCtx->peerDiscoverTimer);
+#endif
+        vos_mem_free(pHddTdlsCtx);
         return -1;
     }
 #endif
@@ -870,34 +886,37 @@ void wlan_hdd_tdls_exit(hdd_adapter_t *pAdapter)
     eHalStatus halStatus = eHAL_STATUS_FAILURE;
 #endif
 
-    /*
-     * NOTE: The Callers of this function should ensure to acquire the
-     * tdls_lock to avoid any concurrent access to the Adapter.
-     */
-
     pHddCtx = WLAN_HDD_GET_CTX( pAdapter );
-    if (0 != (wlan_hdd_validate_context(pHddCtx)))
+    if (!pHddCtx)
     {
        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                 FL("pHddCtx is not valid"));
+                 FL("pHddCtx is NULL"));
        return;
     }
 
     pHddTdlsCtx = WLAN_HDD_GET_TDLS_CTX_PTR(pAdapter);
     if (NULL == pHddTdlsCtx)
     {
-       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                 FL("pHddTdlsCtx is NULL"));
-        return;
+       /* TDLS context can be null and might have been freed up during
+        * cleanup for STA adapter
+        */
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+                 FL("pHddTdlsCtx is NULL, adapter device mode: %d"),
+                 pAdapter->device_mode);
+       return;
     }
 
     vos_flush_work(&pHddTdlsCtx->implicit_setup);
     vos_flush_delayed_work(&pHddCtx->tdls_scan_ctxt.tdls_scan_work);
 
+    mutex_lock(&pHddCtx->tdls_lock);
+
     /* must stop timer here before freeing peer list, because peerIdleTimer is
     part of peer list structure. */
     wlan_hdd_tdls_timers_destroy(pHddTdlsCtx);
     wlan_hdd_tdls_free_list(pHddTdlsCtx);
+
+    mutex_unlock(&pHddCtx->tdls_lock);
 
     wlan_hdd_tdls_free_scan_request(&pHddCtx->tdls_scan_ctxt);
 
@@ -2306,7 +2325,7 @@ void wlan_hdd_tdls_set_mode(hdd_context_t *pHddCtx,
     mutex_unlock(&pHddCtx->tdls_lock);
 }
 
-static void wlan_hdd_tdls_pre_setup(struct work_struct *work)
+static void __wlan_hdd_tdls_pre_setup(struct work_struct *work)
 {
     tdlsCtx_t *pHddTdlsCtx =
        container_of(work, tdlsCtx_t, implicit_setup);
@@ -2424,6 +2443,13 @@ done:
     pHddTdlsCtx->curr_candidate = NULL;
     pHddTdlsCtx->magic = 0;
     return;
+}
+
+static void wlan_hdd_tdls_pre_setup(struct work_struct *work)
+{
+    vos_ssr_protect(__func__);
+    __wlan_hdd_tdls_pre_setup(work);
+    vos_ssr_unprotect(__func__);
 }
 
 tANI_U32 wlan_hdd_tdls_discovery_sent_cnt(hdd_context_t *pHddCtx)

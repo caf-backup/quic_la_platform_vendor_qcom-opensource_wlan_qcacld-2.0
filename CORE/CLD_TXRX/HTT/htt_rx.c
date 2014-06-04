@@ -876,16 +876,13 @@ htt_rx_amsdu_pop_ll(
          */
 
 #ifdef DEBUG_DMA_DONE
-        /* if done bit is not set */
         if (adf_os_unlikely(!((*(u_int32_t *) &rx_desc->attention)
                             & RX_ATTENTION_0_MSDU_DONE_MASK))) {
 
             int dbg_iter = MAX_DONE_BIT_CHECK_ITER;
 
-            htt_rx_print_rx_indication(rx_ind_msg, pdev);
-            htt_print_rx_desc(rx_desc);
 
-            adf_os_print("done bit still not set retrying...\n");
+            adf_os_print("malformed frame\n");
 
             while (dbg_iter &&
                    (!((*(u_int32_t *) &rx_desc->attention) &
@@ -898,18 +895,13 @@ htt_rx_amsdu_pop_ll(
 
                 adf_os_print("debug iter %d success %d\n", dbg_iter,
                      pdev->rx_ring.dbg_sync_success);
-                htt_rx_print_rx_indication(rx_ind_msg, pdev);
-                htt_print_rx_desc(rx_desc);
 
                 dbg_iter--;
             }
 
-            /* if the done bit is still not set, ASSERT the target */
             if (adf_os_unlikely(!((*(u_int32_t *) &rx_desc->attention)
                                   & RX_ATTENTION_0_MSDU_DONE_MASK)))
             {
-                htt_rx_print_rx_indication(rx_ind_msg, pdev);
-                htt_print_rx_desc(rx_desc);
 
                 process_wma_set_command(0,(int)GEN_PARAM_CRASH_INJECT,
                                         0, GEN_CMD);
@@ -1076,7 +1068,28 @@ htt_rx_amsdu_pop_hl(
 #endif
 
     adf_nbuf_set_next(*tail_msdu, NULL);
-    /* here the defrag has not been taken into account */
+    return 0;
+}
+
+int
+htt_rx_frag_pop_hl(
+    htt_pdev_handle pdev,
+    adf_nbuf_t frag_msg,
+    adf_nbuf_t *head_msdu,
+    adf_nbuf_t *tail_msdu)
+{
+    adf_nbuf_pull_head(frag_msg, HTT_RX_FRAG_IND_BYTES);
+    pdev->rx_desc_size_hl =
+        (adf_nbuf_data(frag_msg))
+        [HTT_ENDIAN_BYTE_IDX_SWAP(
+             HTT_RX_IND_HL_RX_DESC_LEN_OFFSET)];
+
+    /* point to the rx desc */
+    adf_nbuf_pull_head(frag_msg,
+                       sizeof(struct hl_htt_rx_ind_base));
+    *head_msdu = *tail_msdu = frag_msg;
+
+    adf_nbuf_set_next(*tail_msdu, NULL);
     return 0;
 }
 
@@ -1527,6 +1540,17 @@ int (*htt_rx_amsdu_pop)(
     adf_nbuf_t *head_msdu,
     adf_nbuf_t *tail_msdu);
 
+/*
+ * htt_rx_frag_pop -
+ * global function pointer that is programmed during attach to point
+ * to either htt_rx_amsdu_pop_ll or htt_rx_frag_pop_hl.
+ */
+int (*htt_rx_frag_pop)(
+    htt_pdev_handle pdev,
+    adf_nbuf_t rx_ind_msg,
+    adf_nbuf_t *head_msdu,
+    adf_nbuf_t *tail_msdu);
+
 int
 (*htt_rx_offload_msdu_pop)(
     htt_pdev_handle pdev,
@@ -1851,6 +1875,7 @@ htt_rx_attach(struct htt_pdev_t *pdev)
         htt_rx_ring_fill_n(pdev, pdev->rx_ring.fill_level);
 
         htt_rx_amsdu_pop = htt_rx_amsdu_pop_ll;
+        htt_rx_frag_pop = htt_rx_amsdu_pop_ll;
         htt_rx_offload_msdu_pop = htt_rx_offload_msdu_pop_ll;
         htt_rx_mpdu_desc_list_next = htt_rx_mpdu_desc_list_next_ll;
         htt_rx_mpdu_desc_seq_num = htt_rx_mpdu_desc_seq_num_ll;
@@ -1871,6 +1896,7 @@ htt_rx_attach(struct htt_pdev_t *pdev)
         /* host can force ring base address if it wish to do so */
         pdev->rx_ring.base_paddr = 0;
         htt_rx_amsdu_pop = htt_rx_amsdu_pop_hl;
+        htt_rx_frag_pop = htt_rx_frag_pop_hl;
         htt_rx_offload_msdu_pop = htt_rx_offload_msdu_pop_hl;
         htt_rx_mpdu_desc_list_next = htt_rx_mpdu_desc_list_next_hl;
         htt_rx_mpdu_desc_seq_num = htt_rx_mpdu_desc_seq_num_hl;

@@ -77,6 +77,10 @@
 
 #define SIR_MDIE_SIZE               3
 
+// Increase dwell time for P2P search in ms
+#define P2P_SEARCH_DWELL_TIME_INCREASE   20
+#define P2P_SOCIAL_CHANNELS              3
+
 /* Max number of channels are 165, but to access 165th element of array,
  *array of 166 is required.
  */
@@ -863,6 +867,7 @@ typedef struct sSirSmeScanReq
      */
     tANI_U32 minChannelTimeBtc;    //in units of milliseconds
     tANI_U32 maxChannelTimeBtc;    //in units of milliseconds
+    tANI_U32 restTime;              //in units of milliseconds, ignored when not connected
     tANI_U8              returnAfterFirstMatch;
 
     /**
@@ -4510,6 +4515,7 @@ typedef struct sSirScanOffloadReq {
     tSirScanType scanType;
     tANI_U32 minChannelTime;
     tANI_U32 maxChannelTime;
+    tANI_U32 restTime;              //in units of milliseconds, ignored when not connected
     tSirP2pScanType p2pScanType;
     tANI_U16 uIEFieldLen;
     tANI_U16 uIEFieldOffset;
@@ -4762,6 +4768,7 @@ typedef struct
 {
     tANI_U16      mesgType;
     tANI_U16      mesgLen;
+    tANI_BOOLEAN  suspended;
 }  tSirReadyToSuspendInd, *tpSirReadyToSuspendInd;
 typedef struct sSirRateUpdateInd
 {

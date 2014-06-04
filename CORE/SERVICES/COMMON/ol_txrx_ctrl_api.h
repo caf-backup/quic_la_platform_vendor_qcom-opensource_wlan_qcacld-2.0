@@ -323,6 +323,35 @@ ol_txrx_vdev_unpause(ol_txrx_vdev_handle data_vdev);
 #endif /* CONFIG_HL_SUPPORT */
 
 /**
+ * @brief Suspend all tx data per thermal event/timer for the
+ *  specified physical device
+ * @details
+ *  This function applies only to HL systerms, and it makes pause and
+ * unpause operations happen in pairs.
+ */
+#if defined(CONFIG_HL_SUPPORT)
+void
+ol_txrx_throttle_pause(ol_txrx_pdev_handle data_pdev);
+#else
+#define ol_txrx_throttle_pause(data_pdev) /* no-op */
+#endif /* CONFIG_HL_SUPPORT */
+
+
+/**
+ * @brief Resume all tx data per thermal event/timer for the
+ * specified physical device
+ * @details
+ *  This function applies only to HL systerms, and it makes pause and
+ * unpause operations happen in pairs.
+ */
+#if defined(CONFIG_HL_SUPPORT)
+void
+ol_txrx_throttle_unpause(ol_txrx_pdev_handle data_pdev);
+#else
+#define ol_txrx_throttle_unpause(data_pdev) /* no-op */
+#endif /* CONFIG_HL_SUPPORT */
+
+/**
  * @brief Suspend all tx data for the specified physical device.
  * @details
  *  This function applies only to HL systems - in LL systems, tx flow control
@@ -334,7 +363,7 @@ ol_txrx_vdev_unpause(ol_txrx_vdev_handle data_vdev);
  *
  * @param data_pdev - the physical device being paused
  */
-#if defined(CONFIG_HL_SUPPORT)
+#if defined(CONFIG_HL_SUPPORT) || defined(QCA_SUPPORT_TXRX_VDEV_PAUSE_LL)
 void
 ol_txrx_pdev_pause(ol_txrx_pdev_handle data_pdev);
 #else
@@ -349,7 +378,7 @@ ol_txrx_pdev_pause(ol_txrx_pdev_handle data_pdev);
  *
  * @param data_pdev - the physical device being unpaused
  */
-#if defined(CONFIG_HL_SUPPORT)
+#if defined(CONFIG_HL_SUPPORT) || defined(QCA_SUPPORT_TXRX_VDEV_PAUSE_LL)
 void
 ol_txrx_pdev_unpause(ol_txrx_pdev_handle data_pdev);
 #else
@@ -812,9 +841,15 @@ u_int16_t ol_txrx_local_peer_id(ol_txrx_peer_handle peer);
 ol_txrx_peer_handle ol_txrx_find_peer_by_addr(ol_txrx_pdev_handle pdev,
                                               u_int8_t *peer_addr,
                                               u_int8_t *peer_id);
+ol_txrx_peer_handle
+ol_txrx_find_peer_by_addr_and_vdev(ol_txrx_pdev_handle pdev,
+                                   ol_txrx_vdev_handle vdev,
+                                   u_int8_t *peer_addr,
+                                   u_int8_t *peer_id);
 #else
 #define ol_txrx_local_peer_id(peer) OL_TXRX_INVALID_LOCAL_PEER_ID
 #define ol_txrx_find_peer_by_addr(pdev, peer_addr, peer_id) NULL
+#define ol_txrx_find_peer_by_addr_and_vdev(pdev, vdev, peer_addr, peer_id) NULL
 #endif
 
 #define OL_TXRX_RSSI_INVALID 0xffff
