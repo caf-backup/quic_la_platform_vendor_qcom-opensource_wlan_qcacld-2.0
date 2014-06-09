@@ -3307,6 +3307,44 @@ REG_VARIABLE( CFG_ENABLE_HYSTERETIC_MODE, WLAN_PARAM_Integer,
                  CFG_ENABLE_PACKET_LOG_MIN,
                  CFG_ENABLE_PACKET_LOG_MAX ),
 
+#ifdef QCA_WIFI_2_0
+
+   REG_VARIABLE( CFG_ENABLE_FW_LOG_TYPE , WLAN_PARAM_Integer,
+                hdd_config_t, enableFwLogType,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_ENABLE_FW_LOG_TYPE_DEFAULT,
+                CFG_ENABLE_FW_LOG_TYPE_MIN,
+                CFG_ENABLE_FW_LOG_TYPE_MAX ),
+
+   REG_VARIABLE( CFG_ENABLE_FW_DEBUG_LOG_LEVEL, WLAN_PARAM_Integer,
+                hdd_config_t, enableFwLogLevel,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_ENABLE_FW_DEBUG_LOG_LEVEL_DEFAULT,
+                CFG_ENABLE_FW_DEBUG_LOG_LEVEL_MIN,
+                CFG_ENABLE_FW_DEBUG_LOG_LEVEL_MAX ),
+
+   REG_VARIABLE_STRING( CFG_ENABLE_FW_MODULE_LOG_LEVEL, WLAN_PARAM_String,
+                hdd_config_t, enableFwModuleLogLevel,
+                VAR_FLAGS_OPTIONAL,
+                (void *) CFG_ENABLE_FW_MODULE_LOG_DEFAULT),
+
+#endif
+
+#ifdef WLAN_FEATURE_11W
+   REG_VARIABLE(CFG_PMF_SA_QUERY_MAX_RETRIES_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, pmfSaQueryMaxRetries,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_PMF_SA_QUERY_MAX_RETRIES_DEFAULT,
+                CFG_PMF_SA_QUERY_MAX_RETRIES_MIN,
+                CFG_PMF_SA_QUERY_MAX_RETRIES_MAX ),
+
+   REG_VARIABLE(CFG_PMF_SA_QUERY_RETRY_INTERVAL_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, pmfSaQueryRetryInterval,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_PMF_SA_QUERY_RETRY_INTERVAL_DEFAULT,
+                CFG_PMF_SA_QUERY_RETRY_INTERVAL_MIN,
+                CFG_PMF_SA_QUERY_RETRY_INTERVAL_MAX ),
+#endif
 };
 
 /*
@@ -4410,8 +4448,8 @@ VOS_STATUS hdd_set_idle_ps_config(hdd_context_t *pHddCtx, v_U32_t val)
    return status;
 }
 
-#ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
-static VOS_STATUS hdd_string_to_u8_array( char *str, tANI_U8 *intArray, tANI_U8 *len, tANI_U8 intArrayMaxLen )
+VOS_STATUS hdd_string_to_u8_array( char *str, tANI_U8 *intArray, tANI_U8 *len,
+    tANI_U8 intArrayMaxLen )
 {
    char *s = str;
 
@@ -4439,7 +4477,6 @@ static VOS_STATUS hdd_string_to_u8_array( char *str, tANI_U8 *intArray, tANI_U8 
    return VOS_STATUS_SUCCESS;
 
 }
-#endif
 
 
 v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
@@ -5168,6 +5205,24 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
       fStatus = FALSE;
       hddLog(LOGE, "Could not pass on WNI_CFG_ANTENNA_DIVESITY to CCM");
    }
+
+#ifdef WLAN_FEATURE_11W
+   if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_PMF_SA_QUERY_MAX_RETRIES,
+                    pConfig->pmfSaQueryMaxRetries, NULL,
+                    eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE)
+   {
+      fStatus = FALSE;
+      hddLog(LOGE, "Could not pass on WNI_CFG_SA_QUERY_MAX_RETRIES to CCM");
+   }
+
+   if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_PMF_SA_QUERY_RETRY_INTERVAL,
+                    pConfig->pmfSaQueryRetryInterval, NULL,
+                    eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE)
+   {
+      fStatus = FALSE;
+      hddLog(LOGE, "Could not pass on WNI_CFG_SA_QUERY_RETRY_INTERVAL to CCM");
+   }
+#endif
 
    return fStatus;
 }

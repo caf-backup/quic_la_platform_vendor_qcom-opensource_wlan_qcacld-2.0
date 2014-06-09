@@ -531,6 +531,17 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                 pHddApCtx->uBCStaId = pSapEvent->sapevt.sapStartBssCompleteEvent.staId;
                 pHostapdAdapter->sessionId =
                         pSapEvent->sapevt.sapStartBssCompleteEvent.sessionId;
+
+#ifdef QCA_LL_TX_FLOW_CT
+                vos_timer_init(&pHostapdAdapter->tx_flow_control_timer,
+                               VOS_TIMER_TYPE_SW,
+                               hdd_tx_resume_timer_expired_handler,
+                               pHostapdAdapter);
+                WLANTL_RegisterTXFlowControl(pHddCtx->pvosContext,
+                               hdd_tx_resume_cb,
+                               pHostapdAdapter->sessionId,
+                               (void *)pHostapdAdapter);
+#endif
                 //@@@ need wep logic here to set privacy bit
                 hdd_softap_Register_BC_STA(pHostapdAdapter, pHddApCtx->uPrivacy);
             }
@@ -1026,11 +1037,14 @@ stopbss :
     }
     return VOS_STATUS_SUCCESS;
 }
+
 int hdd_softap_unpackIE(
                 tHalHandle halHandle,
                 eCsrEncryptionType *pEncryptType,
                 eCsrEncryptionType *mcEncryptType,
                 eCsrAuthType *pAuthType,
+                v_BOOL_t *pMFPCapable,
+                v_BOOL_t *pMFPRequired,
                 u_int16_t gen_ie_len,
                 u_int8_t *gen_ie )
 {
@@ -1083,7 +1097,8 @@ int hdd_softap_unpackIE(
         //dot11RSNIE.gp_cipher_suite_count
         *mcEncryptType = hdd_TranslateRSNToCsrEncryptionType(dot11RSNIE.gp_cipher_suite);
         // Set the PMKSA ID Cache for this interface
-
+        *pMFPCapable = 0 != (dot11RSNIE.RSN_Cap[0] & 0x80);
+        *pMFPRequired = 0 != (dot11RSNIE.RSN_Cap[0] & 0x40);
         // Calling csrRoamSetPMKIDCache to configure the PMKIDs into the cache
     } else
     if (gen_ie[0] == DOT11F_EID_WPA)
@@ -1115,6 +1130,8 @@ int hdd_softap_unpackIE(
         *pEncryptType = hdd_TranslateWPAToCsrEncryptionType(dot11WPAIE.unicast_ciphers[0]);
         //dot11WPAIE.unicast_cipher_count
         *mcEncryptType = hdd_TranslateWPAToCsrEncryptionType(dot11WPAIE.multicast_cipher);
+        *pMFPCapable = VOS_FALSE;
+        *pMFPRequired = VOS_FALSE;
     }
     else
     {
@@ -2343,6 +2360,8 @@ static iw_softap_commit(struct net_device *dev,
     eCsrAuthType RSNAuthType;
     eCsrEncryptionType RSNEncryptType;
     eCsrEncryptionType mcRSNEncryptType;
+    v_BOOL_t MFPCapable = VOS_FALSE;
+    v_BOOL_t MFPRequired = VOS_FALSE;
 
     pHostapdState = WLAN_HDD_GET_HOSTAP_STATE_PTR(pHostapdAdapter);
     pCommitConfig = (s_CommitConfig_t *)extra;
@@ -2409,6 +2428,8 @@ static iw_softap_commit(struct net_device *dev,
                                   &RSNEncryptType,
                                   &mcRSNEncryptType,
                                   &RSNAuthType,
+                                  &MFPCapable,
+                                  &MFPRequired,
                                   pConfig->pRSNWPAReqIE[1]+2,
                                   pConfig->pRSNWPAReqIE );
 
@@ -4284,6 +4305,7 @@ hdd_adapter_t* hdd_wlan_create_ap_dev( hdd_context_t *pHddCtx, tSirMacAddr macAd
         vos_mem_copy(pWlanHostapdDev->dev_addr, (void *)macAddr,sizeof(tSirMacAddr));
         vos_mem_copy(pHostapdAdapter->macAddressCurrent.bytes, (void *)macAddr, sizeof(tSirMacAddr));
 
+        pHostapdAdapter->offloads_configured = FALSE;
         pWlanHostapdDev->destructor = free_netdev;
         pWlanHostapdDev->ieee80211_ptr = &pHostapdAdapter->wdev ;
         pHostapdAdapter->wdev.wiphy = pHddCtx->wiphy;

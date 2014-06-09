@@ -519,19 +519,33 @@ enum {
 static const struct qwlan_hw qwlan_hw_list[] = {
     {
         .id = AR6320_REV1_VERSION,
+        .subid = 0,
         .name = "QCA6174_REV1",
     },
     {
         .id = AR6320_REV1_1_VERSION,
+        .subid = 0x1,
         .name = "QCA6174_REV1_1",
     },
     {
         .id = AR6320_REV1_3_VERSION,
+        .subid = 0x2,
         .name = "QCA6174_REV1_3",
     },
     {
         .id = AR6320_REV2_1_VERSION,
+        .subid = 0x4,
         .name = "QCA6174_REV2_1",
+    },
+    {
+        .id = AR6320_REV2_1_VERSION,
+        .subid = 0x5,
+        .name = "QCA6174_REV2_2",
+    },
+    {
+        .id = AR6320_REV3_VERSION,
+        .subid = 0x8,
+        .name = "QCA6174_REV3",
     }
 };
 
@@ -641,7 +655,8 @@ void hdd_wlan_get_version(hdd_adapter_t *pAdapter, union iwreq_data *wrqu,
     CRMId = pHddContext->target_fw_version & 0x7fff;
 
     for (i = 0; i < ARRAY_SIZE(qwlan_hw_list); i++) {
-        if (pHddContext->target_hw_version == qwlan_hw_list[i].id) {
+        if (pHddContext->target_hw_version == qwlan_hw_list[i].id &&
+            pHddContext->target_hw_revision == qwlan_hw_list[i].subid) {
             pHWversion = qwlan_hw_list[i].name;
             break;
         }
@@ -981,7 +996,7 @@ VOS_STATUS wlan_hdd_get_rssi(hdd_adapter_t *pAdapter, v_S7_t *rssi_value)
 
    hstatus = sme_GetRssi(pHddCtx->hHal, hdd_GetRssiCB,
                          pHddStaCtx->conn_info.staId[ 0 ],
-                         pHddStaCtx->conn_info.bssId,
+                         pHddStaCtx->conn_info.bssId, pAdapter->rssi,
                          &context, pHddCtx->pvosContext);
    if (eHAL_STATUS_SUCCESS != hstatus)
    {
@@ -7115,6 +7130,7 @@ static int iw_setnone_getnone(struct net_device *dev, struct iw_request_info *in
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
                                   "%s:LOGP in Progress. Ignore!!!", __func__);
+        msleep(1000);
         return -EBUSY;
     }
 

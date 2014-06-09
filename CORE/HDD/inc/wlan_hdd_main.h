@@ -1069,6 +1069,7 @@ struct hdd_adapter_s
     unsigned int tx_flow_low_watermark;
     unsigned int tx_flow_high_watermark_offset;
 #endif /* QCA_LL_TX_FLOW_CT */
+    v_BOOL_t offloads_configured;
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(pAdapter) (&(pAdapter)->sessionCtx.station)
@@ -1204,6 +1205,7 @@ struct hdd_context_s
 
 
    v_BOOL_t hdd_wlan_suspended;
+   v_BOOL_t suspended;
 
    spinlock_t filter_lock;
 
@@ -1338,6 +1340,8 @@ struct hdd_context_s
 
     /* defining the chip/rom version */
     v_U32_t target_hw_version;
+    /* defining the chip/rom revision */
+    v_U32_t target_hw_revision;
 #endif
     struct regulatory reg;
 #ifdef FEATURE_WLAN_CH_AVOID
@@ -1501,5 +1505,9 @@ void hdd_deinit_batch_scan(hdd_adapter_t *pAdapter);
 #endif /*End of FEATURE_WLAN_BATCH_SCAN*/
 
 void wlan_hdd_send_svc_nlink_msg(int type);
+
+#ifdef WLAN_FEATURE_STATS_EXT
+void wlan_hdd_cfg80211_stats_ext_init(hdd_context_t *pHddCtx);
+#endif
 
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

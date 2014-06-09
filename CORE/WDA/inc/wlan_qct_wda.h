@@ -1337,6 +1337,12 @@ tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 
 #define WDA_MODEM_POWER_STATE_IND SIR_HAL_MODEM_POWER_STATE_IND
 
+#define WDA_VDEV_STOP_IND           SIR_HAL_VDEV_STOP_IND
+
+#ifdef WLAN_FEATURE_STATS_EXT
+#define WDA_STATS_EXT_REQUEST              SIR_HAL_STATS_EXT_REQUEST
+#endif
+
 
 tSirRetStatus wdaPostCtrlMsg(tpAniSirGlobal pMac, tSirMsgQ *pMsg);
 

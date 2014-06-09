@@ -54,6 +54,7 @@
 #include "btcApi.h"
 #include "vos_nvitem.h"
 #include "p2p_Api.h"
+#include "smeInternal.h"
 
 #ifdef FEATURE_OEM_DATA_SUPPORT
 #include "oemDataApi.h"
@@ -910,9 +911,25 @@ eHalStatus sme_GetStatistics(tHalHandle hHal, eCsrStatsRequesterType requesterId
   ---------------------------------------------------------------------------*/
 tANI_U16 smeGetTLSTAState(tHalHandle hHal, tANI_U8 staId);
 
+/* ---------------------------------------------------------------------------
+    \fn sme_GetRssi
+    \brief a wrapper function that client calls to register a callback to get
+           RSSI
+
+    \param hHal - HAL handle for device
+    \param callback - SME sends back the requested stats using the callback
+    \param staId -    The station ID for which the stats is requested for
+    \param bssid - The bssid of the connected session
+    \param lastRSSI - RSSI value at time of request. In case fw cannot provide
+                      RSSI, do not hold up but return this value.
+    \param pContext - user context to be passed back along with the callback
+    \param pVosContext - vos context
+    \return eHalStatus
+  ---------------------------------------------------------------------------*/
 eHalStatus sme_GetRssi(tHalHandle hHal,
-                             tCsrRssiCallback callback,
-                             tANI_U8 staId, tCsrBssid bssId, void *pContext, void* pVosContext);
+                       tCsrRssiCallback callback,
+                       tANI_U8 staId, tCsrBssid bssId, tANI_S8 lastRSSI,
+                       void *pContext, void* pVosContext);
 
 /* ---------------------------------------------------------------------------
     \fn sme_GetSnr
@@ -3498,4 +3515,21 @@ eHalStatus sme_TxpowerLimit( tHalHandle hHal, tSirTxPowerLimit *psmetx);
 eHalStatus sme_UpdateConnectDebug(tHalHandle hHal, tANI_U32 set_value);
 eHalStatus sme_ApDisableIntraBssFwd(tHalHandle hHal, tANI_U8 sessionId,
                                     tANI_BOOLEAN disablefwd);
+
+#ifdef WLAN_FEATURE_STATS_EXT
+
+typedef struct sStatsExtRequestReq {
+  tANI_U32 request_data_len;
+  tANI_U8* request_data;
+} tStatsExtRequestReq, *tpStatsExtRequestReq;
+
+typedef void (* StatsExtCallback)(void *, tStatsExtEvent *);
+
+void sme_StatsExtRegisterCallback(tHalHandle hHal, StatsExtCallback callback);
+
+eHalStatus sme_StatsExtRequest(tANI_U8 session_id, tpStatsExtRequestReq input);
+
+eHalStatus sme_StatsExtEvent (tHalHandle hHal, void* pMsg);
+
+#endif
 #endif //#if !defined( __SME_API_H )

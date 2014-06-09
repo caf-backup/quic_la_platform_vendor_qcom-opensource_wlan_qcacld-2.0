@@ -1464,13 +1464,15 @@ eHalStatus sme_SetPlmRequest(tHalHandle hHal, tpSirPlmReq pPlmReq)
               {
                   if (NV_CHANNEL_DFS ==
                        vos_nv_getChannelEnabledState(pPlmReq->plmChList[count]))
-                  /* DFS channel is provided, no PLM bursts can be
-                  * transmitted. Ignoring these channels.
-                  */
-                  VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
-                            "%s DFS channel %d ignored for PLM", __func__,
-                            pPlmReq->plmChList[count]);
-                  continue;
+                  {
+                      /* DFS channel is provided, no PLM bursts can be
+                      * transmitted. Ignoring these channels.
+                      */
+                      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+                                "%s DFS channel %d ignored for PLM", __func__,
+                                pPlmReq->plmChList[count]);
+                      continue;
+                  }
               }
               else if (!ret)
               {
@@ -1695,7 +1697,8 @@ void sme_ProcessReadyToSuspend( tHalHandle hHal,
 
    if (NULL != pMac->readyToSuspendCallback)
    {
-       pMac->readyToSuspendCallback (pMac->readyToSuspendContext);
+       pMac->readyToSuspendCallback (pMac->readyToSuspendContext,
+                                     pReadyToSuspend->suspended);
        pMac->readyToSuspendCallback = NULL;
    }
 }
@@ -2613,6 +2616,21 @@ eHalStatus sme_ProcessMsg(tHalHandle hHal, vos_msg_t* pMsg)
                             "nothing to process");
                 }
                 break ;
+
+#ifdef WLAN_FEATURE_STATS_EXT
+          case eWNI_SME_STATS_EXT_EVENT:
+              if (pMsg->bodyptr)
+              {
+                  status = sme_StatsExtEvent(hHal, pMsg->bodyptr);
+                  vos_mem_free(pMsg->bodyptr);
+              }
+              else
+              {
+                  smsLog( pMac, LOGE,
+                          "Empty event message for eWNI_SME_STATS_EXT_EVENT, nothing to process");
+              }
+              break;
+#endif
           default:
 
              if ( ( pMsg->type >= eWNI_SME_MSG_TYPES_BEGIN )
@@ -4869,17 +4887,22 @@ eHalStatus sme_RoamRemoveKey(tHalHandle hHal, tANI_U8 sessionId,
 
 /* ---------------------------------------------------------------------------
     \fn sme_GetRssi
-    \brief a wrapper function that client calls to register a callback to get RSSI
+    \brief a wrapper function that client calls to register a callback to get
+           RSSI
 
+    \param hHal - HAL handle for device
     \param callback - SME sends back the requested stats using the callback
-    \param staId - The station ID for which the stats is requested for
+    \param staId -    The station ID for which the stats is requested for
+    \param bssid - The bssid of the connected session
+    \param lastRSSI - RSSI value at time of request. In case fw cannot provide
+                      RSSI, do not hold up but return this value.
     \param pContext - user context to be passed back along with the callback
     \param pVosContext - vos context
     \return eHalStatus
   ---------------------------------------------------------------------------*/
 eHalStatus sme_GetRssi(tHalHandle hHal,
                              tCsrRssiCallback callback,
-                             tANI_U8 staId, tCsrBssid bssId,
+                             tANI_U8 staId, tCsrBssid bssId, tANI_S8 lastRSSI,
                              void *pContext, void* pVosContext)
 {
    eHalStatus status = eHAL_STATUS_FAILURE;
@@ -4891,7 +4914,8 @@ eHalStatus sme_GetRssi(tHalHandle hHal,
    if ( HAL_STATUS_SUCCESS( status ) )
    {
       status = csrGetRssi( pMac, callback,
-                                 staId, bssId, pContext, pVosContext);
+                           staId, bssId, lastRSSI,
+                           pContext, pVosContext);
       sme_ReleaseGlobalLock( &pMac->sme );
    }
    return (status);
@@ -7283,23 +7307,22 @@ eHalStatus sme_ConfigureSuspendInd( tHalHandle hHal,
 
     MTRACE(macTraceNew(pMac, VOS_MODULE_ID_SME,
                   TRACE_CODE_SME_RX_HDD_CONFIG_SUSPENDIND, NO_SESSION, 0));
+
+    pMac->readyToSuspendCallback = callback;
+    pMac->readyToSuspendContext = callbackContext;
+
     if ( eHAL_STATUS_SUCCESS == ( status = sme_AcquireGlobalLock( &pMac->sme ) ) )
     {
         /* serialize the req through MC thread */
         vosMessage.bodyptr = wlanSuspendParam;
         vosMessage.type    = WDA_WLAN_SUSPEND_IND;
         vosStatus = vos_mq_post_message( VOS_MQ_ID_WDA, &vosMessage );
-        if ( !VOS_IS_STATUS_SUCCESS(vosStatus) )
-        {
+        if ( !VOS_IS_STATUS_SUCCESS(vosStatus) ) {
+           pMac->readyToSuspendCallback = NULL;
+           pMac->readyToSuspendContext = NULL;
            status = eHAL_STATUS_FAILURE;
         }
         sme_ReleaseGlobalLock( &pMac->sme );
-    }
-
-    if ( VOS_IS_STATUS_SUCCESS(vosStatus) )
-    {
-        pMac->readyToSuspendCallback = callback;
-        pMac->readyToSuspendContext = callbackContext;
     }
 
     return(status);
@@ -11860,3 +11883,102 @@ eHalStatus sme_ApDisableIntraBssFwd(tHalHandle hHal, tANI_U8 sessionId,
     return (status);
 }
 
+#ifdef WLAN_FEATURE_STATS_EXT
+
+/******************************************************************************
+  \fn sme_StatsExtRegisterCallback
+
+  \brief
+  a function called to register the callback that send vendor event for stats
+  ext
+
+  \param callback - callback to be registered
+******************************************************************************/
+void sme_StatsExtRegisterCallback(tHalHandle hHal, StatsExtCallback callback)
+{
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+
+    pMac->sme.StatsExtCallback = callback;
+}
+
+/******************************************************************************
+  \fn sme_StatsExtRequest
+
+  \brief
+  a function called when HDD receives STATS EXT vendor command from userspace
+
+  \param sessionID - vdevID for the stats ext request
+
+  \param input - Stats Ext Request structure ptr
+
+  \return eHalStatus
+******************************************************************************/
+eHalStatus sme_StatsExtRequest(tANI_U8 session_id, tpStatsExtRequestReq input)
+{
+    vos_msg_t msg;
+    tpStatsExtRequest data;
+    size_t data_len;
+
+    data_len = sizeof(tStatsExtRequest) + input->request_data_len;
+    data = vos_mem_malloc(data_len);
+
+    if (data == NULL) {
+        return eHAL_STATUS_FAILURE;
+    }
+
+    vos_mem_zero(data, data_len);
+    data->vdev_id = session_id;
+    data->request_data_len = input->request_data_len;
+    if (input->request_data_len) {
+        vos_mem_copy(data->request_data,
+                     input->request_data, input->request_data_len);
+    }
+
+    msg.type = WDA_STATS_EXT_REQUEST;
+    msg.reserved = 0;
+    msg.bodyptr = data;
+
+    if (VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA,
+                                                  &msg)) {
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                  "%s: Not able to post WDA_STATS_EXT_REQUEST message to WDA",
+                  __func__);
+        vos_mem_free(data);
+        return eHAL_STATUS_FAILURE;
+    }
+
+    return eHAL_STATUS_SUCCESS;
+}
+
+
+/******************************************************************************
+  \fn sme_StatsExtEvent
+
+  \brief
+  a callback function called when SME received eWNI_SME_STATS_EXT_EVENT
+  response from WDA
+
+  \param hHal - HAL handle for device
+  \param pMsg - Message body passed from WDA; includes NAN header
+  \return eHalStatus
+******************************************************************************/
+eHalStatus sme_StatsExtEvent(tHalHandle hHal, void* pMsg)
+{
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+    eHalStatus status = eHAL_STATUS_SUCCESS;
+
+    if (NULL == pMsg) {
+        smsLog(pMac, LOGE, "in %s msg ptr is NULL", __func__);
+        status = eHAL_STATUS_FAILURE;
+    } else {
+        smsLog(pMac, LOG2, "SME: entering %s", __func__);
+
+        if (pMac->sme.StatsExtCallback) {
+            pMac->sme.StatsExtCallback(pMac->pAdapter, (tpStatsExtEvent)pMsg);
+        }
+    }
+
+    return status;
+}
+
+#endif

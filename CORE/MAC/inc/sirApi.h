@@ -662,6 +662,12 @@ typedef struct sSirSmeStartBssReq
     tSirMacRateSet          operationalRateSet;// Has 11a or 11b rates
     tSirMacRateSet          extendedRateSet;    // Has 11g rates
     tSirHTConfig            htConfig;
+
+#ifdef WLAN_FEATURE_11W
+    tANI_BOOLEAN            pmfCapable;
+    tANI_BOOLEAN            pmfRequired;
+#endif
+
 } tSirSmeStartBssReq, *tpSirSmeStartBssReq;
 
 #define GET_IE_LEN_IN_BSS(lenInBss) ( lenInBss + sizeof(lenInBss) - \
@@ -834,6 +840,7 @@ typedef struct sSirSmeScanReq
      */
     tANI_U32 minChannelTimeBtc;    //in units of milliseconds
     tANI_U32 maxChannelTimeBtc;    //in units of milliseconds
+    tANI_U32 restTime;              //in units of milliseconds, ignored when not connected
     tANI_U8              returnAfterFirstMatch;
 
     /**
@@ -2140,9 +2147,10 @@ typedef struct sAniGetRssiReq
 {
     // Common for all types are requests
     tANI_U16                msgType;    // message type is same as the request type
-    tANI_U16                msgLen;  // length of the entire request
+    tANI_U16                msgLen;     // length of the entire request
     tANI_U8                 sessionId;
     tANI_U8                 staId;
+    tANI_S8                 lastRSSI;   // in case of error, return last RSSI
     void                    *rssiCallback;
     void                    *pDevContext; //device context
     void                    *pVosContext; //voss context
@@ -4467,6 +4475,7 @@ typedef struct sSirScanOffloadReq {
     tSirScanType scanType;
     tANI_U32 minChannelTime;
     tANI_U32 maxChannelTime;
+    tANI_U32 restTime;              //in units of milliseconds, ignored when not connected
     tSirP2pScanType p2pScanType;
     tANI_U16 uIEFieldLen;
     tANI_U16 uIEFieldOffset;
@@ -4719,6 +4728,7 @@ typedef struct
 {
     tANI_U16      mesgType;
     tANI_U16      mesgLen;
+    tANI_BOOLEAN  suspended;
 }  tSirReadyToSuspendInd, *tpSirReadyToSuspendInd;
 typedef struct sSirRateUpdateInd
 {
@@ -4875,5 +4885,14 @@ typedef struct
 {
     tANI_U32 param;
 } tSirModemPowerStateInd, *tpSirModemPowerStateInd;
+
+#ifdef WLAN_FEATURE_STATS_EXT
+typedef struct
+{
+    tANI_U32 event_data_len;
+    u_int8_t event_data[];
+} tSirStatsExtEvent, *tpSirStatsExtEvent;
+
+#endif
 
 #endif /* __SIR_API_H */

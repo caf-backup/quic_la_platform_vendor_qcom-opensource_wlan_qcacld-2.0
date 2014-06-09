@@ -2384,12 +2384,31 @@ tANI_U8 csrScanFlushDenied(tpAniSirGlobal pMac)
 eHalStatus csrScanFlushResult(tpAniSirGlobal pMac)
 {
     tANI_U8 isFlushDenied = csrScanFlushDenied(pMac);
+    eHalStatus status = eHAL_STATUS_SUCCESS;
+    tSirMbMsg *pMsg;
+    tANI_U16 msgLen;
+
     if (isFlushDenied) {
         smsLog(pMac, LOGW, "%s: scan flush denied in roam state %d",
                 __func__, isFlushDenied);
         return eHAL_STATUS_FAILURE;
     }
-    return ( csrLLScanPurgeResult(pMac, &pMac->scan.scanResultList) );
+
+    /* prepare and send clear cached scan results msg to lim */
+    msgLen = (tANI_U16)(sizeof( tSirMbMsg ));
+    pMsg = vos_mem_malloc(msgLen);
+    if ( NULL != pMsg ) {
+        vos_mem_set((void *)pMsg, msgLen, 0);
+        pMsg->type = pal_cpu_to_be16((tANI_U16)eWNI_SME_CLEAR_LIM_SCAN_CACHE);
+        pMsg->msgLen = pal_cpu_to_be16(msgLen);
+        palSendMBMessage(pMac->hHdd, pMsg);
+    } else {
+        status = eHAL_STATUS_FAILED_ALLOC;
+    }
+
+    csrLLScanPurgeResult( pMac, &pMac->scan.tempScanResults );
+    csrLLScanPurgeResult( pMac, &pMac->scan.scanResultList );
+    return( status );
 }
 
 eHalStatus csrScanFlushSelectiveResult(tpAniSirGlobal pMac, v_BOOL_t flushP2P)
@@ -4684,7 +4703,7 @@ tANI_BOOLEAN csrIsDuplicateBssDescription( tpAniSirGlobal pMac, tSirBssDescripti
     {
         if (pCap1->ess &&
                 csrIsMacAddressEqual( pMac, (tCsrBssid *)pSirBssDesc1->bssId, (tCsrBssid *)pSirBssDesc2->bssId)&&
-            (fForced || (vos_freq_to_band(pSirBssDesc1->channelId) == vos_freq_to_band((pSirBssDesc2->channelId)))))
+            (fForced || (vos_chan_to_band(pSirBssDesc1->channelId) == vos_chan_to_band((pSirBssDesc2->channelId)))))
         {
             fMatch = TRUE;
             // Check for SSID match, if exists
@@ -5347,6 +5366,7 @@ tANI_BOOLEAN csrScanAgeOutBss(tpAniSirGlobal pMac, tCsrScanResult *pResult)
     tANI_BOOLEAN fRet = eANI_BOOLEAN_FALSE;
     tANI_U32 i;
     tCsrRoamSession *pSession;
+    tANI_BOOLEAN isConnBssfound = eANI_BOOLEAN_FALSE;
 
     for( i = 0; i < CSR_ROAM_SESSION_MAX; i++ )
     {
@@ -5354,29 +5374,36 @@ tANI_BOOLEAN csrScanAgeOutBss(tpAniSirGlobal pMac, tCsrScanResult *pResult)
         {
             pSession = CSR_GET_SESSION( pMac, i );
             //Not to remove the BSS we are connected to.
-            if(csrIsConnStateDisconnected(pMac, i) || (NULL == pSession->pConnectBssDesc) ||
-              (!csrIsDuplicateBssDescription(pMac, &pResult->Result.BssDescriptor,
+            if(csrIsConnStateConnectedInfra(pMac, i) && (NULL != pSession->pConnectBssDesc) &&
+              (csrIsDuplicateBssDescription(pMac, &pResult->Result.BssDescriptor,
                                              pSession->pConnectBssDesc, NULL, FALSE))
               )
             {
-                smsLog(pMac, LOGW, "Aging out BSS "MAC_ADDRESS_STR" Channel %d",
-                       MAC_ADDR_ARRAY(pResult->Result.BssDescriptor.bssId),
-                       pResult->Result.BssDescriptor.channelId);
-                //No need to hold the spin lock because caller should hold the lock for pMac->scan.scanResultList
-                if( csrLLRemoveEntry(&pMac->scan.scanResultList, &pResult->Link, LL_ACCESS_NOLOCK) )
-                {
-                    csrFreeScanResultEntry(pMac, pResult);
-                    fRet = eANI_BOOLEAN_TRUE;
-                }
+                isConnBssfound = eANI_BOOLEAN_TRUE;
                 break;
             }
-        } //valid session
-    } //for
-    if( CSR_ROAM_SESSION_MAX == i && fRet != eANI_BOOLEAN_TRUE )
+        }
+    }
+
+    if( isConnBssfound )
     {
-        //reset the counter so this won't hapeen too soon
+        //Reset the counter so that aging out of connected BSS won't hapeen too soon
         pResult->AgingCount = (tANI_S32)pMac->roam.configParam.agingCount;
         pResult->Result.BssDescriptor.nReceivedTime = (tANI_TIMESTAMP)palGetTickCount(pMac->hHdd);
+
+        return (fRet);
+    }
+    else
+    {
+        smsLog(pMac, LOGW, "Aging out BSS "MAC_ADDRESS_STR" Channel %d",
+               MAC_ADDR_ARRAY(pResult->Result.BssDescriptor.bssId),
+               pResult->Result.BssDescriptor.channelId);
+        //No need to hold the spin lock because caller should hold the lock for pMac->scan.scanResultList
+        if( csrLLRemoveEntry(&pMac->scan.scanResultList, &pResult->Link, LL_ACCESS_NOLOCK) )
+        {
+            csrFreeScanResultEntry(pMac, pResult);
+            fRet = eANI_BOOLEAN_TRUE;
+        }
     }
 
     return (fRet);
@@ -5564,7 +5591,7 @@ eHalStatus csrSendMBScanReq( tpAniSirGlobal pMac, tANI_U16 sessionId,
             //hidden SSID option
             pMsg->hiddenSsid = pScanReqParam->hiddenSsid;
             //rest time
-            //pMsg->restTime = pScanReq->restTime;
+            pMsg->restTime = pScanReq->restTime;
             pMsg->returnAfterFirstMatch = pScanReqParam->bReturnAfter1stMatch;
             // All the scan results caching will be done by Roaming
             // We do not want LIM to do any caching of scan results,
@@ -7551,7 +7578,7 @@ void csrSetCfgValidChannelList( tpAniSirGlobal pMac, tANI_U8 *pChannelList, tANI
     {
         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
                 "Scan offload is enabled, update default chan list");
-        status = csrUpdateChannelList(&pMac->scan);
+        status = csrUpdateChannelList(pMac);
         if (eHAL_STATUS_SUCCESS != status)
         {
             VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,

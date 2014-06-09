@@ -821,6 +821,8 @@ PopulateDot11fVHTCaps(tpAniSirGlobal           pMac,
             CFG_GET_INT( nStatus, pMac, WNI_CFG_VHT_RXSTBC, nCfgValue );
 
         pDot11f->rxSTBC = (nCfgValue & 0x0007);
+
+        pDot11f->suBeamformeeCap = psessionEntry->txBFIniFeatureEnabled;
     }
     else
     {
@@ -843,15 +845,14 @@ PopulateDot11fVHTCaps(tpAniSirGlobal           pMac,
         nCfgValue = 0;
         CFG_GET_INT( nStatus, pMac, WNI_CFG_VHT_RXSTBC, nCfgValue );
         pDot11f->rxSTBC = (nCfgValue & 0x0007);
+
+        pDot11f->suBeamformeeCap = 0;
     }
 
     nCfgValue = 0;
     CFG_GET_INT( nStatus, pMac, WNI_CFG_VHT_SU_BEAMFORMER_CAP, nCfgValue );
     pDot11f->suBeamFormerCap = (nCfgValue & 0x0001);
 
-    nCfgValue = 0;
-    CFG_GET_INT( nStatus, pMac, WNI_CFG_VHT_SU_BEAMFORMEE_CAP, nCfgValue );
-    pDot11f->suBeamformeeCap = (nCfgValue & 0x0001);
 
     nCfgValue = 0;
     CFG_GET_INT( nStatus, pMac, WNI_CFG_VHT_CSN_BEAMFORMEE_ANT_SUPPORTED,
@@ -5214,5 +5215,14 @@ void PopulateDot11fAssocRspRates ( tpAniSirGlobal pMac, tDot11fIESuppRates *pSup
      pExt->num_rates = num_ext;
      pExt->present = 1;
   }
+}
+
+void PopulateDot11fTimeoutInterval( tpAniSirGlobal pMac,
+                                    tDot11fIETimeoutInterval *pDot11f,
+                                    tANI_U8 type, tANI_U32 value )
+{
+   pDot11f->present = 1;
+   pDot11f->timeoutType = type;
+   pDot11f->timeoutValue = value;
 }
 // parserApi.c ends here.
