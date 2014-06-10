@@ -234,13 +234,15 @@ eHalStatus sme_Open(tHalHandle hHal);
 
   \param hal - The handle returned by macOpen.
 
+  \param alpha2 - Country code passed by the hdd context.
+
   \return eHAL_STATUS_SUCCESS - SME is successfully initialized.
 
         Other status means SME is failed to be initialized
   \sa
 
 ---------------------------------------------------------------------------*/
-eHalStatus sme_init_chan_list(tHalHandle hal);
+eHalStatus sme_init_chan_list(tHalHandle hal, v_U8_t *alpha2);
 
 /*--------------------------------------------------------------------------
 
@@ -3564,4 +3566,28 @@ eHalStatus sme_StatsExtRequest(tANI_U8 session_id, tpStatsExtRequestReq input);
 eHalStatus sme_StatsExtEvent (tHalHandle hHal, void* pMsg);
 
 #endif
+/* ---------------------------------------------------------------------------
+    \fn sme_UpdateDFSScanMode
+    \brief  Update DFS roam Mode
+            This function is called through dynamic setConfig callback function
+            to configure isAllowDFSChannelRoam.
+    \param  hHal - HAL handle for device
+    \param  isAllowDFSChannelRoam - Enable/Disable DFS roaming scan
+    \return eHAL_STATUS_SUCCESS - SME update allowDFSChannelRoam config
+            successfully.
+            Other status means SME is failed to update isAllowDFSChannelRoam.
+    \sa
+    -------------------------------------------------------------------------*/
+eHalStatus sme_UpdateDFSScanMode(tHalHandle hHal, v_BOOL_t isAllowDFSChannelRoam);
+
+/*--------------------------------------------------------------------------
+  \brief sme_GetDFSScanMode() - get DFS SCAN Mode
+            This is a synchronous call
+  \param hHal - The handle returned by macOpen.
+  \return DFS roaming mode Enabled(1)/Disabled(0)
+  \sa
+  --------------------------------------------------------------------------*/
+v_BOOL_t sme_GetDFSScanMode(tHalHandle hHal);
+
+
 #endif //#if !defined( __SME_API_H )

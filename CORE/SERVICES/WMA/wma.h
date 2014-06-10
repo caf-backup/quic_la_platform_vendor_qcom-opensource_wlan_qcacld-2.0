@@ -392,6 +392,7 @@ struct wma_wow {
 	v_BOOL_t deauth_enable;
 	v_BOOL_t disassoc_enable;
 	v_BOOL_t bmiss_enable;
+	v_BOOL_t gtk_pdev_enable;
 	v_BOOL_t gtk_err_enable[WMA_MAX_SUPPORTED_BSS];
 };
 #ifdef WLAN_FEATURE_11W
@@ -612,6 +613,7 @@ typedef struct {
         u_int32_t roam_preauth_scan_id;
         u_int16_t roam_preauth_chanfreq;
         void *roam_preauth_chan_context;
+	adf_os_spinlock_t roam_preauth_lock;
 
 	/* Here ol_ini_info is used to store ini
 	 * status of arp offload, ns offload

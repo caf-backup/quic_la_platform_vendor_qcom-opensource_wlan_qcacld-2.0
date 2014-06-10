@@ -1081,7 +1081,8 @@ static void wma_delete_all_ibss_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 static void wma_delete_all_ap_remote_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 {
 	ol_txrx_vdev_handle vdev;
-	ol_txrx_peer_handle peer;
+	ol_txrx_peer_handle peer, temp;
+	int32_t is_high_latency;
 
 	if (!wma || vdev_id > wma->max_bssid)
 		return;
@@ -1090,21 +1091,31 @@ static void wma_delete_all_ap_remote_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 	if (!vdev)
 		return;
 
+	is_high_latency = wdi_out_cfg_is_high_latency(
+				vdev->pdev->ctrl_pdev);
 	WMA_LOGE("%s: vdev_id - %d", __func__, vdev_id);
 	/* remove all remote peers of SAP */
 	adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
-	while ((peer = TAILQ_LAST(&vdev->peer_list, peer_list_t))) {
+
+	temp = NULL;
+	TAILQ_FOREACH_REVERSE(peer, &vdev->peer_list, peer_list_t, peer_list_elem) {
+		if (temp) {
+			adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
+			if ((!is_high_latency)
+			   || adf_os_atomic_read(&temp->delete_in_progress) == 0){
+				adf_os_atomic_init(&temp->ref_cnt);
+				adf_os_atomic_inc(&temp->ref_cnt);
+				wma_remove_peer(wma, temp->mac_addr.raw,
+					vdev_id, peer);
+			}
+			adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
+		}
 		/* self peer is deleted by caller */
 		if (peer == TAILQ_FIRST(&vdev->peer_list)){
 			WMA_LOGE("%s: self peer removed by caller ", __func__);
 			break;
-		}
-		adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
-		adf_os_atomic_init(&peer->ref_cnt);
-		adf_os_atomic_inc(&peer->ref_cnt);
-		wma_remove_peer(wma, peer->mac_addr.raw,
-					vdev_id, peer);
-		adf_os_spin_lock_bh(&vdev->pdev->peer_ref_mutex);
+		} else
+			temp = peer;
 	}
 
 	adf_os_spin_unlock_bh(&vdev->pdev->peer_ref_mutex);
@@ -3202,6 +3213,8 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 
         adf_os_spinlock_init(&wma_handle->vdev_detach_lock);
 
+        adf_os_spinlock_init(&wma_handle->roam_preauth_lock);
+
 	/* Register vdev start response event handler */
 	wmi_unified_register_event_handler(wma_handle->wmi_handle,
 					   WMI_VDEV_START_RESP_EVENTID,
@@ -3303,6 +3316,7 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 err_dbglog_init:
 	adf_os_spinlock_destroy(&wma_handle->vdev_respq_lock);
 	adf_os_spinlock_destroy(&wma_handle->vdev_detach_lock);
+	adf_os_spinlock_destroy(&wma_handle->roam_preauth_lock);
 err_event_init:
 	wmi_unified_unregister_event_handler(wma_handle->wmi_handle,
 					     WMI_DEBUG_PRINT_EVENTID);
@@ -5233,7 +5247,7 @@ VOS_STATUS wma_roam_scan_offload_chan_list(tp_wma_handle wma_handle,
     chan_list_fp->vdev_id = wma_handle->roam_offload_vdev_id;
     chan_list_fp->num_chan = chan_count;
     if (chan_count > 0 && list_type == CHANNEL_LIST_STATIC) {
-        /* NCHO or other app is in control */
+        /* external app is controlling channel list */
         chan_list_fp->chan_list_type = WMI_ROAM_SCAN_CHAN_LIST_TYPE_STATIC;
     } else {
         /* umac supplied occupied channel list in LFR */
@@ -5400,6 +5414,7 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
                                    wmi_start_scan_cmd_fixed_param *scan_params)
 {
     tANI_U8 channels_per_burst = 0;
+    tANI_U32 val = 0;
 
     if (NULL == pMac) {
         WMA_LOGE("%s: pMac is NULL", __func__);
@@ -5434,6 +5449,18 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
          *                                   to scan;
          */
 
+        if (wlan_cfgGetInt(pMac, WNI_CFG_PASSIVE_MAXIMUM_CHANNEL_TIME, &val) != eSIR_SUCCESS)
+        {
+            /*
+             * Could not get max channel value from CFG. Log error.
+             */
+            WMA_LOGE("could not retrieve passive max channel value");
+
+            /* use a default value of 110ms */
+            val = WMA_ROAM_DWELL_TIME_PASSIVE_DEFAULT;
+        }
+
+        scan_params->dwell_time_passive = val;
         /*
          * Here is the formula,
          * T(HomeAway) = N * T(dwell) + (N+1) * T(cs)
@@ -5441,8 +5468,10 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
          */
         scan_params->dwell_time_active  = roam_req->NeighborScanChannelMaxTime;
         if (roam_req->HomeAwayTime < 2*WMA_ROAM_SCAN_CHANNEL_SWITCH_TIME) {
-            // clearly we can't follow home away time
-            scan_params->burst_duration     = scan_params->dwell_time_active;
+            /* clearly we can't follow home away time.
+             * Make it a split scan.
+             */
+            scan_params->burst_duration     = 0;
         } else {
             channels_per_burst =
               (roam_req->HomeAwayTime - WMA_ROAM_SCAN_CHANNEL_SWITCH_TIME)
@@ -5459,8 +5488,16 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
                   channels_per_burst * scan_params->dwell_time_active;
             }
         }
-
-        scan_params->dwell_time_passive = scan_params->dwell_time_active;
+        if (pMac->roam.configParam.allowDFSChannelRoam &&
+            roam_req->HomeAwayTime > 0 &&
+            roam_req->ChannelCacheType != CHANNEL_LIST_STATIC) {
+            /* Roaming on DFS channels is supported and it is not app channel list.
+             * It is ok to override homeAwayTime to accomodate DFS dwell time in burst
+             * duration.
+             */
+            scan_params->burst_duration = MAX(scan_params->burst_duration,
+                                                scan_params->dwell_time_passive);
+        }
         scan_params->min_rest_time = roam_req->NeighborScanTimerPeriod;
         scan_params->max_rest_time = roam_req->NeighborScanTimerPeriod;
         scan_params->repeat_probe_time = (roam_req->nProbes > 0) ?
@@ -5481,7 +5518,7 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
         scan_params->probe_delay = 0;
         scan_params->max_scan_time = WMA_HW_DEF_SCAN_MAX_DURATION;
         scan_params->idle_time = scan_params->min_rest_time;
-        scan_params->burst_duration = WMA_ROAM_DWELL_TIME_PASSIVE_DEFAULT;
+        scan_params->burst_duration = 0;
         scan_params->n_probes = 0;
     }
 
@@ -5489,6 +5526,7 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
     if (!pMac->roam.configParam.allowDFSChannelRoam) {
         scan_params->scan_ctrl_flags |= WMI_SCAN_BYPASS_DFS_CHN;
     }
+
     WMA_LOGI("%s: Rome roam scan parameters:"
              " dwell_time_active = %d, dwell_time_passive = %d",
              __func__,
@@ -6866,6 +6904,17 @@ VOS_STATUS wma_roam_preauth_chan_set(tp_wma_handle wma_handle,
 
         WMA_LOGI("%s: channel %d", __func__, params->channelNumber);
 
+	/* Check for prior operation in progress */
+	adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
+	if (wma_handle->roam_preauth_chan_context != NULL) {
+		adf_os_spin_unlock_bh(&wma_handle->roam_preauth_lock);
+		vos_status = VOS_STATUS_E_FAILURE;
+		WMA_LOGE("%s: Rejected request. Previous operation in progress", __func__);
+		goto send_resp;
+	}
+	wma_handle->roam_preauth_chan_context = params;
+	adf_os_spin_unlock_bh(&wma_handle->roam_preauth_lock);
+
         /* Prepare a dummy scan request and get the
          * wmi_start_scan_cmd_fixed_param structure filled properly
          */
@@ -6880,7 +6929,6 @@ VOS_STATUS wma_roam_preauth_chan_set(tp_wma_handle wma_handle,
         scan_req.scanType = eSIR_PASSIVE_SCAN;
         scan_req.p2pScanType = P2P_SCAN_TYPE_LISTEN;
         scan_req.sessionId = vdev_id;
-        wma_handle->roam_preauth_chan_context = params;
         wma_handle->roam_preauth_chanfreq = vos_chan_to_freq(params->channelNumber);
 
         /* set the state in advance before calling wma_start_scan and be ready
@@ -6890,9 +6938,22 @@ VOS_STATUS wma_roam_preauth_chan_set(tp_wma_handle wma_handle,
         wma_handle->roam_preauth_scan_state = WMA_ROAM_PREAUTH_CHAN_REQUESTED;
         vos_status = wma_start_scan(wma_handle, &scan_req, WDA_CHNL_SWITCH_REQ);
 
-        if (vos_status != VOS_STATUS_SUCCESS)
-            wma_handle->roam_preauth_scan_state = WMA_ROAM_PREAUTH_CHAN_NONE;
-        return vos_status;
+        if (vos_status == VOS_STATUS_SUCCESS)
+		return vos_status;
+	wma_handle->roam_preauth_scan_state = WMA_ROAM_PREAUTH_CHAN_NONE;
+	/* Failed operation. Safely clear context */
+	adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
+        wma_handle->roam_preauth_chan_context = NULL;
+	adf_os_spin_unlock_bh(&wma_handle->roam_preauth_lock);
+
+send_resp:
+	WMA_LOGI("%s: sending WDA_SWITCH_CHANNEL_RSP, status = 0x%x",
+			__func__, vos_status);
+	params->chainMask = wma_handle->pdevconfig.txchainmask;
+	params->smpsMode = SMPS_MODE_DISABLED;
+	params->status = vos_status;
+	wma_send_msg(wma_handle, WDA_SWITCH_CHANNEL_RSP, (void *)params, 0);
+	return vos_status;
 }
 
 VOS_STATUS wma_roam_preauth_chan_cancel(tp_wma_handle wma_handle,
@@ -6902,11 +6963,34 @@ VOS_STATUS wma_roam_preauth_chan_cancel(tp_wma_handle wma_handle,
         VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
 
         WMA_LOGI("%s: channel %d", __func__, params->channelNumber);
+	/* Check for prior operation in progress */
+	adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
+	if (wma_handle->roam_preauth_chan_context != NULL) {
+		adf_os_spin_unlock_bh(&wma_handle->roam_preauth_lock);
+		vos_status = VOS_STATUS_E_FAILURE;
+		WMA_LOGE("%s: Rejected request. Previous operation in progress", __func__);
+		goto send_resp;
+	}
+	wma_handle->roam_preauth_chan_context = params;
+	adf_os_spin_unlock_bh(&wma_handle->roam_preauth_lock);
 
         abort_scan_req.SessionId = vdev_id;
         wma_handle->roam_preauth_scan_state = WMA_ROAM_PREAUTH_CHAN_CANCEL_REQUESTED;
-        wma_handle->roam_preauth_chan_context = params;
         vos_status = wma_stop_scan(wma_handle, &abort_scan_req);
+        if (vos_status == VOS_STATUS_SUCCESS)
+		return vos_status;
+	/* Failed operation. Safely clear context */
+	adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
+        wma_handle->roam_preauth_chan_context = NULL;
+	adf_os_spin_unlock_bh(&wma_handle->roam_preauth_lock);
+
+send_resp:
+	WMA_LOGI("%s: sending WDA_SWITCH_CHANNEL_RSP, status = 0x%x",
+			__func__, vos_status);
+	params->chainMask = wma_handle->pdevconfig.txchainmask;
+	params->smpsMode = SMPS_MODE_DISABLED;
+	params->status = vos_status;
+	wma_send_msg(wma_handle, WDA_SWITCH_CHANNEL_RSP, (void *)params, 0);
         return vos_status;
 }
 
@@ -6959,7 +7043,9 @@ static void wma_roam_preauth_scan_event_handler(tp_wma_handle wma_handle,
                 params->smpsMode = SMPS_MODE_DISABLED;
                 params->status = vos_status;
                 wma_send_msg(wma_handle, WDA_SWITCH_CHANNEL_RSP, (void *)params, 0);
+		adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
                 wma_handle->roam_preauth_chan_context = NULL;
+		adf_os_spin_unlock_bh(&wma_handle->roam_preauth_lock);
         }
 
 }
@@ -13525,13 +13611,13 @@ static VOS_STATUS wma_feed_wow_config_to_fw(tp_wma_handle wma,
 	/* Configure GTK based wakeup. Passing vdev_id 0 because
 	  wma_add_wow_wakeup_event always uses vdev 0 for wow wake event id*/
 	ret = wma_add_wow_wakeup_event(wma, WOW_GTK_ERR_EVENT,
-				       wma->wow.gtk_err_enable[0]);
+				       wma->wow.gtk_pdev_enable);
 	if (ret != VOS_STATUS_SUCCESS) {
 		WMA_LOGE("Failed to configure GTK based wakeup");
 		goto end;
 	} else
 		WMA_LOGD("GTK based wakeup is %s in fw",
-			 wma->wow.gtk_err_enable[0] ? "enabled" : "disabled");
+			 wma->wow.gtk_pdev_enable ? "enabled" : "disabled");
 #endif
 	/* Configure probe req based wakeup */
 	ret = wma_add_wow_wakeup_event(wma, WOW_PROBE_REQ_WPS_IE_EVENT,
@@ -13772,7 +13858,7 @@ static VOS_STATUS wma_suspend_req(tp_wma_handle wma, tpSirWlanSuspendParam info)
 	}
 
 	wma->no_of_suspend_ind = 0;
-
+	wma->wow.gtk_pdev_enable = 0;
 	/*
 	 * Enable WOW if any one of the condition meets,
 	 *  1) Is any one of vdev in beaconning mode (in AP mode) ?
@@ -13805,6 +13891,13 @@ static VOS_STATUS wma_suspend_req(tp_wma_handle wma, tpSirWlanSuspendParam info)
 		}
 #endif
 	}
+	for (i = 0; i < wma->max_bssid; i++) {
+		wma->wow.gtk_pdev_enable |= wma->wow.gtk_err_enable[i];
+		WMA_LOGD("VDEV_ID:%d, gtk_err_enable[%d]:%d, gtk_pdev_enable:%d",
+						i, i, wma->wow.gtk_err_enable[i],
+						wma->wow.gtk_pdev_enable);
+	}
+
 	if (!connected && !pno_in_progress) {
 		WMA_LOGD("All vdev are in disconnected state, skipping wow");
 		vos_mem_free(info);
@@ -14753,6 +14846,8 @@ static VOS_STATUS wma_send_gtk_offload_req(tp_wma_handle wma, u_int8_t vdev_id,
 		wmi_buf_free(buf);
 		status = VOS_STATUS_E_FAILURE;
 	}
+
+	WMA_LOGD("VDEVID: %d, GTK_FLAGS: x%x", vdev_id, cmd->flags);
 out:
 	WMA_LOGD("%s Exit", __func__);
 	return status;
@@ -16830,14 +16925,10 @@ static int wma_scan_event_callback(WMA_HANDLE handle, u_int8_t *data,
 		scan_event->reasonCode = eSIR_SME_SCAN_FAILED;
 		break;
 	case WMI_SCAN_EVENT_PREEMPTED:
-	{
-		tAbortScanParams abortScan;
-		abortScan.SessionId = vdev_id;
-		wma_stop_scan(wma_handle, &abortScan);
+                WMA_LOGW("%s: Unhandled Scan Event WMI_SCAN_EVENT_PREEMPTED", __func__);
 		break;
-	}
 	case WMI_SCAN_EVENT_RESTARTED:
-		WMA_LOGP("%s: Unexpected Scan Event %u", __func__, wmi_event->event);
+		WMA_LOGW("%s: Unhandled Scan Event WMI_SCAN_EVENT_RESTARTED", __func__);
 		break;
 	}
 
