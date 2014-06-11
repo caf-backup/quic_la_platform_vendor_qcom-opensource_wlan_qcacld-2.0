@@ -123,7 +123,6 @@
 
 
 extern int wlan_hdd_cfg80211_update_band(struct wiphy *wiphy, eCsrBand eBand);
-
 static int ioctl_debug;
 module_param(ioctl_debug, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
@@ -2665,6 +2664,56 @@ void hdd_GetClassA_statisticsCB(void *pStats, void *pContext)
    spin_unlock(&hdd_context_lock);
 }
 
+void hdd_GetLink_SpeedCB(tSirLinkSpeedInfo *pLinkSpeed, void *pContext)
+{
+   struct linkspeedContext *pLinkSpeedContext;
+   hdd_adapter_t *pAdapter;
+
+   if ((NULL == pLinkSpeed) || (NULL == pContext))
+   {
+      hddLog(VOS_TRACE_LEVEL_ERROR,
+             "%s: Bad param, pLinkSpeed [%p] pContext [%p]",
+             __func__, pLinkSpeed, pContext);
+      return;
+   }
+   spin_lock(&hdd_context_lock);
+   pLinkSpeedContext = pContext;
+   pAdapter      = pLinkSpeedContext->pAdapter;
+
+   /* there is a race condition that exists between this callback
+      function and the caller since the caller could time out either
+      before or while this code is executing.  we use a spinlock to
+      serialize these actions */
+
+   if ((NULL == pAdapter) || (LINK_CONTEXT_MAGIC != pLinkSpeedContext->magic))
+   {
+       /* the caller presumably timed out so there is nothing we can do */
+      spin_unlock(&hdd_context_lock);
+      hddLog(VOS_TRACE_LEVEL_WARN,
+             "%s: Invalid context, pAdapter [%p] magic [%08x]",
+              __func__, pAdapter, pLinkSpeedContext->magic);
+      if (ioctl_debug)
+      {
+         pr_info("%s: Invalid context, pAdapter [%p] magic [%08x]\n",
+                 __func__, pAdapter, pLinkSpeedContext->magic);
+      }
+      return;
+   }
+   /* context is valid so caller is still waiting */
+
+   /* paranoia: invalidate the magic */
+   pLinkSpeedContext->magic = 0;
+
+   /* copy over the stats. do so as a struct copy */
+   pAdapter->ls_stats = *pLinkSpeed;
+
+   /* notify the caller */
+   complete(&pLinkSpeedContext->completion);
+
+   /* serialization is complete */
+   spin_unlock(&hdd_context_lock);
+}
+
 VOS_STATUS  wlan_hdd_get_classAstats(hdd_adapter_t *pAdapter)
 {
    hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
@@ -2881,14 +2930,16 @@ static int iw_get_linkspeed(struct net_device *dev,
 {
    hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
    hdd_context_t *pHddCtx;
+   hdd_station_ctx_t *pHddStaCtx;
    char *pLinkSpeed = (char*)extra;
    int len = sizeof(v_U32_t) + 1;
    v_U32_t link_speed = 0;
-   hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
    VOS_STATUS status;
    int rc, valid;
+   tSirMacAddr bssid;
 
    pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
+   pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
 
    valid = wlan_hdd_validate_context(pHddCtx);
 
@@ -2897,6 +2948,7 @@ static int iw_get_linkspeed(struct net_device *dev,
        hddLog(VOS_TRACE_LEVEL_ERROR, FL("HDD context is not valid"));
        return valid;
    }
+   vos_mem_copy(bssid, pHddStaCtx->conn_info.bssId, VOS_MAC_ADDR_SIZE);
 
    if (eConnectionState_Associated != pHddStaCtx->conn_info.connState)
    {
@@ -2905,39 +2957,22 @@ static int iw_get_linkspeed(struct net_device *dev,
    }
    else
    {
-       status = wlan_hdd_get_classAstats(pAdapter);
-
+       status = wlan_hdd_get_linkspeed_for_peermac(pAdapter, bssid);
        if (!VOS_IS_STATUS_SUCCESS(status ))
        {
-           hddLog(VOS_TRACE_LEVEL_ERROR, FL("Unable to retrieve SME statistics"));
-           return -EINVAL;
+          hddLog(VOS_TRACE_LEVEL_ERROR, FL("Unable to retrieve SME linkspeed"));
+          return -EINVAL;
        }
-
-       /* Unit of link capacity is obtained from the TL API is MbpsX10  */
-       WLANTL_GetSTALinkCapacity(WLAN_HDD_GET_CTX(pAdapter)->pvosContext,
-          (WLAN_HDD_GET_STATION_CTX_PTR(pAdapter))->conn_info.staId[0],
-          &link_speed);
-
-       link_speed = link_speed / 10;
-
-       if (0 == link_speed)
-       {
-           /* The linkspeed returned by HAL is in units of 500kbps.
-            * converting it to mbps.
-            * This is required to support legacy firmware which does
-            * not return link capacity.
-            */
-           link_speed = pAdapter->hdd_stats.ClassA_stat.tx_rate/2;
-       }
-
+       link_speed = pAdapter->ls_stats.estLinkSpeed;
+       /* linkspeed in units of 500 kbps */
+       link_speed = link_speed / 500;
    }
-
    wrqu->data.length = len;
-   // return the linkspeed in the format required by the WiFi Framework
+   /* return the linkspeed in the format required by the WiFi Framework */
    rc = snprintf(pLinkSpeed, len, "%u", link_speed);
    if ((rc < 0) || (rc >= len))
    {
-       // encoding or length error?
+       /* encoding or length error? */
        hddLog(VOS_TRACE_LEVEL_ERROR,FL("Unable to encode link speed"));
        return -EIO;
    }
@@ -4739,17 +4774,20 @@ static int iw_setint_getnone(struct net_device *dev, struct iw_request_info *inf
 
         case WE_SET_SAP_AUTO_CHANNEL_SELECTION:
         {
-            if( 0 == set_value )
+            if (set_value == 0 || set_value == 1)
             {
-                (WLAN_HDD_GET_CTX(pAdapter))->cfg_ini->apAutoChannelSelection = 0;
-            }
-            else if ( 1 == set_value )
-            {
-                (WLAN_HDD_GET_CTX(pAdapter))->cfg_ini->apAutoChannelSelection = 1;
+#ifdef WLAN_FEATURE_MBSSID
+                pAdapter->sap_dyn_ini_cfg.apAutoChannelSelection = set_value;
+#else
+                (WLAN_HDD_GET_CTX(pAdapter))->cfg_ini->apAutoChannelSelection
+                                                                 = set_value;
+#endif
             }
             else
             {
-                 hddLog(LOGE, "Invalid arg  %d in WE_SET_SAP_AUTO_CHANNEL_SELECTION IOCTL", set_value);
+                 hddLog(LOGE,
+                    "Invalid arg %d in WE_SET_SAP_AUTO_CHANNEL_SELECTION IOCTL",
+                    set_value);
                  ret = -EINVAL;
             }
             break;
@@ -5999,7 +6037,16 @@ static int iw_setchar_getnone(struct net_device *dev, struct iw_request_info *in
           sme_updateP2pIe( WLAN_HDD_GET_HAL_CTX(pAdapter), pBuffer, wrqu->data.length );
           break;
        case WE_SET_CONFIG:
-          vstatus = hdd_execute_config_command(pHddCtx, pBuffer);
+          vstatus = hdd_execute_global_config_command(pHddCtx, pBuffer);
+#ifdef WLAN_FEATURE_MBSSID
+          if (vstatus == VOS_STATUS_E_PERM) {
+              vstatus = hdd_execute_sap_dyn_config_command(pAdapter, pBuffer);
+              if (vstatus == VOS_STATUS_SUCCESS)
+                  VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                             "%s: Stored in Dynamic SAP ini config", __func__);
+
+          }
+#endif
           if (VOS_STATUS_SUCCESS != vstatus)
           {
              ret = -EINVAL;
@@ -6099,7 +6146,11 @@ static int iw_setnone_getint(struct net_device *dev, struct iw_request_info *inf
 
         case WE_GET_SAP_AUTO_CHANNEL_SELECTION:
         {
+#ifdef WLAN_FEATURE_MBSSID
+            *value = pAdapter->sap_dyn_ini_cfg.apAutoChannelSelection;
+#else
             *value = (WLAN_HDD_GET_CTX(pAdapter))->cfg_ini->apAutoChannelSelection;
+#endif
             break;
         }
         case WE_GET_CONCURRENCY_MODE:
@@ -6913,7 +6964,19 @@ static int iw_get_char_setnone(struct net_device *dev, struct iw_request_info *i
 
         case WE_GET_CFG:
         {
-            hdd_cfg_get_config(WLAN_HDD_GET_CTX(pAdapter), extra, WE_MAX_STR_LEN);
+#ifdef WLAN_FEATURE_MBSSID
+            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                   "%s: Printing Adapter MBSSID SAP Dyn INI Config", __func__);
+            hdd_cfg_get_sap_dyn_config(pAdapter,
+                                      extra, QCSAP_IOCTL_MAX_STR_LEN);
+            /* Overwrite extra buffer with global ini config if need to return
+             * in buf
+             */
+#endif
+            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                               "%s: Printing CLD global INI Config", __func__);
+            hdd_cfg_get_global_config(WLAN_HDD_GET_CTX(pAdapter), extra,
+                                      QCSAP_IOCTL_MAX_STR_LEN);
             wrqu->data.length = strlen(extra)+1;
             break;
         }
@@ -7227,7 +7290,7 @@ static int iw_setnone_getnone(struct net_device *dev, struct iw_request_info *in
                }
 
                /*Make sure that pAdapter cleaned properly*/
-               hdd_stop_adapter( pHddCtx, pAdapter_to_stop );
+               hdd_stop_adapter( pHddCtx, pAdapter_to_stop, VOS_TRUE );
                hdd_deinit_adapter( pHddCtx, pAdapter_to_stop );
                memset(&pAdapter_to_stop->sessionCtx, 0, sizeof(pAdapter_to_stop->sessionCtx));
 
