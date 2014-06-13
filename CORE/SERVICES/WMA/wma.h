@@ -124,7 +124,7 @@
 
 #ifdef WMA_DEBUG_ALWAYS
 #define WMA_LOGA(fmt, args...) \
-	printk(KERN_INFO "\n%s-%d: " fmt, __func__, __LINE__, ## args)
+	printk(KERN_INFO "%s-%d: " fmt"\n", __func__, __LINE__, ## args)
 #else
 #define WMA_LOGA(fmt, args...)
 #endif
@@ -134,6 +134,8 @@
 
 /* Prefix used by scan req ids generated on the host */
 #define WMA_HOST_SCAN_REQID_PREFIX	 0xA000
+/* Prefix used by roam scan req ids generated on the host */
+#define WMA_HOST_ROAM_SCAN_REQID_PREFIX  0xA800
 /* Prefix used by scan requestor id on host */
 #define WMA_HOST_SCAN_REQUESTOR_ID_PREFIX 0xA000
 #define WMA_HW_DEF_SCAN_MAX_DURATION	  30000 /* 30 secs */
@@ -143,6 +145,7 @@
 #define WMA_SCAN_NPROBES_DEFAULT            (2)
 #define WMA_SCAN_IDLE_TIME_DEFAULT          (25)
 #define WMA_P2P_SCAN_MAX_BURST_DURATION     (120)
+#define WMA_CTS_DURATION_MS_MAX             (32)
 
 /* Roaming default values
  * All time and period values are in milliseconds.
@@ -638,7 +641,7 @@ typedef struct {
 	scan_timer_info wma_scan_timer_info;
 
 	u_int8_t dfs_phyerr_filter_offload;
-
+	v_BOOL_t suitable_ap_hb_failure;
 }t_wma_handle, *tp_wma_handle;
 
 struct wma_target_cap {
@@ -1468,23 +1471,29 @@ typedef struct {
 
 #endif /* FEATURE_WLAN_TDLS */
 
+#define WMA_DFS_MAX_20M_SUB_CH 8
+
+struct wma_dfs_radar_channel_list {
+	A_UINT32	nchannels;
+	/*Channel number including bonded channels on which the RADAR is present */
+	u_int8_t	channels[WMA_DFS_MAX_20M_SUB_CH];
+};
+
 /*
  * Structure to indicate RADAR
  */
 
 struct wma_dfs_radar_indication {
-    /* unique id identifying the VDEV */
-    A_UINT32        vdev_id;
-    /*Channel number on which the RADAR is present */
-    u_int8_t        ieee_chan_number;
-    /* Channel Frequency*/
-    A_UINT32        chan_freq;
-    /* Flag to Indicate RADAR presence on the
-     * current operating channel
-     */
-    u_int32_t       dfs_radar_status;
-    /* Flag to indicate use NOL */
-    int             use_nol;
+	/* unique id identifying the VDEV */
+	A_UINT32        vdev_id;
+	/* Channel list on which RADAR is detected */
+	struct wma_dfs_radar_channel_list chan_list;
+	/* Flag to Indicate RADAR presence on the
+	 * current operating channel
+	 */
+	u_int32_t       dfs_radar_status;
+	/* Flag to indicate use NOL */
+	int             use_nol;
 };
 
 /*
@@ -1510,6 +1519,8 @@ u_int16_t   dfs_usenol(struct ieee80211com *ic);
 #define WMA_SMPS_MASK_LOWER_16BITS 0xFF
 #define WMA_SMPS_MASK_UPPER_3BITS 0x7
 #define WMA_SMPS_PARAM_VALUE_S 29
+
+#define WMA_MAX_SCAN_ID        0x00FF
 
 /* U-APSD Access Categories */
 enum uapsd_ac {
