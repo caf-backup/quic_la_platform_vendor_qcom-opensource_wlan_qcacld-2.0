@@ -4922,6 +4922,62 @@ int hdd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
                pAdapterNode = pNext;
            }
        }
+       else if (strncmp(command, "SETDFSSCANMODE", 14) == 0)
+       {
+           tANI_U8 *value = command;
+           tANI_BOOLEAN dfsScanMode = CFG_ROAMING_DFS_CHANNEL_DEFAULT;
+
+           /* Move pointer to ahead of SETDFSSCANMODE<delimiter> */
+           value = value + 15;
+           /* Convert the value from ascii to integer */
+           ret = kstrtou8(value, 10, &dfsScanMode);
+           if (ret < 0)
+           {
+               /* If the input value is greater than max value of
+                * datatype, then also kstrtou8 fails
+                */
+               VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                      "%s: kstrtou8 failed range [%d - %d]", __func__,
+                      CFG_ROAMING_DFS_CHANNEL_MIN,
+                      CFG_ROAMING_DFS_CHANNEL_MAX);
+               ret = -EINVAL;
+               goto exit;
+           }
+
+           if ((dfsScanMode < CFG_ROAMING_DFS_CHANNEL_MIN) ||
+               (dfsScanMode > CFG_ROAMING_DFS_CHANNEL_MAX))
+           {
+               VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                      "dfsScanMode value %d is out of range"
+                      " (Min: %d Max: %d)", dfsScanMode,
+                      CFG_ROAMING_DFS_CHANNEL_MIN,
+                      CFG_ROAMING_DFS_CHANNEL_MAX);
+               ret = -EINVAL;
+               goto exit;
+           }
+           VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                      "%s: Received Command to Set DFS Scan Mode = %d",
+                      __func__, dfsScanMode);
+
+           pHddCtx->cfg_ini->allowDFSChannelRoam = dfsScanMode;
+           sme_UpdateDFSScanMode((tHalHandle)(pHddCtx->hHal), dfsScanMode);
+       }
+       else if (strncmp(command, "GETDFSSCANMODE", 14) == 0)
+       {
+           tANI_BOOLEAN dfsScanMode =
+                   sme_GetDFSScanMode((tHalHandle)(pHddCtx->hHal));
+           char extra[32];
+           tANI_U8 len = 0;
+
+           len = scnprintf(extra, sizeof(extra), "%s %d", command, dfsScanMode);
+           if (copy_to_user(priv_data.buf, &extra, len + 1))
+           {
+               VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: failed to copy data to user buffer", __func__);
+               ret = -EFAULT;
+               goto exit;
+           }
+       }
        else {
            hddLog( VOS_TRACE_LEVEL_WARN, "%s: Unsupported GUI command %s",
                    __func__, command);
@@ -8446,6 +8502,12 @@ VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
                                        WLAN_STATUS_ASSOC_DENIED_UNSPEC,
                                        GFP_KERNEL);
             }
+
+#ifdef QCA_LL_TX_FLOW_CT
+            WLANTL_RegisterTXFlowControl(pHddCtx->pvosContext, hdd_tx_resume_cb,
+                                         pAdapter->sessionId, (void *)pAdapter);
+#endif
+
             break;
 
          case WLAN_HDD_SOFTAP:
@@ -11311,6 +11373,8 @@ static void hdd_driver_exit(void)
       pHddCtx->isUnloadInProgress = TRUE;
       vos_set_load_unload_in_progress(VOS_MODULE_ID_VOSS, TRUE);
    }
+
+   vos_wait_for_work_thread_completion(__func__);
 
 #ifdef QCA_WIFI_ISOC
    //Do all the cleanup before deregistering the driver
