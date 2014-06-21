@@ -11443,32 +11443,47 @@ VOS_STATUS wma_store_bcn_tmpl(tp_wma_handle wma, u_int8_t vdev_id,
 	return VOS_STATUS_SUCCESS;
 }
 
-static int wma_tbttoffset_update_event_handler(void *handle, u_int8_t *event,
-					       u_int32_t len)
+
+
+static int wma_tbtt_update_ind(tp_wma_handle wma, u_int8_t *buf)
 {
-	tp_wma_handle wma = (tp_wma_handle) handle;
-	WMI_TBTTOFFSET_UPDATE_EVENTID_param_tlvs *param_buf;
-	wmi_tbtt_offset_event_fixed_param *tbtt_offset_event;
-	struct wma_txrx_node *intf = wma->interfaces;
+	struct wma_txrx_node *intf;
 	struct beacon_info *bcn;
 	tSendbeaconParams bcn_info;
-	u_int32_t *adjusted_tsf;
+	u_int32_t *adjusted_tsf = NULL;
 	u_int32_t if_id = 0, vdev_map;
-
-	param_buf = (WMI_TBTTOFFSET_UPDATE_EVENTID_param_tlvs *)event;
-	if(!param_buf) {
-		WMA_LOGE("Invalid tbtt update event buffer");
+	u_int32_t num_tbttoffset_list;
+	wmi_tbtt_offset_event_fixed_param *tbtt_offset_event;
+	WMA_LOGI("%s: Enter", __func__);
+	if (!buf) {
+		WMA_LOGE("Invalid event buffer");
 		return -EINVAL;
 	}
-	tbtt_offset_event = param_buf->fixed_param;
+	if (!wma) {
+		WMA_LOGE("Invalid wma handle");
+		return -EINVAL;
+	}
+	intf = wma->interfaces;
+	tbtt_offset_event = (wmi_tbtt_offset_event_fixed_param *)buf;
 	vdev_map = tbtt_offset_event->vdev_map;
-	adjusted_tsf = param_buf->tbttoffset_list;
+	num_tbttoffset_list = *(u_int32_t *)(buf + sizeof(wmi_tbtt_offset_event_fixed_param));
+	adjusted_tsf = (u_int32_t *) ((u_int8_t *)buf +
+			sizeof(wmi_tbtt_offset_event_fixed_param) +
+			sizeof (u_int32_t));
+	if (!adjusted_tsf) {
+		WMA_LOGE("%s: Invalid adjusted_tsf", __func__);
+		return -EINVAL;
+	}
 
 	for ( ;(vdev_map); vdev_map >>= 1, if_id++) {
 		if (!(vdev_map & 0x1) || (!(intf[if_id].handle)))
 			continue;
 
 		bcn = intf[if_id].beacon;
+		if (!bcn) {
+			WMA_LOGE("%s: Invalid beacon", __func__);
+			return -EINVAL;
+		}
 		if (!bcn->buf) {
 			WMA_LOGE("%s: Invalid beacon buffer", __func__);
 			return -EINVAL;
@@ -11487,7 +11502,55 @@ static int wma_tbttoffset_update_event_handler(void *handle, u_int8_t *event,
 		/* Update beacon template in firmware */
 		wmi_unified_bcn_tmpl_send(wma, if_id, &bcn_info, 0);
 	}
+	return 0;
+}
 
+static int wma_tbttoffset_update_event_handler(void *handle, u_int8_t *event,
+					       u_int32_t len)
+{
+	WMI_TBTTOFFSET_UPDATE_EVENTID_param_tlvs *param_buf;
+	wmi_tbtt_offset_event_fixed_param *tbtt_offset_event;
+	u_int8_t *buf, *tempBuf;
+	vos_msg_t vos_msg = {0};
+
+	param_buf = (WMI_TBTTOFFSET_UPDATE_EVENTID_param_tlvs *)event;
+	if(!param_buf) {
+		WMA_LOGE("Invalid tbtt update event buffer");
+		return -EINVAL;
+	}
+
+	tbtt_offset_event = param_buf->fixed_param;
+	buf = vos_mem_malloc(sizeof(wmi_tbtt_offset_event_fixed_param) +
+			sizeof (u_int32_t) +
+			(param_buf->num_tbttoffset_list * sizeof (u_int32_t)));
+	if (!buf) {
+		WMA_LOGE("%s: Failed alloc memory for buf", __func__);
+		return -EINVAL;
+	}
+
+	tempBuf = buf;
+	vos_mem_zero(buf, (sizeof(wmi_tbtt_offset_event_fixed_param) +
+			sizeof (u_int32_t) +
+			(param_buf->num_tbttoffset_list * sizeof (u_int32_t))));
+	vos_mem_copy(buf, (u_int8_t *)tbtt_offset_event, sizeof (wmi_tbtt_offset_event_fixed_param));
+	buf += sizeof (wmi_tbtt_offset_event_fixed_param);
+
+	vos_mem_copy(buf, (u_int8_t *) &param_buf->num_tbttoffset_list, sizeof (u_int32_t));
+	buf += sizeof(u_int32_t);
+
+	vos_mem_copy(buf, (u_int8_t *)param_buf->tbttoffset_list, (param_buf->num_tbttoffset_list * sizeof(u_int32_t)));
+
+	vos_msg.type = WDA_TBTT_UPDATE_IND;
+	vos_msg.bodyptr = tempBuf;
+	vos_msg.bodyval = 0;
+
+	if (VOS_STATUS_SUCCESS !=
+	vos_mq_post_message(VOS_MQ_ID_WDA, &vos_msg)) {
+		WMA_LOGP("%s: Failed to post WDA_TBTT_UPDATE_IND msg", __func__);
+		vos_mem_free(buf);
+		return -1;
+	}
+	WMA_LOGD("WDA_TBTT_UPDATE_IND posted");
 	return 0;
 }
 
@@ -14951,6 +15014,11 @@ static int wma_add_clear_mcbc_filter(tp_wma_handle wma_handle, uint8_t vdev_id,
 		adf_os_mem_free(buf);
 		return -EIO;
 	}
+	WMA_LOGD("Action:%d; vdev_id:%d; clearList:%d\n",
+			cmd->action, vdev_id, clearList);
+	WMA_LOGD("MCBC MAC Addr: %0x:%0x:%0x:%0x:%0x:%0x\n",
+		multicastAddr[0], multicastAddr[1], multicastAddr[2],
+		multicastAddr[3], multicastAddr[4], multicastAddr[5]);
 	return 0;
 }
 
@@ -14970,11 +15038,14 @@ static VOS_STATUS wma_process_mcbc_set_filter_req(tp_wma_handle wma_handle,
 						__func__, mcbc_param->bssId);
 		return VOS_STATUS_E_FAILURE;
 	}
+	/* set mcbc_param->action to clear MCList and reset
+	 * to configure the MCList in FW
+	*/
 
 	for (i = 0; i < mcbc_param->ulMulticastAddrCnt; i++) {
 		wma_add_clear_mcbc_filter(wma_handle, vdev_id,
 					mcbc_param->multicastAddr[i],
-					(mcbc_param->action == 1));
+					(mcbc_param->action == 0));
 	}
 	return VOS_STATUS_SUCCESS;
 }
@@ -16884,6 +16955,7 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
 		case WDA_8023_MULTICAST_LIST_REQ:
 			wma_process_mcbc_set_filter_req(wma_handle,
 				       (tpSirRcvFltMcAddrList)msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
 			break;
 #ifdef WLAN_FEATURE_GTK_OFFLOAD
 		case WDA_GTK_OFFLOAD_REQ:
@@ -17042,7 +17114,10 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
 			wma_roam_preauth_ind(wma_handle,  msg->bodyptr);
 			vos_mem_free(msg->bodyptr);
 			break;
-
+		case WDA_TBTT_UPDATE_IND:
+			wma_tbtt_update_ind(wma_handle, msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
+			break;
 		default:
 			WMA_LOGD("unknow msg type %x", msg->type);
 			/* Do Nothing? MSG Body should be freed at here */

@@ -8238,7 +8238,7 @@ eHalStatus sme_8023MulticastList (tHalHandle hHal, tANI_U8 sessionId, tpSirRcvFl
     if(pSession == NULL )
     {
         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "%s: Unable to find "
-            "the right session", __func__);
+            "the session Id: %d", __func__, sessionId);
         return eHAL_STATUS_FAILURE;
     }
 
@@ -12465,4 +12465,24 @@ eHalStatus sme_UpdateAddIE(tHalHandle hHal,
     }
     return (status);
 }
+
+/* ---------------------------------------------------------------------------
+    \fn sme_staInMiddleOfRoaming
+    \brief  This function returns TRUE if STA is in the middle of roaming state
+    \param  hHal - HAL handle for device
+    \- return TRUE or FALSE
+    -------------------------------------------------------------------------*/
+tANI_BOOLEAN sme_staInMiddleOfRoaming(tHalHandle hHal)
+{
+    tpAniSirGlobal pMac   = PMAC_STRUCT( hHal );
+    eHalStatus     status = eHAL_STATUS_SUCCESS;
+    tANI_BOOLEAN   ret    = FALSE;
+
+    if (eHAL_STATUS_SUCCESS == (status = sme_AcquireGlobalLock(&pMac->sme))) {
+        ret = csrNeighborMiddleOfRoaming(hHal);
+        sme_ReleaseGlobalLock(&pMac->sme);
+    }
+    return ret;
+}
+
 
