@@ -1302,6 +1302,18 @@ extern eHalStatus sme_RegisterPowerSaveCheck (
    tANI_BOOLEAN (*checkRoutine) (void *checkContext), void *checkContext);
 
 /* ---------------------------------------------------------------------------
+    \fn sme_Register11dScanDoneCallback
+    \brief  Register a routine of type csrScanCompleteCallback which is
+            called whenever an 11d scan is done
+    \param  hHal - The handle returned by macOpen.
+    \param  callback -  11d scan complete routine to be registered
+    \return eHalStatus
+  ---------------------------------------------------------------------------*/
+extern eHalStatus sme_Register11dScanDoneCallback (
+   tHalHandle hHal,
+   csrScanCompleteCallback);
+
+/* ---------------------------------------------------------------------------
     \fn sme_DeregisterPowerSaveCheck
     \brief  Deregister a power save check routine
     \param  hHal - The handle returned by macOpen.
@@ -3513,6 +3525,17 @@ eHalStatus sme_SetThermalLevel( tHalHandle hHal, tANI_U8 level );
    \- return eHalStatus
   -------------------------------------------------------------------------*/
 eHalStatus sme_TxpowerLimit( tHalHandle hHal, tSirTxPowerLimit *psmetx);
+/* ---------------------------------------------------------------------------
+   \fn sme_GetLinkSpeed
+   \brief SME API to get the linkspeed for peermac
+   \param hHal
+   \param lsReq: peermac address to retrieve linkspeed
+   \param plsContext: callback context
+   \param pCallbackfn: callback fn with response (linkspeed)
+   \- return eHalStatus
+ -------------------------------------------------------------------------*/
+eHalStatus sme_GetLinkSpeed(tHalHandle hHal,tSirLinkSpeedInfo *lsReq,void *plsContext,
+                            void (*pCallbackfn)(tSirLinkSpeedInfo *indParam, void *pContext) );
 #endif
 eHalStatus sme_UpdateConnectDebug(tHalHandle hHal, tANI_U32 set_value);
 eHalStatus sme_ApDisableIntraBssFwd(tHalHandle hHal, tANI_U8 sessionId,

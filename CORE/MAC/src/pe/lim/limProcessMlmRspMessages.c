@@ -1913,7 +1913,20 @@ void limProcessStaMlmAddStaRsp( tpAniSirGlobal pMac, tpSirMsgQ limMsgQ ,tpPESess
             goto end;
         }
     if (psessionEntry->limSmeState == eLIM_SME_WT_REASSOC_STATE)
-             mesgType = LIM_MLM_REASSOC_CNF;
+    {
+#ifdef WLAN_FEATURE_VOWIFI_11R
+        // Check if we have keys (PTK) to install in case of 11r
+        tpftPEContext pftPECntxt = &pMac->ft.ftPEContext;
+        if (pftPECntxt->pftSessionEntry != NULL &&
+            pftPECntxt->PreAuthKeyInfo.extSetStaKeyParamValid == TRUE)
+        {
+            tpLimMlmSetKeysReq pMlmStaKeys = &pftPECntxt->PreAuthKeyInfo.extSetStaKeyParam;
+            limSendSetStaKeyReq(pMac, pMlmStaKeys, 0, 0, pftPECntxt->pftSessionEntry, FALSE);
+            pftPECntxt->PreAuthKeyInfo.extSetStaKeyParamValid = FALSE;
+        }
+#endif
+        mesgType = LIM_MLM_REASSOC_CNF;
+    }
         //
         // Update the DPH Hash Entry for this STA
         // with proper state info
@@ -1991,7 +2004,8 @@ void limProcessMlmDelBssRsp( tpAniSirGlobal pMac, tpSirMsgQ limMsgQ,tpPESession 
    //     limLog( pMac, LOGE, FL( "Session deos not exist with given sessionId" ));
    //     return;
   //  }
-  SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
+    SET_LIM_PROCESS_DEFD_MESGS(pMac, true);
+    pMac->sys.gSysFrameCount[SIR_MAC_MGMT_FRAME][SIR_MAC_MGMT_DEAUTH] = 0;
 
     if (((psessionEntry->limSystemRole == eLIM_BT_AMP_AP_ROLE)  ||
          (psessionEntry->limSystemRole == eLIM_BT_AMP_STA_ROLE)
@@ -2949,6 +2963,7 @@ limProcessStaMlmAddBssRspFT(tpAniSirGlobal pMac, tpSirMsgQ limMsgQ, tpPESession 
     wlan_cfgGetInt(pMac, WNI_CFG_DOT11_MODE, &selfStaDot11Mode);
     pAddStaParams->supportedRates.opRateMode = limGetStaRateMode((tANI_U8)selfStaDot11Mode);
     pAddStaParams->encryptType = psessionEntry->encryptType;
+    pAddStaParams->maxTxPower = psessionEntry->maxTxPower;
 
     // Lets save this for when we receive the Reassoc Rsp
     pMac->ft.ftPEContext.pAddStaReq = pAddStaParams;

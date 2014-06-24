@@ -4639,6 +4639,13 @@ typedef struct sSirLPHBInd
 } tSirLPHBInd;
 #endif /* FEATURE_WLAN_LPHB */
 
+typedef struct sSirLinkSpeedInfo
+{
+  /* MAC Address for the peer */
+  tSirMacAddr peer_macaddr;
+  tANI_U32 estLinkSpeed;     //Linkspeed from firmware
+} tSirLinkSpeedInfo, *tpSirLinkSpeedInfo;
+
 typedef struct sSirAddPeriodicTxPtrn
 {
    /* MAC Address for the adapter */
@@ -4699,7 +4706,7 @@ typedef PACKED_PRE struct PACKED_POST
     tANI_U8   bssid[6];     /* BSSID */
     tANI_U8   ssid[33];     /* SSID */
     tANI_U8   ch;           /* Channel */
-    tANI_U8   rssi;         /* RSSI or Level */
+    tANI_S8   rssi;         /* RSSI or Level */
     /*Timestamp when Network was found. Used to calculate age based on timestamp
       in GET_RSP msg header */
     tANI_U32  timestamp;

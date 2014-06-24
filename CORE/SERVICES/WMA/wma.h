@@ -79,7 +79,7 @@
 #define WMA_READY_EVENTID_TIMEOUT          2000
 #define WMA_TGT_SUSPEND_COMPLETE_TIMEOUT   1000
 #define WMA_WAKE_LOCK_TIMEOUT              1000
-#define WMA_MAX_RESUME_RETRY               10
+#define WMA_MAX_RESUME_RETRY               1000
 #define WMA_RESUME_TIMEOUT                 3000
 #define MAX_MEM_CHUNKS                     32
 /*
@@ -145,6 +145,9 @@
 #define WMA_SCAN_NPROBES_DEFAULT            (2)
 #define WMA_SCAN_IDLE_TIME_DEFAULT          (25)
 #define WMA_P2P_SCAN_MAX_BURST_DURATION     (120)
+#define WMA_CTS_DURATION_MS_MAX             (32)
+#define WMA_GO_MIN_ACTIVE_SCAN_BURST_DURATION   (40)
+#define WMA_GO_MAX_ACTIVE_SCAN_BURST_DURATION   (120)
 
 /* Roaming default values
  * All time and period values are in milliseconds.
@@ -634,6 +637,8 @@ typedef struct {
 #endif
 	vos_wake_lock_t wow_wake_lock;
 	int wow_nack;
+	u_int32_t ap_client_cnt;
+	adf_os_atomic_t is_wow_bus_suspended;
 
 	vos_timer_t wma_scan_comp_timer;
 	scan_timer_info wma_scan_timer_info;
