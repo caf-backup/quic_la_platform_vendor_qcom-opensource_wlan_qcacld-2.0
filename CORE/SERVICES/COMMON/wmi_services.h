@@ -105,6 +105,8 @@ typedef  enum  {
     WMI_SERVICE_TDLS_UAPSD_BUFFER_STA, /* TDLS UAPSD Buffer STA support */
     WMI_SERVICE_TDLS_UAPSD_SLEEP_STA,  /* TDLS UAPSD Sleep STA support */
     WMI_SERVICE_IBSS_PWRSAVE,         /* IBSS power save support */
+    WMI_SERVICE_LPASS,                /*Service to support LPASS*/
+    WMI_SERVICE_EXTSCAN,              /* Extended Scans */
     WMI_MAX_SERVICE=128               /* max service */
 } WMI_SERVICE;
 
