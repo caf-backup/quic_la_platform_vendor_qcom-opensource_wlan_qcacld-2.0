@@ -46,6 +46,9 @@
 #include "wma_api.h"
 #include "vos_utils.h"
 #include "wdi_out.h"
+
+#define TLSHIM_PEER_AUTHORIZE_WAIT 10
+
 #define ENTER() VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_INFO, "Enter:%s", __func__)
 
 #define TLSHIM_LOGD(args...) \
@@ -1543,8 +1546,16 @@ VOS_STATUS WLANTL_ChangeSTAState(void *vos_ctx, u_int8_t sta_id,
 	struct ol_txrx_peer_t *peer;
 	enum ol_txrx_peer_state txrx_state = ol_txrx_peer_state_invalid;
 	int err;
+	struct txrx_tl_shim_ctx *tl_shim = vos_get_context(VOS_MODULE_ID_TL,
+							   vos_ctx);
 
 	ENTER();
+
+	if (!tl_shim) {
+		TLSHIM_LOGE("%s: Failed to get TLSHIM context", __func__);
+		return VOS_STATUS_E_FAILURE;
+	}
+
 	if (sta_id >= WLAN_MAX_STA_COUNT) {
 		TLSHIM_LOGE("Invalid sta id :%d", sta_id);
 		return VOS_STATUS_E_INVAL;
@@ -1565,6 +1576,10 @@ VOS_STATUS WLANTL_ChangeSTAState(void *vos_ctx, u_int8_t sta_id,
 				  txrx_state);
 
 	if (txrx_state == ol_txrx_peer_state_auth) {
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+		/* make sure event is reset */
+		vos_event_reset(&tl_shim->peer_authorized_events[peer->vdev->vdev_id]);
+#endif
 		err = wma_set_peer_param(
 				((pVosContextType) vos_ctx)->pWDAContext,
 				peer->mac_addr.raw, WMI_PEER_AUTHORIZE,
@@ -1573,7 +1588,24 @@ VOS_STATUS WLANTL_ChangeSTAState(void *vos_ctx, u_int8_t sta_id,
 			TLSHIM_LOGE("Failed to set the peer state to authorized");
 			return VOS_STATUS_E_FAULT;
 		}
+
+		if (peer->vdev->opmode == wlan_op_mode_sta) {
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+			/*
+			 * TODO: following code waits on event without
+			 * checking if the event was already set. Currently
+			 * there is no vos api to check if event was already
+			 * set fix it cleanly later.
+			 */
+			/* wait for event from firmware to set the event */
+			vos_wait_single_event(&tl_shim->peer_authorized_events[peer->vdev->vdev_id],
+					      TLSHIM_PEER_AUTHORIZE_WAIT);
+			wdi_in_vdev_unpause(peer->vdev,
+				    OL_TXQ_PAUSE_REASON_PEER_UNAUTHORIZED);
+#endif
+		}
 	}
+
 	return VOS_STATUS_SUCCESS;
 }
 
@@ -1726,8 +1758,14 @@ VOS_STATUS WLANTL_Close(void *vos_ctx)
 	for (i = 0;
 		i < wdi_out_cfg_max_vdevs(((pVosContextType)vos_ctx)->cfg_ctx);
 		i++) {
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+		vos_event_destroy(&tl_shim->peer_authorized_events[i]);
+#endif
 		adf_os_spinlock_destroy(&tl_shim->session_flow_control[i].fc_lock);
 	}
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+	adf_os_mem_free(tl_shim->peer_authorized_events);
+#endif
 	adf_os_mem_free(tl_shim->session_flow_control);
 #endif /* QCA_LL_TX_FLOW_CT */
 	adf_os_mem_free(tl_shim->vdev_active);
@@ -1811,11 +1849,32 @@ VOS_STATUS WLANTL_Open(void *vos_ctx, WLANTL_ConfigInfoType *tl_cfg)
 		return VOS_STATUS_E_NOMEM;
 	}
 
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+	tl_shim->peer_authorized_events = adf_os_mem_alloc(NULL,
+					  max_vdev * sizeof(vos_event_t));
+	if (!tl_shim->peer_authorized_events) {
+		TLSHIM_LOGE("Failed to allocate memory for events");
+		adf_os_mem_free(tl_shim->session_flow_control);
+		vos_free_context(vos_ctx, VOS_MODULE_ID_TL, tl_shim);
+		return VOS_STATUS_E_NOMEM;
+	}
+#endif
 	for (i = 0; i < max_vdev; i++) {
 		tl_shim->session_flow_control[i].flowControl = NULL;
 		tl_shim->session_flow_control[i].sessionId = 0xFF;
 		tl_shim->session_flow_control[i].adpaterCtxt = NULL;
 		tl_shim->session_flow_control[i].vdev = NULL;
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+		status = vos_event_init(&tl_shim->peer_authorized_events[i]);
+		if (!VOS_IS_STATUS_SUCCESS(status)) {
+			TLSHIM_LOGE("%s: Failed to initialized a event.",
+				    __func__);
+			adf_os_mem_free(tl_shim->peer_authorized_events);
+			adf_os_mem_free(tl_shim->session_flow_control);
+			vos_free_context(vos_ctx, VOS_MODULE_ID_TL, tl_shim);
+			return status;
+		}
+#endif
 		adf_os_spinlock_init(&tl_shim->session_flow_control[i].fc_lock);
 	}
 #endif /* QCA_LL_TX_FLOW_CT */
@@ -1935,6 +1994,7 @@ v_BOOL_t WLANTL_GetTxResource
 {
 	struct txrx_tl_shim_ctx *tl_shim;
 	v_BOOL_t enough_resource = VOS_TRUE;
+	struct ol_txrx_vdev_t *vdev;
 
 	/* If low watermark is zero, TX flow control is not enabled at all
 	 * return TRUE by default */
@@ -1957,12 +2017,12 @@ v_BOOL_t WLANTL_GetTxResource
 		adf_os_spin_unlock_bh(&tl_shim->session_flow_control[sessionId].fc_lock);
 		return VOS_TRUE;
 	}
-
-	enough_resource = (v_BOOL_t)wdi_in_get_tx_resource(
-		(struct ol_txrx_vdev_t *)tl_shim->session_flow_control[sessionId].vdev,
-		low_watermark,
-		high_watermark_offset);
+	vdev = (struct ol_txrx_vdev_t *)tl_shim->session_flow_control[sessionId].vdev;
 	adf_os_spin_unlock_bh(&tl_shim->session_flow_control[sessionId].fc_lock);
+
+	enough_resource = (v_BOOL_t)wdi_in_get_tx_resource(vdev,
+							low_watermark,
+							high_watermark_offset);
 
 	return enough_resource;
 }
@@ -2174,3 +2234,16 @@ void WLANTL_SetAdapterMaxQDepth
 }
 #endif /* QCA_LL_TX_FLOW_CT */
 
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+void tl_shim_set_peer_authorized_event(void *vos_ctx, v_U8_t session_id)
+{
+	struct txrx_tl_shim_ctx *tl_shim = vos_get_context(VOS_MODULE_ID_TL, vos_ctx);
+
+	if (!tl_shim) {
+		TLSHIM_LOGE("%s: Failed to get TLSHIM context", __func__);
+		return;
+	}
+
+	vos_event_set(&tl_shim->peer_authorized_events[session_id]);
+}
+#endif

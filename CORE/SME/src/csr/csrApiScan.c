@@ -2183,9 +2183,14 @@ eHalStatus csrScanGetResult(tpAniSirGlobal pMac, tCsrScanResultFilter *pFilter, 
                     }
                     else
                     {
-                        fMatch = csrIsSecurityMatch( pMac, &pFilter->authType,
-                       &pFilter->EncryptionType, &pFilter->mcEncryptionType,
-                      &pBssDesc->Result.BssDescriptor, pIes, NULL, NULL, NULL );
+                        fMatch = csrIsSecurityMatch(pMac, &pFilter->authType,
+                                                &pFilter->EncryptionType,
+                                                &pFilter->mcEncryptionType,
+                                                &pFilter->MFPEnabled,
+                                                &pFilter->MFPRequired,
+                                                &pFilter->MFPCapable,
+                                                &pBssDesc->Result.BssDescriptor,
+                                                pIes, NULL, NULL, NULL );
                     }
                     if ((pBssDesc->Result.pvIes == NULL) && pIes)
                          vos_mem_free(pIes);
@@ -2325,7 +2330,7 @@ eHalStatus csrScanGetResult(tpAniSirGlobal pMac, tCsrScanResultFilter *pFilter, 
                 pResult->mcEncryptionType = mc;
                 pResult->authType = auth;
                 pResult->Result.ssId = pBssDesc->Result.ssId;
-                pResult->Result.timer = 0;
+                pResult->Result.timer = pBssDesc->Result.timer;
                 //save the pIes for later use
                 pResult->Result.pvIes = pNewIes;
                 //save bss description
