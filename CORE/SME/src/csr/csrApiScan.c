@@ -2316,7 +2316,7 @@ eHalStatus csrScanGetResult(tpAniSirGlobal pMac, tCsrScanResultFilter *pFilter, 
                 pResult->mcEncryptionType = mc;
                 pResult->authType = auth;
                 pResult->Result.ssId = pBssDesc->Result.ssId;
-                pResult->Result.timer = 0;
+                pResult->Result.timer = pBssDesc->Result.timer;
                 //save the pIes for later use
                 pResult->Result.pvIes = pNewIes;
                 //save bss description
@@ -2467,6 +2467,37 @@ eHalStatus csrScanFlushSelectiveResult(tpAniSirGlobal pMac, v_BOOL_t flushP2P)
     csrLLUnlock(pList);
 
     return (status);
+}
+
+void csrScanFlushBssEntry(tpAniSirGlobal pMac,
+                             tpSmeCsaOffloadInd pCsaOffloadInd)
+{
+    tListElem *pEntry,*pFreeElem;
+    tCsrScanResult *pBssDesc;
+    tDblLinkList *pList = &pMac->scan.scanResultList;
+
+    csrLLLock(pList);
+
+    pEntry = csrLLPeekHead( pList, LL_ACCESS_NOLOCK );
+    while( pEntry != NULL)
+    {
+        pBssDesc = GET_BASE_ADDR( pEntry, tCsrScanResult, Link );
+        if( vos_mem_compare(pBssDesc->Result.BssDescriptor.bssId,
+                            pCsaOffloadInd->bssId, sizeof(tSirMacAddr)) )
+        {
+            pFreeElem = pEntry;
+            pEntry = csrLLNext(pList, pEntry, LL_ACCESS_NOLOCK);
+            csrLLRemoveEntry(pList, pFreeElem, LL_ACCESS_NOLOCK);
+            csrFreeScanResultEntry( pMac, pBssDesc );
+            smsLog( pMac, LOG1, FL("Removed BSS entry:%pM"),
+                    pCsaOffloadInd->bssId);
+            continue;
+        }
+
+        pEntry = csrLLNext(pList, pEntry, LL_ACCESS_NOLOCK);
+    }
+
+    csrLLUnlock(pList);
 }
 
 /**
