@@ -3474,6 +3474,20 @@ REG_VARIABLE( CFG_TDLS_PUAPSD_RX_FRAME_THRESHOLD, WLAN_PARAM_Integer,
                 CFG_ENABLE_HT_2040_COEX_MIN,
                 CFG_ENABLE_HT_2040_COEX_MAX ),
 #endif
+
+   REG_VARIABLE(CFG_IGNORE_CAC_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, ignoreCAC,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_IGNORE_CAC_DEFAULT,
+                CFG_IGNORE_CAC_MIN,
+                CFG_IGNORE_CAC_MAX),
+
+   REG_VARIABLE(CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, IsSapDfsChSifsBurstEnabled,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_DEFAULT,
+                CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MIN,
+                CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MAX ),
 };
 
 #ifdef WLAN_FEATURE_MBSSID
@@ -3969,6 +3983,9 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
           "Name = [gHT2040CoexEnabled] Value = [%u]",
           pHddCtx->cfg_ini->ht2040CoexEnabled);
 #endif
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+          "Name = [gIgnoreCAC] Value = [%u] ",
+          pHddCtx->cfg_ini->ignoreCAC);
 }
 
 
@@ -5278,10 +5295,10 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
      phtCapInfo->rxSTBC = pConfig->enableRxSTBC;
      phtCapInfo->txSTBC = pConfig->enableTxSTBC;
      phtCapInfo->advCodingCap = pConfig->enableRxLDPC;
-
-     if(ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_HT_CAP_INFO,
-                     *(tANI_U16 *)phtCapInfo, NULL, eANI_BOOLEAN_FALSE)
-         ==eHAL_STATUS_FAILURE)
+     val = val16;
+     if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_HT_CAP_INFO,
+                      val, NULL, eANI_BOOLEAN_FALSE)
+         == eHAL_STATUS_FAILURE)
      {
          fStatus = FALSE;
          hddLog(LOGE, "Could not pass on WNI_CFG_HT_CAP_INFO to CCM");

@@ -6699,6 +6699,12 @@ static VOS_STATUS wma_vdev_start(tp_wma_handle wma,
 				return VOS_STATUS_E_FAILURE;
 			}
 
+			if (wma->dfs_ic->ic_curchan)
+			{
+				OS_FREE(wma->dfs_ic->ic_curchan);
+				wma->dfs_ic->ic_curchan = NULL;
+			}
+
 			/* provide the current channel to DFS */
 			wma->dfs_ic->ic_curchan =
 				wma_dfs_configure_channel(wma->dfs_ic,chan,chanmode,req);
@@ -9461,17 +9467,11 @@ static void wma_add_bss_sta_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 		}
 #endif /* WLAN_FEATURE_11W */
 
-		if (add_bss->staContext.encryptType == eSIR_ED_NONE) {
-			WMA_LOGD("%s: send peer authorize wmi cmd for %pM",
-				 __func__, add_bss->bssId);
-			wma_set_peer_param(wma, add_bss->bssId,
-					   WMI_PEER_AUTHORIZE, 1,
-					   add_bss->staContext.smesessionId);
-			wma_vdev_set_bss_params(wma, add_bss->staContext.smesessionId,
-					add_bss->beaconInterval, add_bss->dtimPeriod,
-					add_bss->shortSlotTimeSupported, add_bss->llbCoexist,
-					add_bss->maxTxPower);
-		}
+		wma_vdev_set_bss_params(wma, add_bss->staContext.smesessionId,
+				add_bss->beaconInterval, add_bss->dtimPeriod,
+				add_bss->shortSlotTimeSupported, add_bss->llbCoexist,
+				add_bss->maxTxPower);
+
 		/*
 		 * Store the bssid in interface table, bssid will
 		 * be used during group key setting sta mode.
@@ -9736,18 +9736,6 @@ static void wma_add_sta_req_ap_mode(tp_wma_handle wma, tpAddStaParams add_sta)
 		add_sta->status = VOS_STATUS_E_FAILURE;
 		wma_remove_peer(wma, add_sta->staMac, add_sta->smesessionId, peer);
 		goto send_rsp;
-	}
-	if (add_sta->encryptType == eSIR_ED_NONE) {
-		ret = wma_set_peer_param(wma, add_sta->staMac,
-					 WMI_PEER_AUTHORIZE, 1,
-					 add_sta->smesessionId);
-		if (ret) {
-			add_sta->status = VOS_STATUS_E_FAILURE;
-			wma_remove_peer(wma, add_sta->staMac,
-					add_sta->smesessionId, peer);
-			goto send_rsp;
-		}
-		state = ol_txrx_peer_state_auth;
 	}
 #ifdef WLAN_FEATURE_11W
 	if (add_sta->rmfEnabled) {
@@ -10106,13 +10094,6 @@ static void wma_add_sta_req_sta_mode(tp_wma_handle wma, tpAddStaParams params)
 						  ol_txrx_peer_state_conn);
 		}
 
-		if (params->encryptType == eSIR_ED_NONE) {
-			WMA_LOGD("%s: send peer authorize wmi cmd for %pM",
-				 __func__, params->bssId);
-			wma_set_peer_param(wma, params->bssId,
-					   WMI_PEER_AUTHORIZE, 1,
-					   params->smesessionId);
-		}
 		wmi_unified_send_txbf(wma, params);
 
                 wmi_unified_send_peer_assoc(wma,
@@ -19213,10 +19194,7 @@ v_VOID_t wma_rx_ready_event(WMA_HANDLE handle, void *cmd_param_info)
 	WMI_MAC_ADDR_TO_CHAR_ARRAY (&ev->mac_addr, wma_handle->hwaddr);
 
 #ifndef QCA_WIFI_ISOC
-#ifdef QCA_WIFI_FTM
-	if (vos_get_conparam() != VOS_FTM_MODE)
-#endif
-		wma_update_hdd_cfg(wma_handle);
+	wma_update_hdd_cfg(wma_handle);
 #endif
 
 	vos_event_set(&wma_handle->wma_ready_event);

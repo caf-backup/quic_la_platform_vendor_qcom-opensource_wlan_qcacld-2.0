@@ -5723,7 +5723,7 @@ void hdd_getBand_helper(hdd_context_t *pHddCtx, int *pBand)
  *     for third interface it will be hw_macaddr[0](bit5..7) + 2, etc.
  */
 
-static void hdd_update_macaddr(hdd_config_t *cfg_ini, v_MACADDR_t hw_macaddr)
+void hdd_update_macaddr(hdd_config_t *cfg_ini, v_MACADDR_t hw_macaddr)
 {
     int8_t i;
     u_int8_t macaddr_b0, tmp_br0;
@@ -5738,6 +5738,9 @@ static void hdd_update_macaddr(hdd_config_t *cfg_ini, v_MACADDR_t hw_macaddr)
                   INTF_MACADDR_MASK;
         macaddr_b0 = (macaddr_b0 | (tmp_br0 << 4)) | 0x02;
         cfg_ini->intfMacAddr[i].bytes[0] = macaddr_b0;
+        hddLog(VOS_TRACE_LEVEL_INFO, "cfg_ini->intfMacAddr[%d]: "
+               MAC_ADDRESS_STR, i,
+               MAC_ADDR_ARRAY(cfg_ini->intfMacAddr[i].bytes));
     }
 }
 
@@ -5844,8 +5847,9 @@ static void hdd_update_tgt_ht_cap(hdd_context_t *hdd_ctx,
     {
         pconfig->enable2x2 = 0;
     }
+    val32 = val16;
     status = ccmCfgSetInt(hdd_ctx->hHal, WNI_CFG_HT_CAP_INFO,
-                          *(tANI_U16 *)phtCapInfo, NULL, eANI_BOOLEAN_FALSE);
+                          val32, NULL, eANI_BOOLEAN_FALSE);
     if (status != eHAL_STATUS_SUCCESS)
         VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                   "%s: could not set HT capabilty to CCM",
@@ -6978,9 +6982,9 @@ int hdd_stop (struct net_device *dev)
 
    /* SoftAP ifaces should never go in power save mode
       making sure same here. */
-   if ( (WLAN_HDD_SOFTAP == pAdapter->device_mode )
-                 || (WLAN_HDD_MONITOR == pAdapter->device_mode )
-                 || (WLAN_HDD_P2P_GO == pAdapter->device_mode )
+   if ( (WLAN_HDD_SOFTAP == pAdapter->device_mode ) ||
+        (WLAN_HDD_MONITOR == pAdapter->device_mode) ||
+        (WLAN_HDD_P2P_GO == pAdapter->device_mode )
       )
    {
       /* SoftAP mode, so return from here */
@@ -7849,6 +7853,16 @@ void hdd_cleanup_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter, tANI_
    }
 #endif
 
+   /* The adapter is marked as closed. When hdd_wlan_exit() call returns,
+    * the driver is almost closed and cannot handle either control
+    * messages or data. However, unregister_netdevice() call above will
+    * eventually invoke hdd_stop (ndo_close) driver callback, which attempts
+    * to close the active connections (basically excites control path) which
+    * is not right. Setting this flag helps hdd_stop() to recognize that
+    * the interface is closed and restricts any operations on that
+    */
+   clear_bit(DEVICE_IFACE_OPENED, &pAdapter->event_flags);
+
    if(test_bit(NET_DEVICE_REGISTERED, &pAdapter->event_flags)) {
       if( rtnl_held )
       {
@@ -7861,7 +7875,6 @@ void hdd_cleanup_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter, tANI_
       // note that the pAdapter is no longer valid at this point
       // since the memory has been reclaimed
    }
-
 }
 
 void hdd_set_pwrparams(hdd_context_t *pHddCtx)
@@ -9877,9 +9890,6 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: FTM driver unloaded", __func__);
       goto free_hdd_ctx;
    }
-   //Stop the Interface TX queue.
-   //netif_tx_disable(pWlanDev);
-   //netif_carrier_off(pWlanDev);
 
    if (VOS_STA_SAP_MODE == hdd_get_conparam())
    {
@@ -9934,29 +9944,29 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    if ( VOS_TIMER_STATE_RUNNING ==
                         vos_timer_getCurrentState(&pHddCtx->tx_rx_trafficTmr))
    {
-        vos_timer_stop(&pHddCtx->tx_rx_trafficTmr);
+      vos_timer_stop(&pHddCtx->tx_rx_trafficTmr);
    }
 
    // Destroy the traffic monitor timer
    if (!VOS_IS_STATUS_SUCCESS(vos_timer_destroy(
                          &pHddCtx->tx_rx_trafficTmr)))
    {
-       hddLog(VOS_TRACE_LEVEL_ERROR,
-           "%s: Cannot deallocate Traffic monitor timer", __func__);
+      hddLog(VOS_TRACE_LEVEL_ERROR,
+            "%s: Cannot deallocate Traffic monitor timer", __func__);
    }
 
 #ifdef MSM_PLATFORM
    if (VOS_TIMER_STATE_RUNNING ==
                         vos_timer_getCurrentState(&pHddCtx->bus_bw_timer))
    {
-        vos_timer_stop(&pHddCtx->bus_bw_timer);
+      vos_timer_stop(&pHddCtx->bus_bw_timer);
    }
 
    if (!VOS_IS_STATUS_SUCCESS(vos_timer_destroy(
                          &pHddCtx->bus_bw_timer)))
    {
-       hddLog(VOS_TRACE_LEVEL_ERROR,
-           "%s: Cannot deallocate Bus bandwidth timer", __func__);
+      hddLog(VOS_TRACE_LEVEL_ERROR,
+            "%s: Cannot deallocate Bus bandwidth timer", __func__);
    }
 #endif
 
@@ -9973,7 +9983,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       powerContext.magic = POWER_CONTEXT_MAGIC;
 
       halStatus = sme_RequestFullPower(pHddCtx->hHal, hdd_full_power_callback,
-                                   &powerContext, eSME_FULL_PWR_NEEDED_BY_HDD);
+            &powerContext, eSME_FULL_PWR_NEEDED_BY_HDD);
 
       if (eHAL_STATUS_SUCCESS != halStatus)
       {
@@ -9981,20 +9991,20 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
          {
             /* request was sent -- wait for the response */
             lrc = wait_for_completion_interruptible_timeout(
-                                        &powerContext.completion,
-                                        msecs_to_jiffies(WLAN_WAIT_TIME_POWER));
+                  &powerContext.completion,
+                  msecs_to_jiffies(WLAN_WAIT_TIME_POWER));
             if (lrc <= 0)
             {
                hddLog(VOS_TRACE_LEVEL_ERROR,
-                      "%s: %s while requesting full power",
-                      __func__, (0 == lrc) ? "timeout" : "interrupt");
+                     "%s: %s while requesting full power",
+                     __func__, (0 == lrc) ? "timeout" : "interrupt");
             }
          }
          else
          {
             hddLog(VOS_TRACE_LEVEL_ERROR,
-                   "%s: Request for Full Power failed, status %d",
-                   __func__, halStatus);
+                  "%s: Request for Full Power failed, status %d",
+                  __func__, halStatus);
             /* continue -- need to clean up as much as possible */
          }
       }
@@ -10027,6 +10037,10 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    // Unregister the Net Device Notifier
    unregister_netdevice_notifier(&hdd_netdev_notifier);
 
+   /* Stop all adapters, this will ensure the termination of active
+    * connections on the interface. Make sure the vos_scheduler is
+    * still available to handle those control messages
+    */
    hdd_stop_all_adapters( pHddCtx );
 
 #ifdef WLAN_BTAMP_FEATURE
@@ -10181,36 +10195,47 @@ free_hdd_ctx:
    !defined (QCA_WIFI_ISOC)
 void __hdd_wlan_exit(void)
 {
-        hdd_context_t *pHddCtx = NULL;
-        v_CONTEXT_t pVosContext = NULL;
+   hdd_context_t *pHddCtx = NULL;
+   v_CONTEXT_t pVosContext = NULL;
 
-        //Get the global vos context
-        pVosContext = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
+   ENTER();
 
-        if(!pVosContext)
-                return;
+   //Get the global vos context
+   pVosContext = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
 
-        //Get the HDD context.
-        pHddCtx = (hdd_context_t *)vos_get_context(VOS_MODULE_ID_HDD,
-                                                   pVosContext);
+   if(NULL == pVosContext) {
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+            "%s:Invalid global VOSS context", __func__);
+      EXIT();
+      return;
+   }
 
-        if(!pHddCtx)
-                return;
+   //Get the HDD context.
+   pHddCtx = (hdd_context_t *)vos_get_context(VOS_MODULE_ID_HDD,
+         pVosContext);
 
-        /* module exit should never proceed if SSR is not completed */
-        while(pHddCtx->isLogpInProgress){
-                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-                          "%s:SSR in Progress; block rmmod for 1 second!!!",
-                          __func__);
-                msleep(1000);
-        }
+   if(NULL == pHddCtx) {
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+            "%s:Invalid HDD Context", __func__);
+      EXIT();
+      return;
+   }
 
-        pHddCtx->isUnloadInProgress = TRUE;
+   /* module exit should never proceed if SSR is not completed */
+   while(pHddCtx->isLogpInProgress){
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+            "%s:SSR in Progress; block rmmod for 1 second!!!",
+            __func__);
+      msleep(1000);
+   }
 
-        vos_set_load_unload_in_progress(VOS_MODULE_ID_VOSS, TRUE);
+   pHddCtx->isUnloadInProgress = TRUE;
 
-        //Do all the cleanup before deregistering the driver
-        hdd_wlan_exit(pHddCtx);
+   vos_set_load_unload_in_progress(VOS_MODULE_ID_VOSS, TRUE);
+
+   //Do all the cleanup before deregistering the driver
+   hdd_wlan_exit(pHddCtx);
+   EXIT();
 }
 #endif  /* QCA_WIFI_2_0 && !QCA_WIFI_ISOC */
 
@@ -11806,6 +11831,7 @@ err_config:
 err_free_adf_context:
 #ifdef QCA_WIFI_2_0
    vos_mem_free(adf_ctx);
+   hif_deinit_adf_ctx(hif_sc);
 #endif
 
 err_free_hdd_context:
