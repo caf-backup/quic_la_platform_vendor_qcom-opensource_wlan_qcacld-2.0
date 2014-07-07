@@ -3249,6 +3249,13 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_IBSS_TXSP_END_INACTIVITY_MIN,
                  CFG_IBSS_TXSP_END_INACTIVITY_MAX ),
 
+   REG_VARIABLE( CFG_IBSS_PS_WARMUP_TIME_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, ibssPsWarmupTime,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_IBSS_PS_WARMUP_TIME_DEFAULT,
+                 CFG_IBSS_PS_WARMUP_TIME_MIN,
+                 CFG_IBSS_PS_WARMUP_TIME_MAX ),
+
 #ifndef QCA_WIFI_ISOC
    REG_VARIABLE( CFG_THERMAL_TEMP_MIN_LEVEL0_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, thermalTempMinLevel0,
@@ -3622,6 +3629,22 @@ REG_TABLE_ENTRY g_registry_table[] =
                 CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_DEFAULT,
                 CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MIN,
                 CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MAX ),
+
+   REG_VARIABLE(CFG_DFS_RADAR_PRI_MULTIPLIER_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, dfsRadarPriMultiplier,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_DFS_RADAR_PRI_MULTIPLIER_DEFAULT,
+                CFG_DFS_RADAR_PRI_MULTIPLIER_MIN,
+                CFG_DFS_RADAR_PRI_MULTIPLIER_MAX),
+
+#if !defined(QCA_WIFI_ISOC)
+   REG_VARIABLE( CFG_REORDER_OFFLOAD_SUPPORT_NAME, WLAN_PARAM_Integer,
+                        hdd_config_t, reorderOffloadSupport,
+                        VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                        CFG_REORDER_OFFLOAD_SUPPORT_DEFAULT,
+                        CFG_REORDER_OFFLOAD_SUPPORT_MIN,
+                        CFG_REORDER_OFFLOAD_SUPPORT_MAX ),
+#endif
 };
 
 #ifdef WLAN_FEATURE_MBSSID
@@ -4093,6 +4116,7 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssAwakeOnTxRx] Value = [%u] ",pHddCtx->cfg_ini->isIbssAwakeOnTxRx);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssInactivityTime] Value = [%u] ",pHddCtx->cfg_ini->ibssInactivityCount);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssTxSpEndInactivityTime] Value = [%u] ",pHddCtx->cfg_ini->ibssTxSpEndInactivityTime);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssPsWarmupTime] Value = [%u] ",pHddCtx->cfg_ini->ibssPsWarmupTime);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fDfsPhyerrFilterOffload] Value = [%u] ",pHddCtx->cfg_ini->fDfsPhyerrFilterOffload);
 
 #ifdef IPA_OFFLOAD

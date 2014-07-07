@@ -178,6 +178,15 @@
 #define WMA_MAX_RF_CHAINS(x)	((1 << x) - 1)
 #define WMA_MIN_RF_CHAINS		(1)
 
+#ifdef FEATURE_WLAN_EXTSCAN
+#define WMA_MAX_EXTSCAN_MSG_SIZE        1536
+#define WMA_EXTSCAN_REST_TIME           100
+#define WMA_EXTSCAN_MAX_SCAN_TIME       50000
+#define WMA_EXTSCAN_REPEAT_PROBE        10
+#define WMA_EXTSCAN_BURST_DURATION      150
+#define WMA_EXTSCAN_MAX_TABLE_USAGE     71
+#endif
+
 typedef struct {
 	HTC_ENDPOINT_ID endpoint_id;
 }t_cfg_nv_param;
@@ -527,6 +536,7 @@ typedef struct {
 	u_int32_t isAwakeonTxRxEnabled;
 	u_int32_t inactivityCount;
 	u_int32_t txSPEndInactivityTime;
+	u_int32_t ibssPsWarmupTime;
 }ibss_power_save_params;
 
 typedef struct {
@@ -677,10 +687,14 @@ typedef struct {
 	u_int16_t RArateLimitInterval;
 #endif
 
+
 	/* Powersave Configuration Parameters */
 	u_int8_t staMaxLIModDtim;
 	u_int8_t staModDtim;
 	u_int8_t staDynamicDtim;
+
+	int32_t dfs_pri_multiplier;
+
 }t_wma_handle, *tp_wma_handle;
 
 struct wma_target_cap {
@@ -1257,6 +1271,7 @@ struct wma_vdev_start_req {
 	u_int8_t pmf_enabled;
 	u_int8_t vht_capable;
 	u_int8_t ht_capable;
+	int32_t dfs_pri_multiplier;
 };
 
 struct wma_set_key_params {
@@ -1311,6 +1326,7 @@ enum wma_cfg_cmd_id {
 	WMA_VDEV_IBSS_SET_AWAKE_ON_TX_RX,
 	WMA_VDEV_IBSS_SET_INACTIVITY_TIME,
 	WMA_VDEV_IBSS_SET_TXSP_END_INACTIVITY_TIME,
+	WMA_VDEV_IBSS_PS_SET_WARMUP_TIME_SECS,
 
 	/* dfs control interface */
 	WMA_VDEV_DFS_CONTROL_CMDID,

@@ -4381,6 +4381,7 @@ static eCsrJoinState csrRoamJoinNextBss( tpAniSirGlobal pMac, tSmeCmd *pCommand,
                 if(pSession->bRefAssocStartCnt)
                 {
                     pSession->bRefAssocStartCnt--;
+                    pRoamInfo->pProfile = pProfile;
                     //Complete the last association attemp because a new one is about to be tried
                     csrRoamCallCallback(pMac, sessionId, pRoamInfo, pCommand->u.roamCmd.roamId,
                                         eCSR_ROAM_ASSOCIATION_COMPLETION,
@@ -4542,6 +4543,7 @@ static eCsrJoinState csrRoamJoinNextBss( tpAniSirGlobal pMac, tSmeCmd *pCommand,
             pSession->bRefAssocStartCnt--;
             //Complete the last association attemp because a new one is about to be tried
             pRoamInfo = &roamInfo;
+            pRoamInfo->pProfile = pProfile;
             csrRoamCallCallback(pMac, sessionId, pRoamInfo, pCommand->u.roamCmd.roamId,
                                         eCSR_ROAM_ASSOCIATION_COMPLETION,
                                         eCSR_ROAM_RESULT_NOT_ASSOCIATED);
@@ -4744,6 +4746,12 @@ eHalStatus csrRoamProcessCommand( tpAniSirGlobal pMac, tSmeCmd *pCommand )
                 vos_mem_free(pIes);
                 pIes = NULL;
             }
+        }
+        else
+        {
+            smsLog(pMac, LOGE, FL
+                    ("Reassoc To Same AP failed since Connected BSS is NULL"));
+            return eHAL_STATUS_FAILURE;
         }
         break;
     }
@@ -6034,6 +6042,7 @@ static tANI_BOOLEAN csrRoamProcessResults( tpAniSirGlobal pMac, tSmeCmd *pComman
                     csrRoamStateChange( pMac, eCSR_ROAMING_STATE_IDLE, sessionId );
                     vos_mem_set(&roamInfo, sizeof(tCsrRoamInfo), 0);
                     roamInfo.pBssDesc = pCommand->u.roamCmd.pLastRoamBss;
+                    roamInfo.pProfile = &pCommand->u.roamCmd.roamProfile;
                     roamInfo.statusCode = pSession->joinFailStatusCode.statusCode;
                     roamInfo.reasonCode = pSession->joinFailStatusCode.reasonCode;
                     vos_mem_copy(&roamInfo.bssid,
@@ -6616,6 +6625,7 @@ eHalStatus csrRoamIssueReassoc(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoam
         pCommand->u.roamCmd.hBSSList = CSR_INVALID_SCANRESULT_HANDLE;
         pCommand->u.roamCmd.fReleaseBssList = eANI_BOOLEAN_FALSE;
         pCommand->u.roamCmd.fReassoc = eANI_BOOLEAN_TRUE;
+        csrRoamRemoveDuplicateCommand(pMac, sessionId, pCommand, reason);
         status = csrQueueSmeCommand(pMac, pCommand, fImediate);
         if( !HAL_STATUS_SUCCESS( status ) )
     {

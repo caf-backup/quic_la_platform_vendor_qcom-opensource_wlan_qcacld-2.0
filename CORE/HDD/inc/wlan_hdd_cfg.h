@@ -2447,6 +2447,18 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_IBSS_TXSP_END_INACTIVITY_MAX           (100)
 #define CFG_IBSS_TXSP_END_INACTIVITY_DEFAULT       (0)
 
+/*
+ * When IBSS network is initialized, PS-supporting device
+ * does not enter protocol sleep state during first
+ * gIbssPsWarmupTime seconds.
+ */
+#define CFG_IBSS_PS_WARMUP_TIME_NAME               "gIbssPsWarmupTime"
+#define CFG_IBSS_PS_WARMUP_TIME_MIN                (0)
+/* Allow unsigned Int Max for now */
+#define CFG_IBSS_PS_WARMUP_TIME_MAX                (65535)
+#define CFG_IBSS_PS_WARMUP_TIME_DEFAULT            (0)
+
+
 #define CFG_SAP_MAX_NO_PEERS                       "gSoftApMaxPeers"
 #define CFG_SAP_MAX_NO_PEERS_MIN                   (1)
 #define CFG_SAP_MAX_NO_PEERS_MAX                   (32)
@@ -2622,6 +2634,17 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MIN       ( 0 )
 #define CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MAX       ( 1 )
 #define CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_DEFAULT   ( 1 )
+
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_NAME          "gDFSradarMappingPriMultiplier"
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_DEFAULT       ( 4 )
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_MIN           ( 0 )
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_MAX           ( 10 )
+#if !defined(QCA_WIFI_ISOC)
+#define CFG_REORDER_OFFLOAD_SUPPORT_NAME    "gReorderOffloadSupported"
+#define CFG_REORDER_OFFLOAD_SUPPORT_MIN     ( 0 )
+#define CFG_REORDER_OFFLOAD_SUPPORT_MAX     ( 1 )
+#define CFG_REORDER_OFFLOAD_SUPPORT_DEFAULT ( 0 )
+#endif
 
 /*---------------------------------------------------------------------------
   Type declarations
@@ -3080,6 +3103,7 @@ typedef struct
    v_U8_t                      isIbssAwakeOnTxRx;
    v_U32_t                     ibssInactivityCount;
    v_U32_t                     ibssTxSpEndInactivityTime;
+   v_U32_t                     ibssPsWarmupTime;
 
    v_BOOL_t                    enableTCPChkSumOffld;
    v_BOOL_t                    enableIPChecksumOffload;
@@ -3187,6 +3211,10 @@ typedef struct
    v_BOOL_t                    enableGreenAP;
 #endif
 
+   v_S31_t                     dfsRadarPriMultiplier;
+#if !defined(QCA_WIFI_ISOC)
+   v_U8_t                      reorderOffloadSupport;
+#endif
 } hdd_config_t;
 
 #ifdef WLAN_FEATURE_MBSSID

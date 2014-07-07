@@ -1760,6 +1760,14 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
             }
         }
 
+        if (pRoamInfo) {
+           if ((eSIR_SME_JOIN_TIMEOUT_RESULT_CODE == pRoamInfo->statusCode) ||
+               (eSIR_SME_AUTH_TIMEOUT_RESULT_CODE == pRoamInfo->statusCode) ||
+               (eSIR_SME_ASSOC_TIMEOUT_RESULT_CODE == pRoamInfo->statusCode)) {
+              wlan_hdd_cfg80211_update_bss_list(pAdapter, pRoamInfo);
+           }
+        }
+
         /*Clear the roam profile*/
         hdd_clearRoamProfileIe( pAdapter );
         if (WLAN_HDD_INFRA_STATION == pAdapter->device_mode) {
@@ -2694,6 +2702,25 @@ eHalStatus hdd_RoamTdlsStatusUpdateHandler(hdd_adapter_t *pAdapter,
                 }
                 else
                 {
+                    /* if external control is enabled then initiate TDLS
+                     * only if forced peer is set otherwise ignore
+                     * Should Discover trigger from fw
+                     */
+                    if (pHddCtx->cfg_ini->fTDLSExternalControl &&
+                        (FALSE == curr_peer->isForcedPeer))
+                    {
+                        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+                                  FL("TDLS ExternalControl enabled but curr_peer is not forced, ignore SHOULD_DISCOVER"));
+                        status = eHAL_STATUS_SUCCESS;
+                        break;
+                    }
+                    else
+                    {
+                        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+                                  FL("initiate TDLS setup on SHOULD_DISCOVER, fTDLSExternalControl: %d, curr_peer->isForcedPeer: %d"),
+                                  pHddCtx->cfg_ini->fTDLSExternalControl,
+                                  curr_peer->isForcedPeer);
+                    }
                     wlan_hdd_tdls_pre_setup_init_work(pHddTdlsCtx, curr_peer);
                 }
                 status = eHAL_STATUS_SUCCESS;
