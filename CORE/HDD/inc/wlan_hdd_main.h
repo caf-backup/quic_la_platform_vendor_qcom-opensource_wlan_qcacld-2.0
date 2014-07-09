@@ -276,12 +276,20 @@ struct statsContext
    unsigned int magic;
 };
 
+struct linkspeedContext
+{
+   struct completion completion;
+   hdd_adapter_t *pAdapter;
+   unsigned int magic;
+};
+
 extern spinlock_t hdd_context_lock;
 
 #define STATS_CONTEXT_MAGIC 0x53544154   //STAT
 #define RSSI_CONTEXT_MAGIC  0x52535349   //RSSI
 #define POWER_CONTEXT_MAGIC 0x504F5752   //POWR
 #define SNR_CONTEXT_MAGIC   0x534E5200   //SNR
+#define LINK_CONTEXT_MAGIC  0x4C494E4B   //LINKSPEED
 
 #ifdef FEATURE_WLAN_BATCH_SCAN
 #define HDD_BATCH_SCAN_VERSION (17)
@@ -678,6 +686,9 @@ struct hdd_station_ctx
    /*Save the wep/wpa-none keys*/
    tCsrRoamSetKey ibss_enc_key;
    v_BOOL_t hdd_ReassocScenario;
+
+   /* STA ctx debug variables */
+   int staDebugState;
 };
 
 #define BSS_STOP    0
@@ -841,7 +852,7 @@ typedef struct
     /*Channel*/
     tANI_U8  ch;
     /*RSSI or Level*/
-    tANI_U8  rssi;
+    tANI_S8  rssi;
     /*Age*/
     tANI_U32 age;
 }tHDDbatchScanRspApInfo;
@@ -904,6 +915,8 @@ struct hdd_adapter_s
    struct net_device_stats stats;
    /** HDD statistics*/
    hdd_stats_t hdd_stats;
+   /** linkspeed statistics */
+   tSirLinkSpeedInfo ls_stats;
    /**Mib information*/
    sHddMib_t  hdd_mib;
 
@@ -1323,7 +1336,6 @@ struct hdd_context_s
     int            sta_cnt;
 #endif
 
-    v_U8_t         drvr_miracast;
     v_U8_t         issplitscan_enabled;
 
     /* VHT80 allowed*/
@@ -1353,6 +1365,15 @@ struct hdd_context_s
     v_U8_t current_intf_count;
 
     tSirScanType ioctl_scan_mode;
+
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+    vos_timer_t hdd_wlan_shutdown_timer;
+#endif
+#ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
+    adf_os_work_t  sta_ap_intf_check_work;
+#endif
+
+    v_BOOL_t btCoexModeSet;
 };
 
 
@@ -1510,4 +1531,5 @@ void wlan_hdd_send_svc_nlink_msg(int type);
 void wlan_hdd_cfg80211_stats_ext_init(hdd_context_t *pHddCtx);
 #endif
 
+void hdd_update_macaddr(hdd_config_t *cfg_ini, v_MACADDR_t hw_macaddr);
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

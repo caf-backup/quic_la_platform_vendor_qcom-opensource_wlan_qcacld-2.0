@@ -1038,6 +1038,8 @@ typedef struct tagCsrConfigParam
     tANI_U32  nActiveMinChnTime;     //in units of milliseconds
     tANI_U32  nActiveMaxChnTime;     //in units of milliseconds
 
+    tANI_U32  nInitialDwellTime;      //in units of milliseconds
+
     tANI_U32  nActiveMinChnTimeBtc;     //in units of milliseconds
     tANI_U32  nActiveMaxChnTimeBtc;     //in units of milliseconds
     tANI_U32  disableAggWithBtc;
@@ -1147,7 +1149,7 @@ typedef struct tagCsrConfigParam
     tANI_U8 isCoalesingInIBSSAllowed;
 
     eCsrBand  scanBandPreference;
-    tANI_BOOLEAN allowDFSChannelRoam;
+    tANI_U8  allowDFSChannelRoam;
 }tCsrConfigParam;
 
 //Tush
