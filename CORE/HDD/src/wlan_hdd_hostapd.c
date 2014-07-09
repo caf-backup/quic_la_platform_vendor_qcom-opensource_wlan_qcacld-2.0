@@ -615,7 +615,9 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
     hdd_scaninfo_t *pScanInfo  = NULL;
     struct iw_michaelmicfailure msg;
     v_U8_t ignoreCAC = 0;
-
+    hdd_config_t *cfg = NULL;
+    struct wlan_dfs_info dfs_info;
+    v_U8_t cc_len = WLAN_SVC_COUNTRY_CODE_LEN;
 #ifdef MSM_PLATFORM
     unsigned long flags;
 #endif
@@ -656,6 +658,21 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
     memset(&wrqu, '\0', sizeof(wrqu));
     pHddCtx = (hdd_context_t*)(pHostapdAdapter->pHddCtx);
 
+    if (!pHddCtx) {
+        hddLog(VOS_TRACE_LEVEL_ERROR, FL("HDD context is null"));
+        return eHAL_STATUS_FAILURE;
+    }
+
+    cfg = pHddCtx->cfg_ini;
+
+    if (!cfg) {
+        hddLog(VOS_TRACE_LEVEL_ERROR, FL("HDD config is null"));
+        return eHAL_STATUS_FAILURE;
+    }
+
+    dfs_info.channel = pHddApCtx->operatingChannel;
+    sme_GetCountryCode(pHddCtx->hHal, dfs_info.country_code, &cc_len);
+
     switch(sapEvent)
     {
         case eSAP_START_BSS_EVENT :
@@ -677,6 +694,10 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             }
             else
             {
+#ifdef FEATURE_WLAN_CH_AVOID
+                sme_ChAvoidUpdateReq(pHddCtx->hHal);
+#endif /* FEATURE_WLAN_CH_AVOID */
+
                 pHddApCtx->uBCStaId = pSapEvent->sapevt.sapStartBssCompleteEvent.staId;
 
 #ifdef QCA_LL_TX_FLOW_CT
@@ -729,11 +750,17 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             pHostapdState->bssState = BSS_START;
 
 #ifdef FEATURE_GREEN_AP
-            if (!(VOS_STA&pHddCtx->concurrency_mode))
+            if (!(VOS_STA & pHddCtx->concurrency_mode) &&
+                    cfg->enable2x2 &&
+                    cfg->enableGreenAP) {
                 hdd_wlan_green_ap_mc(pHddCtx, GREEN_AP_PS_START_EVENT);
-            else {
+            } else {
                 hdd_wlan_green_ap_mc(pHddCtx, GREEN_AP_PS_STOP_EVENT);
-                hddLog(VOS_TRACE_LEVEL_INFO, FL("Green-AP: STA interface detected, disable GreenAP"));
+                hddLog(VOS_TRACE_LEVEL_INFO,
+                    "Green-AP: is disabled, due to sta_concurrency: %d, enable2x2: %d, enableGreenAP: %d",
+                     VOS_STA & pHddCtx->concurrency_mode,
+                     cfg->enable2x2,
+                     cfg->enableGreenAP);
             }
 #endif
             // Send current operating channel of SoftAP to BTC-ES
@@ -854,16 +881,19 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             goto stopbss;
 
         case eSAP_DFS_CAC_START:
-            wlan_hdd_send_svc_nlink_msg(WLAN_SVC_DFS_CAC_START_IND);
+            wlan_hdd_send_svc_nlink_msg(WLAN_SVC_DFS_CAC_START_IND,
+                                      &dfs_info, sizeof(struct wlan_dfs_info));
             break;
 
         case eSAP_DFS_CAC_END:
-            wlan_hdd_send_svc_nlink_msg(WLAN_SVC_DFS_CAC_END_IND);
+            wlan_hdd_send_svc_nlink_msg(WLAN_SVC_DFS_CAC_END_IND,
+                                      &dfs_info, sizeof(struct wlan_dfs_info));
             pHddApCtx->dfs_cac_block_tx = VOS_FALSE;
             break;
 
         case eSAP_DFS_RADAR_DETECT:
-            wlan_hdd_send_svc_nlink_msg(WLAN_SVC_DFS_RADAR_DETECT_IND);
+            wlan_hdd_send_svc_nlink_msg(WLAN_SVC_DFS_RADAR_DETECT_IND,
+                                      &dfs_info, sizeof(struct wlan_dfs_info));
             break;
 
         case eSAP_STA_SET_KEY_EVENT:
@@ -2348,6 +2378,33 @@ static iw_softap_setparam(struct net_device *dev,
                      );
              break;
 
+        case QCASAP_SET_RADAR_CMD:
+            {
+                hdd_context_t *pHddCtx =
+                    WLAN_HDD_GET_CTX(pHostapdAdapter);
+                v_U8_t ch =
+                    (WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter))->operatingChannel;
+                v_BOOL_t isDfsch;
+
+                isDfsch = (NV_CHANNEL_DFS ==
+                                vos_nv_getChannelEnabledState(ch));
+
+                hddLog(VOS_TRACE_LEVEL_INFO,
+                       FL("Set QCASAP_SET_RADAR_CMD val %d"), set_value);
+
+                if (!pHddCtx->dfs_radar_found && isDfsch) {
+                    ret = process_wma_set_command(
+                            (int)pHostapdAdapter->sessionId,
+                            (int)WMA_VDEV_DFS_CONTROL_CMDID,
+                            set_value, VDEV_CMD);
+                } else {
+                    hddLog(VOS_TRACE_LEVEL_ERROR,
+                        FL("Ignore command due to "
+                            "dfs_radar_found: %d, is_dfs_channel: %d"),
+                        pHddCtx->dfs_radar_found, isDfsch);
+                }
+                break;
+            }
         default:
             hddLog(LOGE, FL("Invalid setparam command %d value %d"),
                     sub_cmd, set_value);
@@ -3894,7 +3951,8 @@ static int iw_softap_stopbss(struct net_device *dev,
             if (!VOS_IS_STATUS_SUCCESS(status))
             {
                 VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                         ("ERROR: HDD vos wait for single_event failed!!"));
+                         ("%s: ERROR: HDD vos wait for single_event failed!!"),
+                         __func__);
                 VOS_ASSERT(0);
             }
         }
@@ -4435,6 +4493,11 @@ static const struct iw_priv_args hostapd_private_args[] = {
         IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
         0,
         "setNextChnl" },
+
+    {   QCASAP_SET_RADAR_CMD,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "setRadar" },
 
 #endif /* QCA_WIFI_2_0 */
 

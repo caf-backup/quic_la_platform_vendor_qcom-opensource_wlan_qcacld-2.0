@@ -11032,14 +11032,22 @@ VOS_STATUS sme_SelectCBMode(tHalHandle hHal, eCsrPhyMode eCsrPhyMode, tANI_U8 ch
                 PHY_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH -1;
           }
           else if ( channel == 48 || channel == 64 || channel == 112 ||
-                channel == 128 || channel == 144 || channel == 161 )
+                channel == 128 || channel == 161 )
           {
              smeConfig.csrConfig.channelBondingMode5GHz =
                 PHY_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH - 1;
           }
-          else if ( channel == 165 )
+          else if ( channel == 165 || channel == 140 )
           {
              smeConfig.csrConfig.channelBondingMode5GHz = 0;
+          }
+          else if ( channel == 132 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz = 2;
+          }
+          else if ( channel == 136 )
+          {
+             smeConfig.csrConfig.channelBondingMode5GHz = 1;
           }
       }
       /*TODO: Set HT40+ / HT40- for channel 5-7 based on ACS */
@@ -11062,18 +11070,18 @@ VOS_STATUS sme_SelectCBMode(tHalHandle hHal, eCsrPhyMode eCsrPhyMode, tANI_U8 ch
           if ( channel== 40 || channel == 48 || channel == 56 ||
                 channel == 64 || channel == 104 || channel == 112 ||
                 channel == 120 || channel == 128 || channel == 136 ||
-                channel == 144 || channel == 153 || channel == 161 )
+                channel == 153 || channel == 161 )
           {
              smeConfig.csrConfig.channelBondingMode5GHz = 1;
           }
           else if ( channel== 36 || channel == 44 || channel == 52 ||
                 channel == 60 || channel == 100 || channel == 108 ||
                 channel == 116 || channel == 124 || channel == 132 ||
-                channel == 140 || channel == 149 || channel == 157 )
+                channel == 149 || channel == 157 )
           {
              smeConfig.csrConfig.channelBondingMode5GHz = 2;
           }
-          else if ( channel == 165 )
+          else if ( channel == 165 || channel == 140)
           {
              smeConfig.csrConfig.channelBondingMode5GHz = 0;
           }
@@ -11943,6 +11951,59 @@ eHalStatus sme_AddChAvoidCallback
         {
            pMac->sme.pChAvoidNotificationCb = pCallbackfn;
         }
+        sme_ReleaseGlobalLock(&pMac->sme);
+    }
+
+    return(status);
+}
+
+/* ---------------------------------------------------------------------------
+    \fn sme_ChAvoidUpdateReq
+    \API to request channel avoidance update from FW.
+    \param hHal - The handle returned by macOpen
+    \param update_type - The udpate_type parameter of this request call
+    \- return Configuration message posting status, SUCCESS or Fail
+    -------------------------------------------------------------------------*/
+eHalStatus sme_ChAvoidUpdateReq
+(
+   tHalHandle hHal
+)
+{
+    eHalStatus          status    = eHAL_STATUS_SUCCESS;
+    VOS_STATUS          vosStatus = VOS_STATUS_SUCCESS;
+    tpAniSirGlobal      pMac      = PMAC_STRUCT(hHal);
+    tSirChAvoidUpdateReq *cauReq;
+    vos_msg_t           vosMessage;
+
+    status = sme_AcquireGlobalLock(&pMac->sme);
+    if (eHAL_STATUS_SUCCESS == status)
+    {
+        cauReq = (tSirChAvoidUpdateReq *)
+                  vos_mem_malloc(sizeof(tSirChAvoidUpdateReq));
+        if (NULL == cauReq)
+        {
+            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                      "%s Request Buffer Alloc Fail", __func__);
+            sme_ReleaseGlobalLock(&pMac->sme);
+            return eHAL_STATUS_FAILURE;
+        }
+
+        cauReq->reserved_param = 0;
+
+        /* serialize the req through MC thread */
+        vosMessage.bodyptr = cauReq;
+        vosMessage.type    = WDA_CH_AVOID_UPDATE_REQ;
+        vosStatus = vos_mq_post_message(VOS_MQ_ID_WDA, &vosMessage);
+        if (!VOS_IS_STATUS_SUCCESS(vosStatus))
+        {
+           VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                     "%s: Post Ch Avoid Update MSG fail", __func__);
+           vos_mem_free(cauReq);
+           sme_ReleaseGlobalLock(&pMac->sme);
+           return eHAL_STATUS_FAILURE;
+        }
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+                     "%s: Posted Ch Avoid Update MSG", __func__);
         sme_ReleaseGlobalLock(&pMac->sme);
     }
 

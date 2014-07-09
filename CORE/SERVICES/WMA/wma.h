@@ -643,6 +643,9 @@ typedef struct {
 
 	u_int8_t dfs_phyerr_filter_offload;
 	v_BOOL_t suitable_ap_hb_failure;
+
+	int32_t dfs_pri_multiplier;
+
 }t_wma_handle, *tp_wma_handle;
 
 struct wma_target_cap {
@@ -1219,6 +1222,7 @@ struct wma_vdev_start_req {
 	u_int8_t pmf_enabled;
 	u_int8_t vht_capable;
 	u_int8_t ht_capable;
+	int32_t dfs_pri_multiplier;
 };
 
 struct wma_set_key_params {
@@ -1265,8 +1269,12 @@ enum wma_cfg_cmd_id {
        /* Set time latency and time quota for MCC home channels */
        WMA_VDEV_MCC_SET_TIME_LATENCY,
        WMA_VDEV_MCC_SET_TIME_QUOTA,
-       /* Add any new command before this */
-       WMA_CMD_ID_MAX
+
+	/* dfs control interface */
+	WMA_VDEV_DFS_CONTROL_CMDID,
+
+	/* Add any new command before this */
+	WMA_CMD_ID_MAX
 };
 
 typedef struct wma_trigger_uapsd_params

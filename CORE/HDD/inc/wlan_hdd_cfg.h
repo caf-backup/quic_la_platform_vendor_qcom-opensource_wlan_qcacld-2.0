@@ -1607,6 +1607,12 @@ typedef enum
 #define CFG_ENABLE_FW_MODULE_LOG_DEFAULT  ""
 #endif
 
+#ifdef FEATURE_GREEN_AP
+#define CFG_ENABLE_GREEN_AP_FEATURE         "gEnableGreenAp"
+#define CFG_ENABLE_GREEN_AP_FEATURE_MIN     ( 0 )
+#define CFG_ENABLE_GREEN_AP_FEATURE_MAX     ( 1 )
+#define CFG_ENABLE_GREEN_AP_FEATURE_DEFAULT ( 1 )
+#endif
 
 /*
  * VOS Trace Enable Control
@@ -2492,6 +2498,11 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MAX       ( 1 )
 #define CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_DEFAULT   ( 1 )
 
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_NAME          "gDFSradarMappingPriMultiplier"
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_DEFAULT       ( 4 )
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_MIN           ( 0 )
+#define CFG_DFS_RADAR_PRI_MULTIPLIER_MAX           ( 10 )
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -3025,6 +3036,12 @@ typedef struct
 #endif
    v_U8_t      ignoreCAC;
    v_BOOL_t                    IsSapDfsChSifsBurstEnabled;
+
+#ifdef FEATURE_GREEN_AP
+   v_BOOL_t                    enableGreenAP;
+#endif
+
+   v_S31_t                     dfsRadarPriMultiplier;
 } hdd_config_t;
 
 #ifdef WLAN_FEATURE_MBSSID

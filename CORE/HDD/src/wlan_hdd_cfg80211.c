@@ -2680,7 +2680,8 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
     if (!VOS_IS_STATUS_SUCCESS(status))
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                 ("ERROR: HDD vos wait for single_event failed!!"));
+                 ("%s: ERROR: HDD vos wait for single_event failed!!"),
+                 __func__);
         smeGetCommandQStatus(hHal);
         VOS_ASSERT(0);
         return -EINVAL;
@@ -3281,6 +3282,10 @@ static int __wlan_hdd_cfg80211_change_iface(struct wiphy *wiphy,
     eCsrRoamBssType LastBSSType;
     hdd_config_t *pConfig = NULL;
     eMib_dot11DesiredBssType connectedBssType;
+#ifdef WLAN_FEATURE_LPSS
+    hdd_adapter_t *pDataAdapter = NULL;
+    hdd_adapter_list_node_t *pAdapterNode = NULL, *pNext = NULL;
+#endif
     VOS_STATUS vstatus;
     eHalStatus hstatus;
     int status;
@@ -3612,17 +3617,6 @@ static int __wlan_hdd_cfg80211_change_iface(struct wiphy *wiphy,
                 if (status != VOS_STATUS_SUCCESS)
                         return status;
 
-                // fw will take care if PS offload is enabled.
-                if (pHddCtx->cfg_ini->enablePowersaveOffload)
-                    goto done;
-                /* In case of JB, for P2P-GO, only change interface will be called,
-                 * This is the right place to enable back bmps_imps()
-                 */
-                if (pHddCtx->hdd_wlan_suspended)
-                {
-                    hdd_set_pwrparams(pHddCtx);
-                }
-                hdd_enable_bmps_imps(pHddCtx);
 #ifdef QCA_LL_TX_FLOW_CT
                 if (NL80211_IFTYPE_P2P_CLIENT == type)
                 {
@@ -3636,6 +3630,18 @@ static int __wlan_hdd_cfg80211_change_iface(struct wiphy *wiphy,
                              (void *)pAdapter);
                 }
 #endif /* QCA_LL_TX_FLOW_CT */
+
+                // fw will take care if PS offload is enabled.
+                if (pHddCtx->cfg_ini->enablePowersaveOffload)
+                    goto done;
+                /* In case of JB, for P2P-GO, only change interface will be called,
+                 * This is the right place to enable back bmps_imps()
+                 */
+                if (pHddCtx->hdd_wlan_suspended)
+                {
+                    hdd_set_pwrparams(pHddCtx);
+                }
+                hdd_enable_bmps_imps(pHddCtx);
                 goto done;
             case NL80211_IFTYPE_AP:
             case NL80211_IFTYPE_P2P_GO:
@@ -3716,6 +3722,26 @@ done:
         pHddCtx->isAmpAllowed = VOS_TRUE;
     }
 #endif //WLAN_BTAMP_FEATURE
+
+#ifdef WLAN_FEATURE_LPSS
+    vstatus = hdd_get_front_adapter(pHddCtx, &pAdapterNode);
+    while (NULL != pAdapterNode && VOS_STATUS_SUCCESS == status) {
+        pDataAdapter = pAdapterNode->pAdapter;
+        if (pDataAdapter) {
+            if (pDataAdapter->device_mode == WLAN_HDD_INFRA_STATION)
+                break;
+            if (pDataAdapter->device_mode == WLAN_HDD_P2P_CLIENT)
+                break;
+            if (pDataAdapter->device_mode == WLAN_HDD_P2P_DEVICE)
+                break;
+        }
+        vstatus = hdd_get_next_adapter ( pHddCtx, pAdapterNode, &pNext );
+        pAdapterNode = pNext;
+    }
+
+    wlan_hdd_send_status_pkg(pDataAdapter, NULL, 1, 0);
+#endif
+
     EXIT();
     return 0;
 }
@@ -3766,14 +3792,6 @@ static int wlan_hdd_tdls_add_station(struct wiphy *wiphy,
                     MAC_ADDRESS_STR " Request declined.",
                     __func__, MAC_ADDR_ARRAY(mac));
         return -ENOTSUPP;
-    }
-
-    if (pHddCtx->isLogpInProgress)
-    {
-        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "%s:LOGP in Progress. Ignore!!!", __func__);
-        wlan_hdd_tdls_set_link_status(pAdapter, mac, eTDLS_LINK_IDLE);
-        return -EBUSY;
     }
 
     pTdlsPeer = wlan_hdd_tdls_find_peer(pAdapter, mac, TRUE);
@@ -3952,21 +3970,23 @@ static int wlan_hdd_change_station(struct wiphy *wiphy,
     MTRACE(vos_trace(VOS_MODULE_ID_HDD,
                      TRACE_CODE_HDD_CHANGE_STATION,
                      pAdapter->sessionId, params->listen_interval));
-    pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
-    pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
 
-    if ((NULL == pHddCtx) || (NULL == pHddStaCtx))
+    pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
+
+    if (0 != wlan_hdd_validate_context(pHddCtx))
     {
-        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
-                  "invalid HDD state or HDD station context");
-        return -EINVAL;
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                 "%s: HDD context is not valid", __func__);
+       return -EINVAL;
     }
 
-    if (pHddCtx->isLogpInProgress)
+    pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
+
+    if (!pHddStaCtx)
     {
-        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "%s:LOGP in Progress. Ignore!!!", __func__);
-        return -EAGAIN;
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+                  "%s: HDD station context is null", __func__);
+        return -EINVAL;
     }
 
     vos_mem_copy(STAMacAddress.bytes, mac, sizeof(v_MACADDR_t));
@@ -8572,15 +8592,25 @@ int wlan_hdd_cfg80211_del_station(struct wiphy *wiphy,
 static int wlan_hdd_cfg80211_add_station(struct wiphy *wiphy,
           struct net_device *dev, u8 *mac, struct station_parameters *params)
 {
-    hdd_adapter_t *pAdapter =  WLAN_HDD_GET_PRIV_PTR(dev);
     int status = -EPERM;
 #ifdef FEATURE_WLAN_TDLS
+    hdd_adapter_t *pAdapter =  WLAN_HDD_GET_PRIV_PTR(dev);
+    hdd_context_t *pHddCtx = wiphy_priv(wiphy);
     u32 mask, set;
+
     ENTER();
 
     MTRACE(vos_trace(VOS_MODULE_ID_HDD,
                      TRACE_CODE_HDD_CFG80211_ADD_STA,
                      pAdapter->sessionId, params->listen_interval));
+
+    if (0 != wlan_hdd_validate_context(pHddCtx))
+    {
+       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                 "%s: HDD context is not valid", __func__);
+       return -EINVAL;
+    }
+
     mask = params->sta_flags_mask;
 
     set = params->sta_flags_set;
@@ -9460,19 +9490,12 @@ static int wlan_hdd_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *d
     MTRACE(vos_trace(VOS_MODULE_ID_HDD,
                      TRACE_CODE_HDD_CFG80211_TDLS_MGMT,
                      pAdapter->sessionId, action_code));
-    if (NULL == pHddCtx || NULL == pHddCtx->cfg_ini)
-    {
-        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "Invalid arguments");
-        return -EINVAL;
-    }
 
-    if (pHddCtx->isLogpInProgress)
+    if (0 != wlan_hdd_validate_context(pHddCtx))
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "%s:LOGP in Progress. Ignore!!!", __func__);
-        wlan_hdd_tdls_set_link_status(pAdapter, peer, eTDLS_LINK_IDLE);
-        return -EBUSY;
+                  "%s: HDD context is not valid", __func__);
+        return -EINVAL;
     }
 
     if (eTDLS_SUPPORT_NOT_ENABLED == pHddCtx->tdls_mode)
