@@ -204,6 +204,7 @@ static v_U8_t sapRandomChannelSel(ptSapContext sapContext)
     v_U8_t  target_channel = 0;
     v_U8_t total_num_channels = 0;
     v_BOOL_t isChannelNol = VOS_FALSE;
+    v_BOOL_t isOutOfRange = VOS_FALSE;
     int i=0;
 
     if (sapGet5GHzChannelList(sapContext))
@@ -244,6 +245,23 @@ static v_U8_t sapRandomChannelSel(ptSapContext sapContext)
                 continue;
             }
         }
+
+        /* check if the channel is within ACS channel range */
+        isOutOfRange = sapAcsChannelCheck(sapContext,
+                            sapContext->SapAllChnlList.channelList[i]);
+        if (VOS_TRUE == isOutOfRange)
+        {
+            /*
+             * Skip this channel since it is out of ACS channel range
+             */
+            VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_LOW,
+                     "%s[%d]: index: %d, Channel = %d out of ACS channel range",
+                      __func__, __LINE__, i,
+                      sapContext->SapAllChnlList.channelList[i]);
+
+            continue;
+        }
+
         available_chan_idx[available_chan_count++] =
             sapContext->SapAllChnlList.channelList[i];
     }
@@ -269,6 +287,36 @@ static v_U8_t sapRandomChannelSel(ptSapContext sapContext)
     return target_channel;
 }
 
+v_BOOL_t
+sapAcsChannelCheck(ptSapContext sapContext, v_U8_t channelNumber)
+{
+    v_U32_t acsStartChannelNum;
+    v_U32_t acsEndChannelNum;
+    tHalHandle hHal;
+
+    if (!sapContext->apAutoChannelSelection)
+        return VOS_FALSE;
+
+    hHal = VOS_GET_HAL_CB(sapContext->pvosGCtx);
+    if (NULL == hHal)
+    {
+        VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+             "Invalid HAL pointer from pvosGCtx on sapGetChannelList");
+        return VOS_STATUS_E_FAULT;
+    }
+
+    ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_START_CHANNEL,
+                 &acsStartChannelNum);
+    ccmCfgGetInt(hHal, WNI_CFG_SAP_CHANNEL_SELECT_END_CHANNEL,
+                 &acsEndChannelNum);
+
+    if ((channelNumber < acsStartChannelNum) ||
+        (channelNumber > acsEndChannelNum))
+        return VOS_TRUE;
+
+
+    return VOS_FALSE;
+}
 
 /*
  * This Function Checks if a given channel is AVAILABLE or USABLE
@@ -1601,6 +1649,12 @@ sapFsm
                              sapContext->csrRoamProfile.phyMode),
                              sapContext->channel);
                  }
+                 if (sapContext->channel > 14 &&
+                         (sapContext->csrRoamProfile.phyMode ==
+                         eSAP_DOT11_MODE_11g ||
+                         sapContext->csrRoamProfile.phyMode ==
+                         eSAP_DOT11_MODE_11g_ONLY))
+                     sapContext->csrRoamProfile.phyMode = eSAP_DOT11_MODE_11a;
 
                  /* Transition from eSAP_CH_SELECT to eSAP_STARTING (both without substates) */
                  VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, from state %s => %s",
@@ -2068,18 +2122,49 @@ sapconvertToCsrProfile(tsap_Config_t *pconfig_params, eCsrRoamBssType bssType, t
     profile->MFPRequired = pconfig_params->mfpRequired ? 1 : 0;
 #endif
 
-    if (pconfig_params->addnIEsBufferLen > 0 &&
-        pconfig_params->addnIEsBuffer != NULL)
+    if (pconfig_params->probeRespIEsBufferLen > 0 &&
+        pconfig_params->pProbeRespIEsBuffer != NULL)
     {
-        profile->addIeParams.dataLen = pconfig_params->addnIEsBufferLen;
-        profile->addIeParams.data_buff = pconfig_params->addnIEsBuffer;
+        profile->addIeParams.probeRespDataLen =
+            pconfig_params->probeRespIEsBufferLen;
+        profile->addIeParams.probeRespData_buff =
+            pconfig_params->pProbeRespIEsBuffer;
     }
     else
     {
-        profile->addIeParams.dataLen = 0;
-        profile->addIeParams.data_buff = NULL;
+        profile->addIeParams.probeRespDataLen = 0;
+        profile->addIeParams.probeRespData_buff = NULL;
     }
-    return eSAP_STATUS_SUCCESS; /* Success.  */
+    /*assoc resp IE */
+    if (pconfig_params->assocRespIEsLen > 0 &&
+            pconfig_params->pAssocRespIEsBuffer != NULL)
+    {
+        profile->addIeParams.assocRespDataLen =
+            pconfig_params->assocRespIEsLen;
+        profile->addIeParams.assocRespData_buff =
+            pconfig_params->pAssocRespIEsBuffer;
+    }
+    else
+    {
+        profile->addIeParams.assocRespDataLen = 0;
+        profile->addIeParams.assocRespData_buff = NULL;
+    }
+
+    if (pconfig_params->probeRespBcnIEsLen > 0 &&
+            pconfig_params->pProbeRespBcnIEsBuffer!= NULL)
+    {
+        profile->addIeParams.probeRespBCNDataLen =
+            pconfig_params->probeRespBcnIEsLen;
+        profile->addIeParams.probeRespBCNData_buff =
+            pconfig_params->pProbeRespBcnIEsBuffer;
+    }
+    else
+    {
+        profile->addIeParams.probeRespBCNDataLen = 0;
+        profile->addIeParams.probeRespBCNData_buff = NULL;
+    }
+
+    return eSAP_STATUS_SUCCESS; /* Success. */
 }
 
 /**
