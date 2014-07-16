@@ -432,6 +432,14 @@ typedef enum {
     WMI_WOW_ENABLE_CMDID,
     /** host woke up from sleep event to FW. Generated in response to WOW Hardware event */
     WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID,
+    /* Acer IOAC add keep alive cmd. */
+    WMI_WOW_ACER_IOAC_ADD_KEEPALIVE_CMDID,
+    /* Acer IOAC del keep alive cmd. */
+    WMI_WOW_ACER_IOAC_DEL_KEEPALIVE_CMDID,
+    /* Acer IOAC add pattern for awake */
+    WMI_WOW_ACER_IOAC_ADD_WAKE_PATTERN_CMDID,
+    /* Acer IOAC deleta a wake pattern */
+    WMI_WOW_ACER_IOAC_DEL_WAKE_PATTERN_CMDID,
 
     /* RTT measurement related cmd */
     /** reques to make an RTT measurement */
@@ -452,6 +460,14 @@ typedef enum {
     WMI_MCC_SCHED_TRAFFIC_STATS_CMDID,
     /** one time request for txrx stats */
     WMI_REQUEST_STATS_EXT_CMDID,
+
+    /* Link Layer stats */
+    /** Request for link layer stats */
+    WMI_REQUEST_LINK_STATS_CMDID,
+    /** Request for setting params to link layer stats */
+    WMI_START_LINK_STATS_CMDID,
+    /** Request to clear stats*/
+    WMI_CLEAR_LINK_STATS_CMDID,
 
     /** ARP OFFLOAD REQUEST*/
     WMI_SET_ARP_NS_OFFLOAD_CMDID=WMI_CMD_GRP_START_ID(WMI_GRP_ARP_NS_OFL),
@@ -739,6 +755,12 @@ typedef enum {
     /*STATS specific events*/
     /** txrx stats event requested by host */
     WMI_STATS_EXT_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_STATS),
+    /** FW iface link stats Event  */
+    WMI_IFACE_LINK_STATS_EVENTID,
+    /** FW iface peer link stats Event  */
+    WMI_PEER_LINK_STATS_EVENTID,
+    /** FW Update radio stats Event  */
+    WMI_RADIO_LINK_STATS_EVENTID,
 
     /*NLO specific events*/
     /** NLO match event after the first match */
@@ -797,8 +819,12 @@ typedef enum {
 
     /* Container for QXDM/DIAG events */
     WMI_DIAG_DATA_CONTAINER_EVENTID,
+
      /* host auto shutdown event */
     WMI_HOST_AUTO_SHUTDOWN_EVENTID,
+
+    /*update mib counters together with WMI_UPDATE_STATS_EVENTID*/
+    WMI_UPDATE_WHAL_MIB_STATS_EVENTID,
 
     /* GPIO Event */
     WMI_GPIO_INPUT_EVENTID=WMI_EVT_GRP_START_ID(WMI_GRP_GPIO),
@@ -1386,6 +1412,22 @@ typedef struct {
      * @brief keep_alive_pattern_size - keep alive pattern size.
      */
     A_UINT32 keep_alive_pattern_size;
+
+    /**
+     * @brief max_tdls_concurrent_sleep_sta - Number of tdls sleep sta supported
+     * @details
+     *      Each TDLS STA can become a sleep STA independently. This parameter
+     *      mentions how many such sleep STAs can be supported concurrently.
+     */
+    A_UINT32 max_tdls_concurrent_sleep_sta;
+
+    /**
+     * @brief max_tdls_concurrent_buffer_sta - Number of tdls buffer sta supported
+     * @details
+     *      Each TDLS STA can become a buffer STA independently. This parameter
+     *      mentions how many such buffer STAs can be supported concurrently.
+     */
+    A_UINT32 max_tdls_concurrent_buffer_sta;
 } wmi_resource_config;
 
 
@@ -1702,6 +1744,25 @@ typedef struct {
     /**id of VDEV that requested the scan */
     A_UINT32 vdev_id;
 } wmi_scan_event_fixed_param;
+
+
+/*
+* If FW has multiple active channels due to MCC(multi channel concurrency),
+* then these stats are combined stats for all the active channels.
+*/
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_update_whal_mib_stats_event_fixed_param */
+    /** ack count, it is an incremental number, not accumulated number */
+    A_UINT32 ackRcvBad;
+    /** bad rts count, it is an incremental number, not accumulated number */
+    A_UINT32 rtsBad;
+    /** good rts, it is an incremental number, not accumulated number */
+    A_UINT32 rtsGood;
+    /** fcs count, it is an incremental number, not accumulated number */
+    A_UINT32 fcsBad;
+    /** beacon count, it is an incremental number, not accumulated number */
+    A_UINT32 noBeacons;
+} wmi_update_whal_mib_stats_event_fixed_param;
 
 /*
  * This defines how much headroom is kept in the
@@ -2257,6 +2318,7 @@ typedef enum {
     PAUSE_TYPE_P2P_GO_PS =      0x5, /** only vdev_map is valid, actually only one vdev id is set at one time */
     PAUSE_TYPE_STA_ADD_BA =     0x6, /** only peer_id and tid_map are valid, actually only one tid is set at one time */
     PAUSE_TYPE_AP_PS =          0x7, /** for pausing AP vdev when all the connected clients are in PS. only vdev_map is valid */
+    PAUSE_TYPE_IBSS_PS =        0x8, /** for pausing IBSS vdev when all the peers are in PS. only vdev_map is valid */
     PAUSE_TYPE_HOST =           0x15,/** host is requesting vdev pause */
 } wmi_tx_pause_type;
 
@@ -2537,6 +2599,324 @@ typedef struct {
     /** peer MAC address */
     wmi_mac_addr peer_macaddr;
 } wmi_request_stats_cmd_fixed_param;
+
+/* stats type bitmap  */
+#define WMI_LINK_STATS_RADIO         0x00000001
+#define WMI_LINK_STATS_IFACE         0x00000002
+#define WMI_LINK_STATS_ALL_PEER      0x00000004
+#define WMI_LINK_STATS_PER_PEER      0x00000008
+
+
+/* wifi clear statistics bitmap  */
+#define WIFI_STATS_RADIO              0x00000001 /** all radio statistics */
+#define WIFI_STATS_RADIO_CCA          0x00000002 /** cca_busy_time (within radio statistics) */
+#define WIFI_STATS_RADIO_CHANNELS     0x00000004 /** all channel statistics (within radio statistics) */
+#define WIFI_STATS_RADIO_SCAN         0x00000008 /** all scan statistics (within radio statistics) */
+#define WIFI_STATS_IFACE              0x00000010 /** all interface statistics */
+#define WIFI_STATS_IFACE_TXRATE       0x00000020 /** all tx rate statistics (within interface statistics) */
+#define WIFI_STATS_IFACE_AC           0x00000040 /** all ac statistics (within interface statistics) */
+#define WIFI_STATS_IFACE_CONTENTION   0x00000080 /** all contention (min, max, avg) statistics (within ac statisctics) */
+#define WMI_STATS_IFACE_ALL_PEER      0x00000100 /** All peer stats on this interface */
+#define WMI_STATS_IFACE_PER_PEER      0x00000200 /** Clear particular peer stats depending on the peer_mac */
+
+/** Default value for stats if the stats collection has not started */
+#define WMI_STATS_VALUE_INVALID       0xffffffff
+
+typedef enum {
+    WMI_ROAMING_IDLE = 0,
+    WMI_ROAMING_ACTIVE = 1,
+} wmi_roam_state;
+
+/* access categories */
+typedef enum {
+   WMI_AC_VO  = 0,
+   WMI_AC_VI  = 1,
+   WMI_AC_BE  = 2,
+   WMI_AC_BK  = 3,
+   WMI_AC_MAX = 4,
+} wmi_traffic_ac;
+
+typedef enum {
+    WMI_STA_STATS = 0,
+    WMI_SOFTAP_STATS = 1,
+    WMI_IBSS_STATS = 2,
+    WMI_P2P_CLIENT_STATS = 3,
+    WMI_P2P_GO_STATS = 4,
+    WMI_NAN_STATS = 5,
+    WMI_MESH_STATS = 6,
+} wmi_link_iface_type;
+
+/* channel operating width */
+typedef enum {
+    WMI_CHAN_WIDTH_20    = 0,
+    WMI_CHAN_WIDTH_40    = 1,
+    WMI_CHAN_WIDTH_80    = 2,
+    WMI_CHAN_WIDTH_160   = 3,
+    WMI_CHAN_WIDTH_80P80 = 4,
+    WMI_CHAN_WIDTH_5     = 5,
+    WMI_CHAN_WIDTH_10    = 6,
+} wmi_channel_width;
+
+/* wifi peer type */
+typedef enum {
+   WMI_PEER_STA,
+   WMI_PEER_AP,
+   WMI_PEER_P2P_GO,
+   WMI_PEER_P2P_CLIENT,
+   WMI_PEER_NAN,
+   WMI_PEER_TDLS,
+   WMI_PEER_INVALID,
+} wmi_peer_type;
+
+/*Clear stats*/
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_clear_link_stats_cmd_fixed_param */
+    /** unique id identifying the VDEV, generated by the caller */
+    A_UINT32 vdev_id;
+    /** stop_stats_collection_req = 1 will imply stop the statistics collection */
+    A_UINT32 stop_stats_collection_req;
+    /** identifies what stats to be cleared */
+    A_UINT32 stats_clear_req_mask;
+    /** identifies which peer stats to be cleared. Valid only while clearing PER_REER */
+    wmi_mac_addr peer_macaddr;
+} wmi_clear_link_stats_cmd_fixed_param;
+
+/* Link Stats configuration params. Trigger the link layer statistics collection*/
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_start_link_stats_cmd_fixed_param */
+    /** threshold to classify the pkts as short or long */
+    A_UINT32 mpdu_size_threshold;
+    /** set for field debug mode. Driver should collect all statistics regardless of performance impact.*/
+    A_UINT32 aggressive_statistics_gathering;
+} wmi_start_link_stats_cmd_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_request_link_stats_cmd_fixed_param */
+    /** Type of stats required. This is a bitmask WMI_LINK_STATS_RADIO, WMI_LINK_STATS_IFACE */
+    A_UINT32 stats_type;
+    /** unique id identifying the VDEV, generated by the caller */
+    A_UINT32 vdev_id;
+    /** unique id identifying the request, generated by the caller */
+    A_UINT32 request_id;
+    /** peer MAC address */
+    wmi_mac_addr peer_macaddr;
+} wmi_request_link_stats_cmd_fixed_param;
+
+/* channel statistics */
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_channel_stats */
+    /** Channel width (20, 40, 80, 80+80, 160) enum wmi_channel_width*/
+    A_UINT32 channel_width;
+    /** Primary 20 MHz channel */
+    A_UINT32 center_freq;
+    /** center frequency (MHz) first segment */
+    A_UINT32 center_freq0;
+    /** center frequency (MHz) second segment */
+    A_UINT32 center_freq1;
+    /** msecs the radio is awake (32 bits number accruing over time) */
+    A_UINT32 radio_awake_time;
+    /** msecs the CCA register is busy (32 bits number accruing over time) */
+    A_UINT32 cca_busy_time;
+} wmi_channel_stats;
+
+/* radio statistics */
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_radio_link_stats */
+    /** Wifi radio (if multiple radio supported) */
+    A_UINT32 radio_id;
+    /** msecs the radio is awake (32 bits number accruing over time) */
+    A_UINT32 on_time;
+    /** msecs the radio is transmitting (32 bits number accruing over time) */
+    A_UINT32 tx_time;
+    /** msecs the radio is in active receive (32 bits number accruing over time) */
+    A_UINT32 rx_time;
+    /** msecs the radio is awake due to all scan (32 bits number accruing over time) */
+    A_UINT32 on_time_scan;
+    /** msecs the radio is awake due to NAN (32 bits number accruing over time) */
+    A_UINT32 on_time_nbd;
+    /** msecs the radio is awake due to G?scan (32 bits number accruing over time) */
+    A_UINT32 on_time_gscan;
+    /** msecs the radio is awake due to roam?scan (32 bits number accruing over time) */
+    A_UINT32 on_time_roam_scan;
+    /** msecs the radio is awake due to PNO scan (32 bits number accruing over time) */
+    A_UINT32 on_time_pno_scan;
+    /** msecs the radio is awake due to HS2.0 scans and GAS exchange (32 bits number accruing over time) */
+    A_UINT32 on_time_hs20;
+    /** number of channels */
+    A_UINT32 num_channels;
+} wmi_radio_link_stats;
+
+/** Radio statistics (once started) do not stop or get reset unless wifi_clear_link_stats is invoked */
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_stats_event_fixed_param */
+    /** unique id identifying the request, given in the request stats command */
+    A_UINT32 request_id;
+    /** Number of radios*/
+    A_UINT32 num_radio;
+    /** more_data will be set depending on the number of radios */
+    A_UINT32 more_radio_events;
+/*
+ * This TLV is followed by another TLV of array of bytes
+ *   size of(struct wmi_radio_link_stats);
+ *
+ * This TLV is followed by another TLV of array of bytes
+ *   num_channels * size of(struct wmi_channel_stats)
+ */
+
+} wmi_radio_link_stats_event_fixed_param;
+
+/* per rate statistics */
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_rate_stats */
+    /** rate information
+     * The rate-code is a 1-byte field in which:for given rate, nss and preamble
+     * b'7-b-6 indicate the preamble (0 OFDM, 1 CCK, 2, HT, 3 VHT)
+     * b'5-b'4 indicate the NSS (0 - 1x1, 1 - 2x2, 2 - 3x3)
+     * b'3-b'0 indicate the rate, which is indicated as follows:
+     *          OFDM :     0: OFDM 48 Mbps
+     *                     1: OFDM 24 Mbps
+     *                     2: OFDM 12 Mbps
+     *                     3: OFDM 6 Mbps
+     *                     4: OFDM 54 Mbps
+     *                     5: OFDM 36 Mbps
+     *                     6: OFDM 18 Mbps
+     *                     7: OFDM 9 Mbps
+     *         CCK (pream == 1)
+     *                     0: CCK 11 Mbps Long
+     *                     1: CCK 5.5 Mbps Long
+     *                     2: CCK 2 Mbps Long
+     *                     3: CCK 1 Mbps Long
+     *                     4: CCK 11 Mbps Short
+     *                     5: CCK 5.5 Mbps Short
+     *                     6: CCK 2 Mbps Short
+     *         HT/VHT (pream == 2/3)
+     *                     0..7: MCS0..MCS7 (HT)
+     *                     0..9: MCS0..MCS9 (VHT)
+     */
+    A_UINT32 rate;
+    /** units of 100 Kbps */
+    A_UINT32 bitrate;
+    /** number of successfully transmitted data pkts (ACK rcvd) */
+    A_UINT32 tx_mpdu;
+    /** number of received data pkts */
+    A_UINT32 rx_mpdu;
+    /** number of data packet losses (no ACK) */
+    A_UINT32 mpdu_lost;
+    /** total number of data pkt retries */
+    A_UINT32 retries;
+    /** number of short data pkt retries */
+    A_UINT32 retries_short;
+    /** number of long data pkt retries */
+    A_UINT32 retries_long;
+} wmi_rate_stats;
+
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_peer_link_stats */
+    /** peer type (AP, TDLS, GO etc.) enum wmi_peer_type*/
+    A_UINT32 peer_type;
+    /** mac address */
+    wmi_mac_addr peer_mac_address;
+    /** peer wmi_CAPABILITY_XXX */
+    A_UINT32 capabilities;
+    /** number of rates */
+    A_UINT32 num_rates;
+} wmi_peer_link_stats;
+
+/** PEER statistics (once started) reset and start afresh after each connection */
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_peer_stats_event_fixed_param */
+    /** unique id identifying the request, given in the request stats command */
+    A_UINT32 request_id;
+    /** number of peers accomidated in this particular event  */
+    A_UINT32 num_peers;
+    /** Indicates the fragment number  */
+    A_UINT32 peer_event_number;
+    /** Indicates if there are more peers which will be sent as seperate peer_stats event */
+    A_UINT32 more_data;
+
+/**
+ * This TLV is followed by another TLV
+ * num_peers * size of(struct wmi_peer_stats)
+ * num_rates * size of(struct wmi_rate_stats). num_rates is the sum of the rates of all the peers.
+ */
+} wmi_peer_stats_event_fixed_param;
+
+/* per access category statistics */
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_wmm_ac_stats */
+    /** access category (VI, VO, BE, BK) enum wmi_traffic_ac*/
+    A_UINT32 ac_type;
+    /** number of successfully transmitted unicast data pkts (ACK rcvd) */
+    A_UINT32 tx_mpdu;
+    /** number of received unicast mpdus */
+    A_UINT32 rx_mpdu;
+    /** number of succesfully transmitted multicast data packets */
+    /** STA case: implies ACK received from AP for the unicast packet in which mcast pkt was sent */
+    A_UINT32 tx_mcast;
+    /** number of received multicast data packets */
+    A_UINT32 rx_mcast;
+    /** number of received unicast a-mpdus */
+    A_UINT32 rx_ampdu;
+    /** number of transmitted unicast a-mpdus */
+    A_UINT32 tx_ampdu;
+    /** number of data pkt losses (no ACK) */
+    A_UINT32 mpdu_lost;
+    /** total number of data pkt retries */
+    A_UINT32 retries;
+    /** number of short data pkt retries */
+    A_UINT32 retries_short;
+    /** number of long data pkt retries */
+    A_UINT32 retries_long;
+    /** data pkt min contention time (usecs) */
+    A_UINT32 contention_time_min;
+    /** data pkt max contention time (usecs) */
+    A_UINT32 contention_time_max;
+    /** data pkt avg contention time (usecs) */
+    A_UINT32 contention_time_avg;
+    /** num of data pkts used for contention statistics */
+    A_UINT32 contention_num_samples;
+} wmi_wmm_ac_stats;
+
+/* interface statistics */
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_iface_link_stats */
+    /** access point beacon received count from connected AP */
+    A_UINT32 beacon_rx;
+    /** access point mgmt frames received count from connected AP (including Beacon) */
+    A_UINT32 mgmt_rx;
+    /** action frames received count */
+    A_UINT32 mgmt_action_rx;
+    /** action frames transmit count */
+    A_UINT32 mgmt_action_tx;
+    /** access Point Beacon and Management frames RSSI (averaged) */
+    A_UINT32 rssi_mgmt;
+    /** access Point Data Frames RSSI (averaged) from connected AP */
+    A_UINT32 rssi_data;
+    /** access Point ACK RSSI (averaged) from connected AP */
+    A_UINT32 rssi_ack;
+    /** number of peers */
+    A_UINT32 num_peers;
+    /** Indicates how many peer_stats events will be sent depending on the num_peers. */
+    A_UINT32 num_peer_events;
+    /** number of ac */
+    A_UINT32 num_ac;
+    /** Roaming Stat */
+    A_UINT32 roam_state;
+} wmi_iface_link_stats;
+
+/** Interface statistics (once started) reset and start afresh after each connection */
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_iface_link_stats_event_fixed_param */
+    /** unique id identifying the request, given in the request stats command */
+    A_UINT32 request_id;
+    /** unique id identifying the VDEV, generated by the caller */
+    A_UINT32 vdev_id;
+/*
+ * This TLV is followed by another TLV
+ *   wmi_iface_link_stats iface_link_stats;
+ *   num_ac * size of(struct wmi_wmm_ac_stats)
+ */
+} wmi_iface_link_stats_event_fixed_param;
 
 /** Suspend option */
 enum {
@@ -3061,7 +3441,42 @@ typedef enum {
     /* Enable Aggregation State Trigger Event */
     WMI_VDEV_PARAM_AGGR_TRIG_EVENT_ENABLE,
 
+    /* This parameter indicates whether IBSS station can enter into power save
+    * mode by sending Null frame (with PM=1). When not allowed, IBSS station has to stay
+    * awake all the time and should never set PM=1 in its transmitted frames.
+    * This parameter is meaningful/valid only when WMI_VDEV_PARAM_ATIM_WINDOW_LENGTH
+    * is non-zero. */
+    WMI_VDEV_PARAM_IS_IBSS_POWER_SAVE_ALLOWED,
+
+    /* This parameter indicates if this station can enter into power collapse
+    * for the remaining beacon interval after the ATIM window.
+    * This parameter is meaningful/valid only when WMI_VDEV_PARAM_IS_IBSS_POWER_SAVE_ALLOWED
+    * is set to TRUE. */
+    WMI_VDEV_PARAM_IS_POWER_COLLAPSE_ALLOWED,
+
+    /* This parameter indicates whether IBSS station exit power save mode and
+    * enter power active state (by sending Null frame with PM=0 in the immediate ATIM Window)
+    * whenever there is a TX/RX activity. */
+    WMI_VDEV_PARAM_IS_AWAKE_ON_TXRX_ENABLED,
+
+    /* If Awake on TX/RX activity is enabled, this parameter indicates
+    * the data inactivity time in number of beacon intervals after which
+    * IBSS station reenters power save by sending Null frame with PM=1. */
+    WMI_VDEV_PARAM_INACTIVITY_CNT,
+
+    /* Inactivity time in msec after which TX Service Period (SP) is
+    * terminated by sending a Qos Null frame with EOSP.
+    * If value is 0, TX SP is terminated with the last buffered packet itself
+    * instead of waiting for the inactivity timeout. */
+    WMI_VDEV_PARAM_TXSP_END_INACTIVITY_TIME_MS,
+
+    /** DTIM policy */
+    WMI_VDEV_PARAM_DTIM_POLICY,
+
 } WMI_VDEV_PARAM;
+
+/* Length of ATIM Window in TU */
+#define WMI_VDEV_PARAM_ATIM_WINDOW_LENGTH WMI_VDEV_PARAM_ATIM_WINDOW
 
 enum wmi_pkt_type {
     WMI_PKT_TYPE_RAW = 0,
@@ -4740,8 +5155,17 @@ when comparing wifi header.*/
 #define WOW_DEFAULT_BITMASK_SIZE_DWORD        37
 #define WOW_MAX_BITMAP_FILTERS               32
 #define WOW_DEFAULT_MAGIG_PATTERN_MATCH_CNT  16
+#define WOW_ACER_EXTEND_PATTERN_MATCH_CNT    16
+#define WOW_ACER_SHORT_PATTERN_MATCH_CNT     8
 #define WOW_DEFAULT_EVT_BUF_SIZE             148  /* Maximum 148 bytes of the data is copied starting from header incase if the match is found.
                                                                                     The 148 comes from (128 - 14 )  payload size  + 8bytes LLC + 26bytes MAC header*/
+#define WOW_DEFAULT_ACER_IOAC_PATTERN_SIZE  6
+#define WOW_DEFAULT_ACER_IOAC_PATTERN_SIZE_DWORD 2
+#define WOW_DEFAULT_ACER_IOAC_RANDOM_SIZE  6
+#define WOW_DEFAULT_ACER_IOAC_RANDOM_SIZE_DWORD 2
+#define WOW_DEFAULT_ACER_IOAC_KEEP_ALIVE_PKT_SIZE   120
+#define WOW_DEFAULT_ACER_IOAC_KEEP_ALIVE_PKT_SIZE_DWORD 30
+
 typedef enum pattern_type_e {
     WOW_PATTERN_MIN = 0,
     WOW_BITMAP_PATTERN = WOW_PATTERN_MIN,
@@ -4751,6 +5175,8 @@ typedef enum pattern_type_e {
     WOW_TIMER_PATTERN,
     WOW_MAGIC_PATTERN,
     WOW_IPV6_RA_PATTERN,
+    WOW_ACER_IOAC_PKT_PATTERN,
+    WOW_ACER_IOAC_TMR_PATTERN,
     WOW_PATTERN_MAX
 }WOW_PATTERN_TYPE;
 
@@ -4772,6 +5198,10 @@ typedef enum event_type_e {
     WOW_HTT_EVENT,
     WOW_RA_MATCH_EVENT,
     WOW_HOST_AUTO_SHUTDOWN_EVENT,
+    WOW_ACER_IOAC_MAGIC_EVENT,
+    WOW_ACER_IOAC_SHORT_EVENT,
+    WOW_ACER_IOAC_EXTEND_EVENT,
+    WOW_ACER_IOAC_TIMER_EVENT,
 }WOW_WAKE_EVENT_TYPE;
 
 typedef enum wake_reason_e {
@@ -4796,6 +5226,10 @@ typedef enum wake_reason_e {
     WOW_REASON_HTT_EVENT,
     WOW_REASON_RA_MATCH,
     WOW_REASON_HOST_AUTO_SHUTDOWN,
+    WOW_REASON_ACER_IOAC_MAGIC_EVENT,
+    WOW_REASON_ACER_IOAC_SHORT_EVENT,
+    WOW_REASON_ACER_IOAC_EXTEND_EVENT,
+    WOW_REASON_ACER_IOAC_TIMER_EVENT,
     WOW_REASON_DEBUG_TEST = 0xFF,
 }WOW_WAKE_REASON_TYPE;
 
@@ -4841,6 +5275,64 @@ typedef struct WOW_MAGIC_PATTERN_CMD
     A_UINT32     tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_MAGIC_PATTERN_CMD */
 	wmi_mac_addr macaddr;
 }WOW_MAGIC_PATTERN_CMD;
+
+typedef enum wow_ioac_pattern_type {
+    WOW_IOAC_MAGIC_PATTERN = 1,
+    WOW_IOAC_SHORT_PATTERN,
+    WOW_IOAC_EXTEND_PATTERN,
+} WOW_IOAC_PATTERN_TYPE;
+
+typedef struct acer_ioac_pkt_pattern_s {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_ACER_IOAC_PKT_PATTERN_T */
+    A_UINT32 pattern_type;
+    A_UINT32 pattern[WOW_DEFAULT_ACER_IOAC_PATTERN_SIZE_DWORD];
+    A_UINT32 random[WOW_DEFAULT_ACER_IOAC_RANDOM_SIZE_DWORD];
+    A_UINT32 pattern_len;
+    A_UINT32 random_len;
+} WOW_ACER_IOAC_PKT_PATTERN_T;
+
+typedef struct acer_ioac_tmr_pattern_s {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_ACER_IOAC_TMR_PATTERN_T */
+    A_UINT32 wake_in_s;
+    A_UINT32 vdev_id;
+} WOW_ACER_IOAC_TMR_PATTERN_T;
+
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_IOAC_ADD_KEEPALIVE_CMD_fixed_param */
+    A_UINT32 nID;
+} WMI_WOW_IOAC_ADD_KEEPALIVE_CMD_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_IOAC_DEL_KEEPALIVE_CMD_fixed_param */
+    A_UINT32 nID;
+} WMI_WOW_IOAC_DEL_KEEPALIVE_CMD_fixed_param;
+
+typedef struct acer_ioac_keepalive_s {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WOW_IOAC_KEEPALIVE_T */
+    A_UINT32 keepalive_pkt_buf[WOW_DEFAULT_ACER_IOAC_KEEP_ALIVE_PKT_SIZE_DWORD];
+    A_UINT32 keepalive_pkt_len;
+    A_UINT32 period_in_ms;
+    A_UINT32 vdev_id;
+} WOW_IOAC_KEEPALIVE_T;
+
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_ACER_IOAC_ADD_PATTERN_CMD_fixed_param */
+    A_UINT32 vdev_id;
+    A_UINT32 pattern_type;
+/*
+ * Following this struct are these TLVs. Note that they are all array of structures
+ * but can have at most one element. Which TLV is empty or has one element depends
+ * on the field pattern_type. This is to emulate an union.
+ *     WOW_ACER_IOAC_PKT_PATTERN_T pattern_info_acer_pkt[];
+ *     WOW_ACER_IOAC_TMR_PATTERN_T pattern_info_acer_tmr[];
+ */
+} WMI_WOW_ACER_IOAC_ADD_PATTERN_CMD_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_ACER_IOAC_DEL_PATTERN_CMD_fixed_param */
+    A_UINT32 vdev_id;
+    A_UINT32 pattern_type;
+} WMI_WOW_ACER_IOAC_DEL_PATTERN_CMD_fixed_param;
 
 typedef struct {
     A_UINT32        tlv_header;     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_WMI_WOW_ADD_PATTERN_CMD_fixed_param */
@@ -5786,6 +6278,16 @@ typedef struct {
     /** TDLS Option Control
      * Off-Channel, Buffer STA, (later)Sleep STA support */
     A_UINT32 tdls_options;
+    /* Buffering time in number of beacon intervals */
+    A_UINT32 tdls_peer_traffic_ind_window;
+    /* Wait time for PTR frame */
+    A_UINT32 tdls_peer_traffic_response_timeout_ms;
+    /* Self PUAPSD mask */
+    A_UINT32 tdls_puapsd_mask;
+    /* Inactivity timeout */
+    A_UINT32 tdls_puapsd_inactivity_time_ms;
+    /* Max of rx frame during SP */
+    A_UINT32 tdls_puapsd_rx_frame_threshold;
 } wmi_tdls_set_state_cmd_fixed_param;
 
 /* WMI_TDLS_PEER_UPDATE_CMDID */
@@ -5803,7 +6305,6 @@ enum wmi_tdls_peer_state {
 };
 
 /* NB: These defines are fixed, and cannot be changed without breaking WMI compatibility */
-#define WMI_TDLS_MAX_SUPP_CHANNELS 128
 #define WMI_TDLS_MAX_SUPP_OPER_CLASSES 32
 typedef struct {
     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_tdls_peer_capabilities  */
@@ -5818,10 +6319,25 @@ typedef struct {
     A_UINT32 off_chan_support;
     A_UINT32 peer_curr_operclass;
     A_UINT32 self_curr_operclass;
+    /* Number of channels available for off channel operation */
     A_UINT32 peer_chan_len;
-    A_UINT8  peer_chan[WMI_TDLS_MAX_SUPP_CHANNELS];
     A_UINT32 peer_operclass_len;
     A_UINT8  peer_operclass[WMI_TDLS_MAX_SUPP_OPER_CLASSES];
+    /* Is peer initiator or responder of TDLS setup request */
+    A_UINT32 is_peer_responder;
+    /* Preferred off channel number as configured by user */
+    A_UINT32 pref_offchan_num;
+    /* Preferred off channel bandwidth as configured by user */
+    A_UINT32 pref_offchan_bw;
+
+    /** Followed by the variable length TLV peer_chan_list:
+     *  wmi_channel peer_chan_list[].
+     *  Array size would be peer_chan_len.
+     *  This array is intersected channels which is supported by both peer
+     *  and DUT. freq1 in chan_info shall be same as mhz, freq2 shall be 0.
+     *  FW shall compute BW for an offchan based on peer's ht/vht cap
+     *  received in peer_assoc cmd during change STA operation
+     */
 } wmi_tdls_peer_capabilities;
 
 #define WMI_TDLS_QOS_VO_FLAG           0
@@ -5832,43 +6348,82 @@ typedef struct {
 #define WMI_TDLS_QOS_SP_FLAG           5
 #define WMI_TDLS_QOS_MOREDATA_FLAG     7
 
-#define WMI_TDLS_SET_QOS_FLAG(ppeer_caps,flag) do { \
+#define WMI_TDLS_PEER_SET_QOS_FLAG(ppeer_caps,flag) do { \
         (ppeer_caps)->peer_qos |=  (1 << flag);      \
      } while(0)
-#define WMI_TDLS_GET_QOS_FLAG(ppeer_caps,flag)   \
+#define WMI_TDLS_PEER_GET_QOS_FLAG(ppeer_caps,flag)   \
         (((ppeer_caps)->peer_qos & (1 << flag)) >> flag)
 
-#define WMI_SET_TDLS_VO_UAPSD(ppeer_caps) \
-    WMI_TDLS_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VO_FLAG)
-#define WMI_GET_TDLS_VO_UAPSD(ppeer_caps) \
-    WMI_TDLS_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VO_FLAG)
-#define WMI_SET_TDLS_VI_UAPSD(ppeer_caps) \
-    WMI_TDLS_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VI_FLAG)
-#define WMI_GET_TDLS_VI_UAPSD(ppeer_caps) \
-    WMI_TDLS_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VI_FLAG)
-#define WMI_SET_TDLS_BK_UAPSD(ppeer_caps) \
-    WMI_TDLS_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BK_FLAG)
-#define WMI_GET_TDLS_BK_UAPSD(ppeer_caps) \
-    WMI_TDLS_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BK_FLAG)
-#define WMI_SET_TDLS_BE_UAPSD(ppeer_caps) \
-    WMI_TDLS_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BE_FLAG)
-#define WMI_GET_TDLS_BE_UAPSD(ppeer_caps) \
-    WMI_TDLS_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BE_FLAG)
-#define WMI_SET_TDLS_ACK_UAPSD(ppeer_caps) \
-    WMI_TDLS_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_ACK_FLAG)
-#define WMI_GET_TDLS_ACK_UAPSD(ppeer_caps) \
-    WMI_TDLS_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_ACK_FLAG)
+#define WMI_SET_TDLS_PEER_VO_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VO_FLAG)
+#define WMI_GET_TDLS_PEER_VO_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VO_FLAG)
+#define WMI_SET_TDLS_PEER_VI_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VI_FLAG)
+#define WMI_GET_TDLS_PEER_VI_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_VI_FLAG)
+#define WMI_SET_TDLS_PEER_BK_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BK_FLAG)
+#define WMI_GET_TDLS_PEER_BK_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BK_FLAG)
+#define WMI_SET_TDLS_PEER_BE_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BE_FLAG)
+#define WMI_GET_TDLS_PEER_BE_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_BE_FLAG)
+#define WMI_SET_TDLS_PEER_ACK_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_ACK_FLAG)
+#define WMI_GET_TDLS_PEER_ACK_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_ACK_FLAG)
 /* SP has 2 bits */
-#define WMI_SET_TDLS_SP_UAPSD(ppeer_caps,val) do { \
+#define WMI_SET_TDLS_PEER_SP_UAPSD(ppeer_caps,val) do { \
      (ppeer_caps)->peer_qos |=  (((val)&0x3) << WMI_TDLS_QOS_SP_FLAG); \
      } while(0)
-#define WMI_GET_TDLS_SP_UAPSD(ppeer_caps) \
+#define WMI_GET_TDLS_PEER_SP_UAPSD(ppeer_caps) \
     (((ppeer_caps)->peer_qos & (0x3 << WMI_TDLS_QOS_SP_FLAG)) >> WMI_TDLS_QOS_SP_FLAG)
 
-#define WMI_SET_TDLS_MORE_DATA_ACK_UAPSD(ppeer_caps) \
-    WMI_TDLS_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_MOREDATA_FLAG)
-#define WMI_GET_TDLS_MORE_DATA_ACK_UAPSD(ppeer_caps) \
-    WMI_TDLS_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_MOREDATA_FLAG)
+#define WMI_SET_TDLS_PEER_MORE_DATA_ACK_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_SET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_MOREDATA_FLAG)
+#define WMI_GET_TDLS_PEER_MORE_DATA_ACK_UAPSD(ppeer_caps) \
+    WMI_TDLS_PEER_GET_QOS_FLAG(ppeer_caps, WMI_TDLS_QOS_MOREDATA_FLAG)
+
+
+#define WMI_TDLS_SELF_SET_QOS_FLAG(pset_cmd,flag) do { \
+        (pset_cmd)->tdls_puapsd_mask |=  (1 << flag);      \
+    } while(0)
+#define WMI_TDLS_SELF_GET_QOS_FLAG(pset_cmd,flag)   \
+        (((pset_cmd)->tdls_puapsd_mask & (1 << flag)) >> flag)
+
+#define WMI_SET_TDLS_SELF_VO_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_SET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_VO_FLAG)
+#define WMI_GET_TDLS_SELF_VO_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_GET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_VO_FLAG)
+#define WMI_SET_TDLS_SELF_VI_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_SET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_VI_FLAG)
+#define WMI_GET_TDLS_SELF_VI_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_GET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_VI_FLAG)
+#define WMI_SET_TDLS_SELF_BK_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_SET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_BK_FLAG)
+#define WMI_GET_TDLS_SELF__BK_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_GET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_BK_FLAG)
+#define WMI_SET_TDLS_SELF_BE_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_SET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_BE_FLAG)
+#define WMI_GET_TDLS_SELF_BE_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_GET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_BE_FLAG)
+#define WMI_SET_TDLS_SELF_ACK_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_SET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_ACK_FLAG)
+#define WMI_GET_TDLS_SELF_ACK_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_GET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_ACK_FLAG)
+/* SP has 2 bits */
+#define WMI_SET_TDLS_SELF_SP_UAPSD(pset_cmd,val) do { \
+     (pset_cmd)->tdls_puapsd_mask |=  (((val)&0x3) << WMI_TDLS_QOS_SP_FLAG); \
+    } while(0)
+#define WMI_GET_TDLS_SELF_SP_UAPSD(pset_cmd) \
+    (((pset_cmd)->tdls_puapsd_mask & (0x3 << WMI_TDLS_QOS_SP_FLAG)) >> WMI_TDLS_QOS_SP_FLAG)
+
+#define WMI_SET_TDLS_SELF_MORE_DATA_ACK_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_SET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_MOREDATA_FLAG)
+#define WMI_GET_TDLS_SELF_MORE_DATA_ACK_UAPSD(pset_cmd) \
+    WMI_TDLS_SELF_GET_QOS_FLAG(pset_cmd, WMI_TDLS_QOS_MOREDATA_FLAG)
 
 typedef struct {
     /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_tdls_peer_update_cmd_fixed_param  */
@@ -5882,6 +6437,8 @@ typedef struct {
     /* The TLV for wmi_tdls_peer_capabilities will follow.
      *     wmi_tdls_peer_capabilities  peer_caps;
      */
+    /** Followed by the variable length TLV chan_info:
+     *  wmi_channel chan_info[] */
 } wmi_tdls_peer_update_cmd_fixed_param;
 
 /** TDLS EVENTS */
@@ -5906,6 +6463,12 @@ enum wmi_tdls_peer_reason {
     WMI_TDLS_TEARDOWN_REASON_SCAN,
     /** tdls peer disconnected due to peer deletion */
     WMI_TDLS_DISCONNECTED_REASON_PEER_DELETE,
+    /** tdls peer disconnected due to PTR timeout */
+    WMI_TDLS_TEARDOWN_REASON_PTR_TIMEOUT,
+    /** tdls peer disconnected due wrong PTR format */
+    WMI_TDLS_TEARDOWN_REASON_BAD_PTR,
+    /** tdls peer not responding */
+    WMI_TDLS_TEARDOWN_REASON_NO_RESPONSE,
 };
 
 /* WMI_TDLS_PEER_EVENTID */
