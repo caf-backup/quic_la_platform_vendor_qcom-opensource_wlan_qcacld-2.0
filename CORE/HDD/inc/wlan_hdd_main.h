@@ -1325,7 +1325,8 @@ struct hdd_context_s
    /** Concurrency Parameters*/
    tVOS_CONCURRENCY_MODE concurrency_mode;
 
-   v_U16_t no_of_sessions[VOS_MAX_NO_OF_MODE + 1];
+   v_U8_t no_of_open_sessions[VOS_MAX_NO_OF_MODE];
+   v_U8_t no_of_active_sessions[VOS_MAX_NO_OF_MODE];
 
    hdd_chip_reset_stats_t hddChipResetStats;
    /* Number of times riva restarted */
@@ -1456,12 +1457,13 @@ struct hdd_context_s
     adf_os_work_t  sta_ap_intf_check_work;
 #endif
 
+    v_U8_t dev_dfs_cac_status;
+
+    v_BOOL_t btCoexModeSet;
 #ifdef FEATURE_GREEN_AP
     hdd_green_ap_ctx_t *green_ap_ctx;
 #endif
 };
-
-
 
 /*---------------------------------------------------------------------------
   Function declarations and documenation
@@ -1526,8 +1528,14 @@ void wlan_hdd_set_monitor_tx_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAd
 void hdd_cleanup_actionframe( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter );
 
 void crda_regulatory_entry_default(v_U8_t *countryCode, int domain_id);
-void wlan_hdd_set_concurrency_mode(hdd_context_t *pHddCtx, tVOS_CON_MODE mode);
-void wlan_hdd_clear_concurrency_mode(hdd_context_t *pHddCtx, tVOS_CON_MODE mode);
+void wlan_hdd_set_concurrency_mode(hdd_context_t *pHddCtx,
+                                   tVOS_CON_MODE mode);
+void wlan_hdd_clear_concurrency_mode(hdd_context_t *pHddCtx,
+                                     tVOS_CON_MODE mode);
+void wlan_hdd_incr_active_session(hdd_context_t *pHddCtx,
+                                  tVOS_CON_MODE mode);
+void wlan_hdd_decr_active_session(hdd_context_t *pHddCtx,
+                                  tVOS_CON_MODE mode);
 void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter);
 void hdd_prevent_suspend(void);
 void hdd_allow_suspend(void);
@@ -1640,6 +1648,10 @@ void wlan_hdd_send_version_pkg(v_U32_t fw_version,
 void wlan_hdd_send_svc_nlink_msg(int type, void *data, int len);
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
 void wlan_hdd_auto_shutdown_enable(hdd_context_t *hdd_ctx, v_U8_t enable);
+#endif
+
+#ifdef WLAN_FEATURE_MBSSID
+hdd_adapter_t *hdd_get_con_sap_adapter(hdd_adapter_t *this_sap_adapter);
 #endif
 
 boolean hdd_is_5g_supported(hdd_context_t * pHddCtx);

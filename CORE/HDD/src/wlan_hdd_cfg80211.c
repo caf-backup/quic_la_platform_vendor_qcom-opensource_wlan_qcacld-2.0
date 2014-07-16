@@ -1699,6 +1699,54 @@ static void wlan_hdd_add_hostapd_conf_vsie(hdd_adapter_t* pHostapdAdapter,
     return;
 }
 
+static void wlan_hdd_add_obss_scan_param_ie(hdd_adapter_t* pHostapdAdapter,
+                                           v_U8_t *genie, v_U8_t *total_ielen)
+{
+    beacon_data_t *pBeacon = pHostapdAdapter->sessionCtx.ap.beacon;
+    int left = pBeacon->tail_len;
+    v_U8_t *ptr = pBeacon->tail;
+    v_U8_t elem_id, elem_len;
+    v_U16_t ielen = 0;
+
+    if ( NULL == ptr || 0 == left )
+        return;
+
+    while (left >= 2)
+    {
+        elem_id  = ptr[0];
+        elem_len = ptr[1];
+        left -= 2;
+        if (elem_len > left)
+        {
+            hddLog( VOS_TRACE_LEVEL_ERROR,
+                    "****Invalid IEs eid = %d elem_len=%d left=%d*****",
+                    elem_id, elem_len, left);
+            return;
+        }
+
+        if (WLAN_EID_OVERLAP_BSS_SCAN_PARAM == elem_id)
+        {
+            ielen = ptr[1] + 2;
+            if ((*total_ielen + ielen) <= MAX_GENIE_LEN)
+            {
+                vos_mem_copy(&genie[*total_ielen], ptr, ielen);
+                *total_ielen += ielen;
+            }
+            else
+            {
+                hddLog( VOS_TRACE_LEVEL_ERROR,
+                           "IE Length is too big "
+                           "IEs eid=%d elem_len=%d total_ie_lent=%d",
+                           elem_id, elem_len, *total_ielen);
+            }
+        }
+
+        left -= elem_len;
+        ptr += (elem_len + 2);
+    }
+    return;
+}
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0))
 static int wlan_hdd_cfg80211_update_apies(hdd_adapter_t* pHostapdAdapter,
                             struct beacon_parameters *params)
@@ -1750,6 +1798,11 @@ static int wlan_hdd_cfg80211_update_apies(hdd_adapter_t* pHostapdAdapter,
         wlan_hdd_add_hostapd_conf_vsie(pHostapdAdapter, genie, &total_ielen);
     }
 
+    if (WLAN_HDD_SOFTAP == pHostapdAdapter->device_mode)
+    {
+        wlan_hdd_add_obss_scan_param_ie(pHostapdAdapter, genie, &total_ielen);
+    }
+
     vos_mem_copy(updateIE.bssid, pHostapdAdapter->macAddressCurrent.bytes,
                  sizeof(tSirMacAddr));
 
@@ -1759,7 +1812,7 @@ static int wlan_hdd_cfg80211_update_apies(hdd_adapter_t* pHostapdAdapter,
         updateIE.ieBufferlength = total_ielen;
         updateIE.pAdditionIEBuffer = genie;
         updateIE.append = VOS_FALSE;
-        updateIE.notify = VOS_TRUE;
+        updateIE.notify = VOS_FALSE;
 
         if (sme_UpdateAddIE(WLAN_HDD_GET_HAL_CTX(pHostapdAdapter),
             &updateIE, eUPDATE_IE_PROBE_BCN) == eHAL_STATUS_FAILURE) {
@@ -2031,23 +2084,23 @@ static int wlan_hdd_cfg80211_set_channel( struct wiphy *wiphy, struct net_device
                 (WLAN_HDD_GET_AP_CTX_PTR(pAdapter))->sapConfig.channel = channel;
             }
 
+#ifdef QCA_HT_2040_COEX
             /* set channel bonding mode for 2.4G */
             if ( channel <= 14 )
             {
-                tSmeConfigParams smeConfig;
-                sme_GetConfigParam(pHddCtx->hHal, &smeConfig);
-
                 switch (channel_type)
                 {
                 case NL80211_CHAN_HT20:
-                    smeConfig.csrConfig.channelBondingMode24GHz = 0;
-                    sme_UpdateConfig(pHddCtx->hHal, &smeConfig);
+                    sme_SetPhyCBMode24G(pHddCtx->hHal,
+                                        PHY_SINGLE_CHANNEL_CENTERED);
                     break;
 
                 case NL80211_CHAN_HT40MINUS:
+                    sme_SetPhyCBMode24G(pHddCtx->hHal,
+                                        PHY_DOUBLE_CHANNEL_HIGH_PRIMARY);
                 case NL80211_CHAN_HT40PLUS:
-                    smeConfig.csrConfig.channelBondingMode24GHz = 1;
-                    sme_UpdateConfig(pHddCtx->hHal, &smeConfig);
+                    sme_SetPhyCBMode24G(pHddCtx->hHal,
+                                        PHY_DOUBLE_CHANNEL_LOW_PRIMARY);
                     break;
 
                 default:
@@ -2057,6 +2110,7 @@ static int wlan_hdd_cfg80211_set_channel( struct wiphy *wiphy, struct net_device
                     return -EINVAL;
                 }
             }
+#endif
         }
     }
     else
@@ -2182,6 +2236,19 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
                                sizeof(pConfig->acsAllowedChnls));
     }
 
+#ifdef QCA_HT_2040_COEX
+    if ((pHostapdAdapter->device_mode == WLAN_HDD_SOFTAP)&&
+        pHddCtx->cfg_ini->ht2040CoexEnabled)
+    {
+       tSmeConfigParams smeConfig;
+
+       vos_mem_zero(&smeConfig, sizeof (tSmeConfigParams));
+       sme_GetConfigParam(hHal, &smeConfig);
+       smeConfig.csrConfig.obssEnabled = 1;
+       sme_UpdateConfig (hHal, &smeConfig);
+    }
+#endif
+
     if (pHostapdAdapter->device_mode == WLAN_HDD_SOFTAP)
     {
         pIe = wlan_hdd_cfg80211_get_ie_ptr(pBeacon->tail, pBeacon->tail_len,
@@ -2208,6 +2275,39 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
             pConfig->countryCode[1] = pHddCtx->reg.alpha2[1];
             pConfig->ieee80211d = 0;
         }
+
+#ifdef WLAN_FEATURE_MBSSID
+        if (!vos_concurrent_sap_sessions_running()) {
+            /* Single AP Mode */
+            if (VOS_IS_DFS_CH(pConfig->channel))
+                 pHddCtx->dev_dfs_cac_status = DFS_CAC_NEVER_DONE;
+        } else {
+            /* MBSSID Mode */
+            hdd_adapter_t *con_sap_adapter;
+            v_U16_t con_ch;
+
+            con_sap_adapter = hdd_get_con_sap_adapter(pHostapdAdapter);
+            if (con_sap_adapter) {
+                /* we have active SAP running */
+                con_ch = con_sap_adapter->sessionCtx.ap.operatingChannel;
+                /* If this SAP is configured for ACS use CC_SAP's DFS channel */
+                if (pConfig->channel == AUTO_CHANNEL_SELECT) {
+                    if (con_ch != 0 && VOS_IS_DFS_CH(con_ch))
+                        pConfig->channel = con_ch;
+                } else if (VOS_IS_DFS_CH(con_ch) &&
+                           (pConfig->channel != con_ch)) {
+                    hddLog(VOS_TRACE_LEVEL_ERROR,
+                               "%s: Only SCC AP-AP DFS Permitted (ch=%d, con_ch=%d) !!", __func__, pConfig->channel, con_ch);
+                    return -EINVAL;
+                }
+            } else {
+                /* We have idle AP interface (no active SAP running on it
+                 * When one SAP is stopped then also this condition applies */
+                if (VOS_IS_DFS_CH(pConfig->channel))
+                     pHddCtx->dev_dfs_cac_status = DFS_CAC_NEVER_DONE;
+            }
+        }
+#endif
         /*
         * If auto channel is configured i.e. channel is 0,
         * so skip channel validation.
@@ -2603,6 +2703,11 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
         return 0;
     }
 
+    if (vos_max_concurrent_connections_reached()) {
+        hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Reached max concurrent connections"));
+        return -EINVAL;
+    }
+
     pConfig->persona = pHostapdAdapter->device_mode;
 
     psmeConfig = (tSmeConfigParams*) vos_mem_malloc(sizeof(tSmeConfigParams));
@@ -2669,6 +2774,7 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
 
     //Succesfully started Bss update the state bit.
     set_bit(SOFTAP_BSS_STARTED, &pHostapdAdapter->event_flags);
+    wlan_hdd_incr_active_session(pHddCtx, pHostapdAdapter->device_mode);
 
 #ifdef WLAN_FEATURE_P2P_DEBUG
     if (pHostapdAdapter->device_mode == WLAN_HDD_P2P_GO)
@@ -2718,6 +2824,11 @@ static int wlan_hdd_cfg80211_add_beacon(struct wiphy *wiphy,
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                    "%s: HDD context is not valid", __func__);
         return status;
+    }
+
+    if (vos_max_concurrent_connections_reached()) {
+        hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Reached max concurrent connections"));
+        return -EINVAL;
     }
 
     if ( (pAdapter->device_mode == WLAN_HDD_SOFTAP)
@@ -2927,6 +3038,8 @@ static int wlan_hdd_cfg80211_stop_ap (struct wiphy *wiphy,
                 }
             }
             clear_bit(SOFTAP_BSS_STARTED, &pAdapter->event_flags);
+            /* BSS stopped, clear the active sessions for this device mode */
+            wlan_hdd_decr_active_session(pHddCtx, pAdapter->device_mode);
         }
         mutex_unlock(&pHddCtx->sap_lock);
 
@@ -3022,6 +3135,11 @@ static int wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 
     hddLog(VOS_TRACE_LEVEL_INFO_HIGH, "%s: pAdapter = %p, device mode = %d",
            __func__, pAdapter, pAdapter->device_mode);
+
+    if (vos_max_concurrent_connections_reached()) {
+        hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Reached max concurrent connections"));
+        return -EINVAL;
+    }
 
     if ((pAdapter->device_mode == WLAN_HDD_SOFTAP)
       || (pAdapter->device_mode == WLAN_HDD_P2P_GO)
@@ -3295,6 +3413,11 @@ static int __wlan_hdd_cfg80211_change_iface(struct wiphy *wiphy,
 
     hddLog(VOS_TRACE_LEVEL_INFO, "%s: device_mode = %d, IFTYPE = 0x%x",
                              __func__, pAdapter->device_mode, type);
+
+    if (vos_max_concurrent_connections_reached()) {
+        hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Reached max concurrent connections"));
+        return -EINVAL;
+    }
 
     pConfig = pHddCtx->cfg_ini;
     wdev = ndev->ieee80211_ptr;
@@ -3697,7 +3820,7 @@ done:
 
 #ifdef WLAN_BTAMP_FEATURE
     if((NL80211_IFTYPE_STATION == type) && (pHddCtx->concurrency_mode <= 1) &&
-       (pHddCtx->no_of_sessions[WLAN_HDD_INFRA_STATION] <=1))
+       (pHddCtx->no_of_open_sessions[WLAN_HDD_INFRA_STATION] <=1))
     {
         //we are ok to do AMP
         pHddCtx->isAmpAllowed = VOS_TRUE;
@@ -6863,9 +6986,8 @@ static int wlan_hdd_try_disconnect( hdd_adapter_t *pAdapter )
 }
 
 /*
- * FUNCTION: __wlan_hdd_cfg80211_set_privacy
- * This function is used to initialize the security
- * parameters during connect operation.
+ * FUNCTION: __wlan_hdd_cfg80211_connect
+ * This function is used to start the association process
  */
 static int __wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
                                       struct net_device *ndev,
@@ -6879,11 +7001,10 @@ static int __wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
 
     ENTER();
 
-    if (!pAdapter)
-    {
+    if (!pAdapter) {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                   "%s: Adapter context is null", __func__);
-        return VOS_STATUS_E_FAILURE;
+        return -EINVAL;
     }
 
     MTRACE(vos_trace(VOS_MODULE_ID_HDD,
@@ -6893,25 +7014,27 @@ static int __wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
              "%s: device_mode = %d",__func__,pAdapter->device_mode);
 
     pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
-    if (!pHddCtx)
-    {
+    if (!pHddCtx) {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                   "%s: HDD context is null", __func__);
-        return VOS_STATUS_E_FAILURE;
+        return -EINVAL;
     }
 
     status = wlan_hdd_validate_context(pHddCtx);
-    if (0 != status)
-    {
+    if (0 != status) {
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                    "%s: HDD context is not valid", __func__);
         return status;
     }
 
+    if (vos_max_concurrent_connections_reached()) {
+        hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Reached max concurrent connections"));
+        return -ECONNREFUSED;
+    }
+
 #ifdef WLAN_BTAMP_FEATURE
     //Infra connect not supported when AMP traffic is on.
-    if( VOS_TRUE == WLANBAP_AmpSessionOn() )
-    {
+    if (VOS_TRUE == WLANBAP_AmpSessionOn()) {
         hddLog(VOS_TRACE_LEVEL_ERROR,
                 "%s: No connection when AMP is on", __func__);
         return -ECONNREFUSED;
@@ -6922,15 +7045,14 @@ static int __wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
     //P2P Mode will be taken care in Open/close adapter
     if (!pHddCtx->cfg_ini->enablePowersaveOffload &&
         (WLAN_HDD_INFRA_STATION == pAdapter->device_mode) &&
-        (vos_concurrent_sessions_running()))
-    {
-        exitbmpsStatus = hdd_disable_bmps_imps(pHddCtx, WLAN_HDD_INFRA_STATION);
+        (vos_concurrent_open_sessions_running())) {
+        exitbmpsStatus = hdd_disable_bmps_imps(pHddCtx,
+                                               WLAN_HDD_INFRA_STATION);
     }
 
     /*Try disconnecting if already in connected state*/
     status = wlan_hdd_try_disconnect(pAdapter);
-    if ( 0 > status)
-    {
+    if ( 0 > status) {
         hddLog(VOS_TRACE_LEVEL_ERROR, FL("Failed to disconnect the existing"
                 " connection"));
         return -EALREADY;
@@ -6939,42 +7061,35 @@ static int __wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
     /*initialise security parameters*/
     status = wlan_hdd_cfg80211_set_privacy(pAdapter, req);
 
-    if ( 0 > status)
-    {
+    if (0 > status) {
         hddLog(VOS_TRACE_LEVEL_ERROR, "%s: failed to set security params",
                 __func__);
         return status;
     }
 
-    if ( req->channel )
-    {
+    if (req->channel) {
         status = wlan_hdd_cfg80211_connect_start(pAdapter, req->ssid,
                                                   req->ssid_len, req->bssid,
                                                   req->channel->hw_value);
-    }
-    else
-    {
+    } else {
         status = wlan_hdd_cfg80211_connect_start(pAdapter, req->ssid,
                                                   req->ssid_len, req->bssid, 0);
     }
 
-    if (0 > status)
-    {
+    if (0 > status) {
         //ReEnable BMPS if disabled
         // If PS offload is enabled, fw will take care of
 // ps in cae of concurrency.
         if((VOS_STATUS_SUCCESS == exitbmpsStatus) &&
-            (NULL != pHddCtx) && !pHddCtx->cfg_ini->enablePowersaveOffload)
-        {
-            if (pHddCtx->hdd_wlan_suspended)
-            {
+            (NULL != pHddCtx) && !pHddCtx->cfg_ini->enablePowersaveOffload) {
+            if (pHddCtx->hdd_wlan_suspended) {
                 hdd_set_pwrparams(pHddCtx);
             }
            //ReEnable Bmps and Imps back
            hdd_enable_bmps_imps(pHddCtx);
         }
 
-        hddLog(VOS_TRACE_LEVEL_ERROR, "%s: connect failed", __func__);
+        hddLog(VOS_TRACE_LEVEL_ERROR, FL("connect failed"));
         return status;
     }
     pHddCtx->isAmpAllowed = VOS_FALSE;
@@ -7318,6 +7433,11 @@ static int wlan_hdd_cfg80211_join_ibss( struct wiphy *wiphy,
         hddLog (VOS_TRACE_LEVEL_ERROR, "%s ERROR: Data Storage Corruption",
                 __func__);
         return -EIO;
+    }
+
+    if (vos_max_concurrent_connections_reached()) {
+        hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Reached max concurrent connections"));
+        return -ECONNREFUSED;
     }
 
     /*Try disconnecting if already in connected state*/
@@ -10679,6 +10799,26 @@ int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
                "Do not allow suspend"));
         return -EAGAIN;
     }
+
+    /* If RADAR detection is in progress (HDD), prevent suspend. The flag
+     * "dfs_cac_block_tx" is set to TRUE when RADAR is found and stay TRUE until
+     * CAC is done for a SoftAP which is in started state.
+     */
+    status = hdd_get_front_adapter(pHddCtx, &pAdapterNode);
+
+    while (NULL != pAdapterNode && VOS_STATUS_SUCCESS == status) {
+        pAdapter = pAdapterNode->pAdapter;
+        if (WLAN_HDD_SOFTAP == pAdapter->device_mode  &&
+              BSS_START == WLAN_HDD_GET_HOSTAP_STATE_PTR(pAdapter)->bssState &&
+              VOS_TRUE == WLAN_HDD_GET_AP_CTX_PTR(pAdapter)->dfs_cac_block_tx) {
+           hddLog(VOS_TRACE_LEVEL_DEBUG,
+                 FL("RADAR detection in progress, do not allow suspend"));
+           return -EAGAIN;
+        }
+        status = hdd_get_next_adapter(pHddCtx, pAdapterNode, &pNext);
+        pAdapterNode = pNext;
+    }
+
 #ifdef QCA_WIFI_2_0
     /* Stop ongoing scan on each interface */
     status =  hdd_get_front_adapter ( pHddCtx, &pAdapterNode );
