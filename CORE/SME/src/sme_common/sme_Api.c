@@ -795,13 +795,18 @@ sme_process_cmd:
             {
                 pCommand = GET_BASE_ADDR( pEntry, tSmeCmd, Link );
 
-                //We cannot execute any command in wait-for-key state until setKey is through.
-                if( CSR_IS_WAIT_FOR_KEY( pMac, pCommand->sessionId ) )
+                /* Allow only disconnect command
+                 * in wait-for-key state until setKey is through.
+                 */
+                if( CSR_IS_WAIT_FOR_KEY( pMac, pCommand->sessionId ) &&
+                    !CSR_IS_DISCONNECT_COMMAND( pCommand ) )
                 {
                     if( !CSR_IS_SET_KEY_COMMAND( pCommand ) )
                     {
                         csrLLUnlock( &pMac->sme.smeCmdActiveList );
-                        smsLog(pMac, LOGE, "  Cannot process command(%d) while waiting for key", pCommand->command);
+                        smsLog(pMac, LOGE, FL("SessionId %d:  Cannot process "
+                               "command(%d) while waiting for key"),
+                               pCommand->sessionId, pCommand->command);
                         fContinue = eANI_BOOLEAN_FALSE;
                         goto sme_process_scan_queue;
                     }
@@ -1327,10 +1332,18 @@ eHalStatus sme_Open(tHalHandle hHal)
 /*
  * sme_init_chan_list, triggers channel setup based on country code.
  */
-eHalStatus sme_init_chan_list(tHalHandle hal, v_U8_t *alpha2)
+eHalStatus sme_init_chan_list(tHalHandle hal, v_U8_t *alpha2,
+                              COUNTRY_CODE_SOURCE cc_src)
 {
-    tpAniSirGlobal mac = PMAC_STRUCT(hal);
-    return csr_init_chan_list(mac, alpha2);
+    tpAniSirGlobal pmac = PMAC_STRUCT(hal);
+
+    if ((cc_src == COUNTRY_CODE_SET_BY_USER) &&
+        (pmac->roam.configParam.fSupplicantCountryCodeHasPriority))
+    {
+        pmac->roam.configParam.Is11dSupportEnabled = eANI_BOOLEAN_FALSE;
+    }
+
+    return csr_init_chan_list(pmac, alpha2);
 }
 
 /*--------------------------------------------------------------------------
