@@ -129,6 +129,9 @@ CONFIG_CHECKSUM_OFFLOAD := 1
 
 #Enable GTK offload
 CONFIG_GTK_OFFLOAD := 1
+
+#Set this to 1 to catch erroneous Target accesses during debug.
+CONFIG_ATH_PCIE_ACCESS_DEBUG := 0
 endif
 
 #Enable IPA offload
@@ -263,6 +266,7 @@ HDD_OBJS := 	$(HDD_SRC_DIR)/bap_hdd_main.o \
 		$(HDD_SRC_DIR)/wlan_hdd_scan.o \
 		$(HDD_SRC_DIR)/wlan_hdd_softap_tx_rx.o \
 		$(HDD_SRC_DIR)/wlan_hdd_tx_rx.o \
+		$(HDD_SRC_DIR)/wlan_hdd_trace.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wext.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wmm.o \
 		$(HDD_SRC_DIR)/wlan_hdd_wowl.o
@@ -1148,6 +1152,10 @@ endif
 #Enable collecting target RAM dump after kernel panic
 ifeq ($(CONFIG_TARGET_RAMDUMP_AFTER_KERNEL_PANIC), 1)
 CDEFINES += -DTARGET_RAMDUMP_AFTER_KERNEL_PANIC
+endif
+
+ifeq ($(CONFIG_ATH_PCIE_ACCESS_DEBUG), 1)
+CDEFINES += -DCONFIG_ATH_PCIE_ACCESS_DEBUG
 endif
 
 # Fix build for GCC 4.7

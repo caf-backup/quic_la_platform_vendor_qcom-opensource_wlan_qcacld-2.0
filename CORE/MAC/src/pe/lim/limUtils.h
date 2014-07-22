@@ -72,6 +72,9 @@ typedef enum
     *pCurVal = (tLimBAState)(((pSta->baState >> tid*2) & 0x3));\
 }
 
+#define VHT_MCS_3x3_MASK    0x30
+#define VHT_MCS_2x2_MASK    0x0C
+
 typedef struct sAddBaInfo
 {
     tANI_U16 fBaEnable : 1;
@@ -582,4 +585,10 @@ void limUtilsframeshtonl(tpAniSirGlobal  pCtx,
                             tANI_U8  *pOut,
                             tANI_U32  pIn,
                             tANI_U8  fMsb);
+
+void limSetProtectedBit(tpAniSirGlobal  pMac,
+                           tpPESession     psessionEntry,
+                           tSirMacAddr     peer,
+                           tpSirMacMgmtHdr pMacHdr);
+
 #endif /* __LIM_UTILS_H */
