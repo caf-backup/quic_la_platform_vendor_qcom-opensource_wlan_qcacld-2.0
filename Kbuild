@@ -31,7 +31,7 @@ ifeq ($(KERNEL_BUILD), 0)
 	CONFIG_PRIMA_WLAN_11AC_HIGH_TP := y
 
 	#Flag to enable TDLS feature
-	CONFIG_QCOM_TDLS := y
+	CONFIG_QCOM_TDLS := n
 
 	#Flag to enable Fast Transition (11r) feature
 	CONFIG_QCOM_VOWIFI_11R := y
@@ -41,7 +41,7 @@ ifeq ($(KERNEL_BUILD), 0)
         #Flag to enable Protected Managment Frames (11w) feature
                 CONFIG_WLAN_FEATURE_11W := y
         #Flag to enable LTE CoEx feature
-                CONFIG_QCOM_LTE_COEX := n
+                CONFIG_QCOM_LTE_COEX := y
         #Flag to enable LPSS feature
                 CONFIG_WLAN_FEATURE_LPSS := n
                 endif
