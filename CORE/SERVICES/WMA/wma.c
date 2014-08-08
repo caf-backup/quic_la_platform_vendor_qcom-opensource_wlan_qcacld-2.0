@@ -970,18 +970,18 @@ static void wma_remove_peer(tp_wma_handle wma, u_int8_t *bssid,
 #define PEER_ALL_TID_BITMASK 0xffffffff
 	u_int32_t peer_tid_bitmap = PEER_ALL_TID_BITMASK;
 	u_int8_t *peer_addr = bssid;
-        if (!wma->peer_count)
-        {
-             WMA_LOGE("%s: Can't remove peer with peer_addr %pM vdevid %d peer_count %d",
-                    __func__, bssid, vdev_id, wma->peer_count);
-             return;
-        }
+	if (!wma->interfaces[vdev_id].peer_count)
+	{
+		WMA_LOGE("%s: Can't remove peer with peer_addr %pM vdevid %d peer_count %d",
+				__func__, bssid, vdev_id, wma->interfaces[vdev_id].peer_count);
+		return;
+	}
 	if (peer)
 		ol_txrx_peer_detach(peer);
 
-	wma->peer_count--;
+	wma->interfaces[vdev_id].peer_count--;
 	WMA_LOGE("%s: Removed peer with peer_addr %pM vdevid %d peer_count %d",
-                    __func__, bssid, vdev_id, wma->peer_count);
+                    __func__, bssid, vdev_id, wma->interfaces[vdev_id].peer_count);
 	/* Flush all TIDs except MGMT TID for this peer in Target */
 	peer_tid_bitmap &= ~(0x1 << WMI_MGMT_TID);
 	wmi_unified_peer_flush_tids_send(wma->wmi_handle, bssid,
@@ -3844,9 +3844,9 @@ static VOS_STATUS wma_create_peer(tp_wma_handle wma, ol_txrx_pdev_handle pdev,
 {
 	ol_txrx_peer_handle peer;
 
-	if (++wma->peer_count > wma->wlan_resource_config.num_peers) {
+	if (++wma->interfaces[vdev_id].peer_count > wma->wlan_resource_config.num_peers) {
 		WMA_LOGP("%s, the peer count exceeds the limit %d",
-			 __func__, wma->peer_count - 1);
+			 __func__, wma->interfaces[vdev_id].peer_count - 1);
 		goto err;
 	}
 	peer = ol_txrx_peer_attach(pdev, vdev, peer_addr);
@@ -3860,11 +3860,11 @@ static VOS_STATUS wma_create_peer(tp_wma_handle wma, ol_txrx_pdev_handle pdev,
 		goto err;
 	}
 	WMA_LOGE("%s: Created peer with peer_addr %pM vdev_id %d, peer_count - %d",
-                    __func__, peer_addr, vdev_id, wma->peer_count);
+                    __func__, peer_addr, vdev_id, wma->interfaces[vdev_id].peer_count);
 
    return VOS_STATUS_SUCCESS;
 err:
-	wma->peer_count--;
+	wma->interfaces[vdev_id].peer_count--;
 	return VOS_STATUS_E_FAILURE;
 }
 
@@ -4428,15 +4428,16 @@ static ol_txrx_vdev_handle wma_vdev_attach(tp_wma_handle wma_handle,
 	} else {
 		WMA_LOGE("Failed to get value for WNI_CFG_FRAGMENTATION_THRESHOLD, leaving unchanged");
 	}
-        /* Initialize roaming offload state */
-        if ((self_sta_req->type == WMI_VDEV_TYPE_STA) &&
-            (self_sta_req->subType == 0)) {
-            wma_handle->roam_offload_vdev_id = (A_UINT32) self_sta_req->sessionId;
-            wma_handle->roam_offload_enabled = TRUE;
-            wmi_unified_vdev_set_param_send(wma_handle->wmi_handle, wma_handle->roam_offload_vdev_id,
-                             WMI_VDEV_PARAM_ROAM_FW_OFFLOAD,
-                             (WMI_ROAM_FW_OFFLOAD_ENABLE_FLAG|WMI_ROAM_BMISS_FINAL_SCAN_ENABLE_FLAG));
-        }
+	/* Initialize roaming offload state */
+	if ((self_sta_req->type == WMI_VDEV_TYPE_STA) &&
+			(self_sta_req->subType == 0)) {
+		wma_handle->roam_offload_enabled = TRUE;
+		wmi_unified_vdev_set_param_send(wma_handle->wmi_handle,
+				self_sta_req->sessionId,
+				WMI_VDEV_PARAM_ROAM_FW_OFFLOAD,
+				(WMI_ROAM_FW_OFFLOAD_ENABLE_FLAG |
+				WMI_ROAM_BMISS_FINAL_SCAN_ENABLE_FLAG));
+	}
 
 	if (wlan_cfgGetInt(mac, WNI_CFG_ENABLE_MCC_ADAPTIVE_SCHED,
 	        &cfg_val) == eSIR_SUCCESS) {
@@ -5234,7 +5235,9 @@ end:
  * Returns    :
  */
 VOS_STATUS wma_roam_scan_offload_mode(tp_wma_handle wma_handle,
-        wmi_start_scan_cmd_fixed_param *scan_cmd_fp, u_int32_t mode)
+		wmi_start_scan_cmd_fixed_param *scan_cmd_fp,
+		u_int32_t mode,
+		u_int32_t vdev_id)
 {
     VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
     wmi_buf_t buf = NULL;
@@ -5258,7 +5261,7 @@ VOS_STATUS wma_roam_scan_offload_mode(tp_wma_handle wma_handle,
                WMITLV_GET_STRUCT_TLVLEN(wmi_roam_scan_mode_fixed_param));
 
     roam_scan_mode_fp->roam_scan_mode = mode;
-    roam_scan_mode_fp->vdev_id = wma_handle->roam_offload_vdev_id;
+    roam_scan_mode_fp->vdev_id = vdev_id;
     /* Fill in scan parameters suitable for roaming scan */
     buf_ptr += sizeof(wmi_roam_scan_mode_fixed_param);
     vos_mem_copy(buf_ptr, scan_cmd_fp, sizeof(wmi_start_scan_cmd_fixed_param));
@@ -5290,7 +5293,9 @@ error:
  * Returns    :
  */
 VOS_STATUS wma_roam_scan_offload_rssi_thresh(tp_wma_handle wma_handle,
-			A_INT32 rssi_thresh, A_INT32 rssi_thresh_diff)
+        A_INT32 rssi_thresh,
+        A_INT32 rssi_thresh_diff,
+        u_int32_t vdev_id)
 {
     VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
     wmi_buf_t buf = NULL;
@@ -5314,7 +5319,7 @@ VOS_STATUS wma_roam_scan_offload_rssi_thresh(tp_wma_handle wma_handle,
                WMITLV_GET_STRUCT_TLVLEN(
                    wmi_roam_scan_rssi_threshold_fixed_param));
     /* fill in threshold values */
-    rssi_threshold_fp->vdev_id = wma_handle->roam_offload_vdev_id;
+    rssi_threshold_fp->vdev_id = vdev_id;
     rssi_threshold_fp->roam_scan_rssi_thresh = rssi_thresh & 0x000000ff;
     rssi_threshold_fp->roam_rssi_thresh_diff = rssi_thresh_diff & 0x000000ff;
 
@@ -5342,7 +5347,9 @@ error:
  * Returns    :
  */
 VOS_STATUS wma_roam_scan_offload_scan_period(tp_wma_handle wma_handle,
-            A_UINT32 scan_period, A_UINT32 scan_age)
+        A_UINT32 scan_period,
+        A_UINT32 scan_age,
+        u_int32_t vdev_id)
 {
     VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
     wmi_buf_t buf = NULL;
@@ -5366,7 +5373,7 @@ VOS_STATUS wma_roam_scan_offload_scan_period(tp_wma_handle wma_handle,
                WMITLV_GET_STRUCT_TLVLEN(
                    wmi_roam_scan_period_fixed_param));
     /* fill in scan period values */
-    scan_period_fp->vdev_id = wma_handle->roam_offload_vdev_id;
+    scan_period_fp->vdev_id = vdev_id;
     scan_period_fp->roam_scan_period = scan_period; /* 20 seconds */
     scan_period_fp->roam_scan_age = scan_age;
 
@@ -5393,7 +5400,9 @@ error:
  * Returns    :
  */
 VOS_STATUS wma_roam_scan_offload_rssi_change(tp_wma_handle wma_handle,
-			A_INT32 rssi_change_thresh, A_UINT32 bcn_rssi_weight)
+        A_INT32 rssi_change_thresh,
+        A_UINT32 bcn_rssi_weight,
+        u_int32_t vdev_id)
 {
     VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
     wmi_buf_t buf = NULL;
@@ -5417,7 +5426,7 @@ VOS_STATUS wma_roam_scan_offload_rssi_change(tp_wma_handle wma_handle,
                WMITLV_GET_STRUCT_TLVLEN(
                    wmi_roam_scan_rssi_change_threshold_fixed_param));
     /* fill in rssi change threshold (hysteresis) values */
-    rssi_change_fp->vdev_id = wma_handle->roam_offload_vdev_id;
+    rssi_change_fp->vdev_id = vdev_id;
     rssi_change_fp->roam_scan_rssi_change_thresh = rssi_change_thresh;
     rssi_change_fp->bcn_rssi_weight = bcn_rssi_weight;
 
@@ -5445,7 +5454,10 @@ error:
  * Returns    :
  */
 VOS_STATUS wma_roam_scan_offload_chan_list(tp_wma_handle wma_handle,
-            u_int8_t chan_count, u_int8_t *chan_list, u_int8_t list_type)
+        u_int8_t chan_count,
+        u_int8_t *chan_list,
+        u_int8_t list_type,
+        u_int32_t vdev_id)
 {
     VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
     wmi_buf_t buf = NULL;
@@ -5475,7 +5487,7 @@ VOS_STATUS wma_roam_scan_offload_chan_list(tp_wma_handle wma_handle,
     WMITLV_SET_HDR(&chan_list_fp->tlv_header,
                WMITLV_TAG_STRUC_wmi_roam_chan_list_fixed_param,
                WMITLV_GET_STRUCT_TLVLEN(wmi_roam_chan_list_fixed_param));
-    chan_list_fp->vdev_id = wma_handle->roam_offload_vdev_id;
+    chan_list_fp->vdev_id = vdev_id;
     chan_list_fp->num_chan = chan_count;
     if (chan_count > 0 && list_type == CHANNEL_LIST_STATIC) {
         /* external app is controlling channel list */
@@ -5785,7 +5797,8 @@ v_VOID_t wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
  * Returns    :
  */
 VOS_STATUS wma_roam_scan_offload_ap_profile(tp_wma_handle wma_handle,
-        wmi_ap_profile *ap_profile_p)
+        wmi_ap_profile *ap_profile_p,
+        u_int32_t vdev_id)
 {
     VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
     wmi_buf_t buf = NULL;
@@ -5810,7 +5823,7 @@ VOS_STATUS wma_roam_scan_offload_ap_profile(tp_wma_handle wma_handle,
                WMITLV_GET_STRUCT_TLVLEN(
                    wmi_roam_ap_profile_fixed_param));
     /* fill in threshold values */
-    roam_ap_profile_fp->vdev_id = wma_handle->roam_offload_vdev_id;
+    roam_ap_profile_fp->vdev_id = vdev_id;
     roam_ap_profile_fp->id = 0;
     buf_ptr += sizeof(wmi_roam_ap_profile_fixed_param);
 
@@ -5837,22 +5850,28 @@ error:
 }
 
 VOS_STATUS wma_roam_scan_bmiss_cnt(tp_wma_handle wma_handle,
-			A_INT32 first_bcnt, A_UINT32 final_bcnt)
+        A_INT32 first_bcnt,
+        A_UINT32 final_bcnt,
+        u_int32_t vdev_id)
 {
     int status = 0;
 
     WMA_LOGI("%s: first_bcnt=%d, final_bcnt=%d", __func__, first_bcnt, final_bcnt);
 
-    status = wmi_unified_vdev_set_param_send(wma_handle->wmi_handle, wma_handle->roam_offload_vdev_id,
-            WMI_VDEV_PARAM_BMISS_FIRST_BCNT, first_bcnt);
+    status = wmi_unified_vdev_set_param_send(wma_handle->wmi_handle,
+          vdev_id,
+          WMI_VDEV_PARAM_BMISS_FIRST_BCNT,
+          first_bcnt);
     if (status != EOK) {
         WMA_LOGE("wmi_unified_vdev_set_param_send WMI_VDEV_PARAM_BMISS_FIRST_BCNT returned Error %d",
             status);
         return VOS_STATUS_E_FAILURE;
     }
 
-    status = wmi_unified_vdev_set_param_send(wma_handle->wmi_handle, wma_handle->roam_offload_vdev_id,
-            WMI_VDEV_PARAM_BMISS_FINAL_BCNT, final_bcnt);
+    status = wmi_unified_vdev_set_param_send(wma_handle->wmi_handle,
+          vdev_id,
+          WMI_VDEV_PARAM_BMISS_FINAL_BCNT,
+          final_bcnt);
     if (status != EOK) {
         WMA_LOGE("wmi_unified_vdev_set_param_send WMI_VDEV_PARAM_BMISS_FINAL_BCNT returned Error %d",
             status);
@@ -5871,7 +5890,8 @@ VOS_STATUS wma_roam_scan_bmiss_cnt(tp_wma_handle wma_handle,
  * Args       :
  * Returns    :
  */
-VOS_STATUS wma_roam_scan_offload_init_connect(tp_wma_handle wma_handle)
+VOS_STATUS wma_roam_scan_offload_init_connect(tp_wma_handle wma_handle,
+        u_int32_t vdev_id)
 {
     VOS_STATUS vos_status;
     tpAniSirGlobal pMac = (tpAniSirGlobal)vos_get_context(VOS_MODULE_ID_PE,
@@ -5886,23 +5906,33 @@ VOS_STATUS wma_roam_scan_offload_init_connect(tp_wma_handle wma_handle)
      * triggered before association completes
      */
     vos_status = wma_roam_scan_bmiss_cnt(wma_handle,
-            WMA_ROAM_BMISS_FIRST_BCNT_DEFAULT, WMA_ROAM_BMISS_FINAL_BCNT_DEFAULT);
+            WMA_ROAM_BMISS_FIRST_BCNT_DEFAULT,
+            WMA_ROAM_BMISS_FINAL_BCNT_DEFAULT,
+            vdev_id);
 
     /* rssi_thresh = 10 is low enough */
-    vos_status = wma_roam_scan_offload_rssi_thresh(wma_handle, WMA_ROAM_LOW_RSSI_TRIGGER_VERYLOW,
-                                                   pMac->roam.configParam.neighborRoamConfig.nOpportunisticThresholdDiff);
+    vos_status = wma_roam_scan_offload_rssi_thresh(wma_handle,
+            WMA_ROAM_LOW_RSSI_TRIGGER_VERYLOW,
+            pMac->roam.configParam.neighborRoamConfig.nOpportunisticThresholdDiff,
+            vdev_id);
     vos_status = wma_roam_scan_offload_scan_period(wma_handle,
-                                                WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT, WMA_ROAM_OPP_SCAN_AGING_PERIOD_DEFAULT);
+            WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT,
+            WMA_ROAM_OPP_SCAN_AGING_PERIOD_DEFAULT,
+            vdev_id);
     vos_status = wma_roam_scan_offload_rssi_change(wma_handle,
-                                                   pMac->roam.configParam.neighborRoamConfig.nRoamRescanRssiDiff,
-                                                   WMA_ROAM_BEACON_WEIGHT_DEFAULT);
+            pMac->roam.configParam.neighborRoamConfig.nRoamRescanRssiDiff,
+            WMA_ROAM_BEACON_WEIGHT_DEFAULT,
+            vdev_id);
     wma_roam_scan_fill_ap_profile(wma_handle, pMac, NULL, &ap_profile);
 
-    vos_status = wma_roam_scan_offload_ap_profile(wma_handle, &ap_profile);
+    vos_status = wma_roam_scan_offload_ap_profile(wma_handle, &ap_profile,
+            vdev_id);
 
     wma_roam_scan_fill_scan_params(wma_handle, pMac, NULL, &scan_params);
-    vos_status = wma_roam_scan_offload_mode(wma_handle, &scan_params,
-            WMI_ROAM_SCAN_MODE_PERIODIC);
+    vos_status = wma_roam_scan_offload_mode(wma_handle,
+            &scan_params,
+            WMI_ROAM_SCAN_MODE_PERIODIC,
+            vdev_id);
     return vos_status;
 }
 
@@ -5911,7 +5941,8 @@ VOS_STATUS wma_roam_scan_offload_init_connect(tp_wma_handle wma_handle)
  * Args       :
  * Returns    :
  */
-VOS_STATUS wma_roam_scan_offload_end_connect(tp_wma_handle wma_handle)
+VOS_STATUS wma_roam_scan_offload_end_connect(tp_wma_handle wma_handle,
+        u_int32_t vdev_id)
 {
     VOS_STATUS vos_status;
     tpAniSirGlobal pMac = (tpAniSirGlobal)vos_get_context(VOS_MODULE_ID_PE,
@@ -5928,11 +5959,14 @@ VOS_STATUS wma_roam_scan_offload_end_connect(tp_wma_handle wma_handle)
     if (wma_handle->roam_offload_enabled) {
 
         wma_roam_scan_fill_scan_params(wma_handle, pMac, NULL, &scan_params);
-        vos_status = wma_roam_scan_offload_mode(wma_handle, &scan_params,
-                                WMI_ROAM_SCAN_MODE_NONE);
+        vos_status = wma_roam_scan_offload_mode(wma_handle,
+                &scan_params,
+                WMI_ROAM_SCAN_MODE_NONE,
+                vdev_id);
     }
     return VOS_STATUS_SUCCESS;
 }
+
 
 /* function   : wma_process_roam_scan_req
  * Description : Main routine to handle ROAM commands coming from CSR module.
@@ -5978,13 +6012,15 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
             wma_handle->suitable_ap_hb_failure = FALSE;
 
             vos_status = wma_roam_scan_offload_rssi_thresh(wma_handle,
-                                                           (roam_req->LookupThreshold - WMA_NOISE_FLOOR_DBM_DEFAULT),
-                                                           roam_req->OpportunisticScanThresholdDiff);
+                    (roam_req->LookupThreshold - WMA_NOISE_FLOOR_DBM_DEFAULT),
+                    roam_req->OpportunisticScanThresholdDiff,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
             vos_status = wma_roam_scan_bmiss_cnt(wma_handle,
-                    roam_req->RoamBmissFirstBcnt, roam_req->RoamBmissFinalBcnt);
+                    roam_req->RoamBmissFirstBcnt, roam_req->RoamBmissFinalBcnt,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
@@ -5994,8 +6030,9 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
              */
             if (roam_req->EmptyRefreshScanPeriod > 0) {
                 vos_status = wma_roam_scan_offload_scan_period(wma_handle,
-                                          roam_req->EmptyRefreshScanPeriod,
-                                          roam_req->EmptyRefreshScanPeriod * 3);
+                        roam_req->EmptyRefreshScanPeriod,
+                        roam_req->EmptyRefreshScanPeriod * 3,
+                        roam_req->sessionId);
                 if (vos_status != VOS_STATUS_SUCCESS) {
                     break;
                 }
@@ -6008,34 +6045,40 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
              * 2 times the current beacon's rssi.
              */
             vos_status = wma_roam_scan_offload_rssi_change(wma_handle,
-                                      roam_req->RoamRescanRssiDiff,
-                                      roam_req->RoamBeaconRssiWeight);
+                    roam_req->RoamRescanRssiDiff,
+                    roam_req->RoamBeaconRssiWeight,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
             wma_roam_scan_fill_ap_profile(wma_handle, pMac, roam_req, &ap_profile);
 
             vos_status = wma_roam_scan_offload_ap_profile(wma_handle,
-                                      &ap_profile);
+                  &ap_profile,
+                  roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
             vos_status = wma_roam_scan_offload_chan_list(wma_handle,
-                                roam_req->ConnectedNetwork.ChannelCount,
-                                &roam_req->ConnectedNetwork.ChannelCache[0],
-                                roam_req->ChannelCacheType);
+                    roam_req->ConnectedNetwork.ChannelCount,
+                    &roam_req->ConnectedNetwork.ChannelCache[0],
+                    roam_req->ChannelCacheType,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
 
 
             wma_roam_scan_fill_scan_params(wma_handle, pMac, roam_req, &scan_params);
-            vos_status = wma_roam_scan_offload_mode(wma_handle, &scan_params, mode);
+            vos_status = wma_roam_scan_offload_mode(wma_handle,
+                    &scan_params,
+                    mode,
+                    roam_req->sessionId);
             break;
 
         case ROAM_SCAN_OFFLOAD_STOP:
             wma_handle->suitable_ap_hb_failure = FALSE;
-            wma_roam_scan_offload_end_connect(wma_handle);
+            wma_roam_scan_offload_end_connect(wma_handle, roam_req->sessionId);
             if (roam_req->StartScanReason == REASON_OS_REQUESTED_ROAMING_NOW) {
                 vos_msg_t vosMsg;
                 vosMsg.type = eWNI_SME_ROAM_SCAN_OFFLOAD_RSP;
@@ -6065,7 +6108,7 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
                   && wma_handle->suitable_ap_hb_failure) {
                 WMA_LOGE("%s: Sending heartbeat failure after preauth failures",
                            __func__);
-                wma_beacon_miss_handler(wma_handle, wma_handle->roam_offload_vdev_id);
+                wma_beacon_miss_handler(wma_handle, roam_req->sessionId);
                 wma_handle->suitable_ap_hb_failure = FALSE;
             }
             break;
@@ -6073,8 +6116,10 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
         case ROAM_SCAN_OFFLOAD_UPDATE_CFG:
             wma_handle->suitable_ap_hb_failure = FALSE;
             wma_roam_scan_fill_scan_params(wma_handle, pMac, roam_req, &scan_params);
-            vos_status = wma_roam_scan_offload_mode(wma_handle, &scan_params,
-                                                    WMI_ROAM_SCAN_MODE_NONE);
+            vos_status = wma_roam_scan_offload_mode(wma_handle,
+                    &scan_params,
+                    WMI_ROAM_SCAN_MODE_NONE,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
@@ -6084,7 +6129,8 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
             }
 
             vos_status = wma_roam_scan_bmiss_cnt(wma_handle,
-                    roam_req->RoamBmissFirstBcnt, roam_req->RoamBmissFinalBcnt);
+                    roam_req->RoamBmissFirstBcnt, roam_req->RoamBmissFinalBcnt,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
@@ -6093,24 +6139,27 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
              * Runtime (after association) changes to rssi thresholds and other parameters.
              */
             vos_status = wma_roam_scan_offload_chan_list(wma_handle,
-                                roam_req->ConnectedNetwork.ChannelCount,
-                                &roam_req->ConnectedNetwork.ChannelCache[0],
-                                roam_req->ChannelCacheType);
+                    roam_req->ConnectedNetwork.ChannelCount,
+                    &roam_req->ConnectedNetwork.ChannelCache[0],
+                    roam_req->ChannelCacheType,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
 
             vos_status = wma_roam_scan_offload_rssi_thresh(wma_handle,
-                                (roam_req->LookupThreshold - WMA_NOISE_FLOOR_DBM_DEFAULT),
-                                 roam_req->OpportunisticScanThresholdDiff);
+                    (roam_req->LookupThreshold - WMA_NOISE_FLOOR_DBM_DEFAULT),
+                    roam_req->OpportunisticScanThresholdDiff,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
 
             if (roam_req->EmptyRefreshScanPeriod > 0) {
                 vos_status = wma_roam_scan_offload_scan_period(wma_handle,
-                                          roam_req->EmptyRefreshScanPeriod,
-                                          roam_req->EmptyRefreshScanPeriod * 3);
+                        roam_req->EmptyRefreshScanPeriod,
+                        roam_req->EmptyRefreshScanPeriod * 3,
+                        roam_req->sessionId);
                 if (vos_status != VOS_STATUS_SUCCESS) {
                     break;
                 }
@@ -6120,21 +6169,27 @@ VOS_STATUS wma_process_roam_scan_req(tp_wma_handle wma_handle,
             }
 
             vos_status = wma_roam_scan_offload_rssi_change(wma_handle,
-                                roam_req->RoamRescanRssiDiff,
-                                roam_req->RoamBeaconRssiWeight);
+                    roam_req->RoamRescanRssiDiff,
+                    roam_req->RoamBeaconRssiWeight,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
 
             wma_roam_scan_fill_ap_profile(wma_handle, pMac, roam_req, &ap_profile);
             vos_status = wma_roam_scan_offload_ap_profile(wma_handle,
-                                      &ap_profile);
+                    &ap_profile,
+                    roam_req->sessionId);
             if (vos_status != VOS_STATUS_SUCCESS) {
                 break;
             }
 
             wma_roam_scan_fill_scan_params(wma_handle, pMac, roam_req, &scan_params);
-            vos_status = wma_roam_scan_offload_mode(wma_handle, &scan_params, mode);
+            vos_status = wma_roam_scan_offload_mode(
+                    wma_handle,
+                    &scan_params,
+                    mode,
+                    roam_req->sessionId);
 
             break;
 
@@ -6625,7 +6680,7 @@ VOS_STATUS wma_process_dhcp_ind(tp_wma_handle wma_handle,
 }
 
 static WLAN_PHY_MODE wma_chan_to_mode(u8 chan, ePhyChanBondState chan_offset,
-                                      u8 vht_capable)
+                                      u8 vht_capable, u8 dot11_mode)
 {
 	WLAN_PHY_MODE phymode = MODE_UNKNOWN;
 
@@ -6633,8 +6688,29 @@ static WLAN_PHY_MODE wma_chan_to_mode(u8 chan, ePhyChanBondState chan_offset,
 	if ((chan >= WMA_11G_CHANNEL_BEGIN) && (chan <= WMA_11G_CHANNEL_END)) {
 		switch (chan_offset) {
 		case PHY_SINGLE_CHANNEL_CENTERED:
-                        /* Configure MODE_11NG_HT20 for self vdev(for vht too) */
-			phymode = vht_capable ? MODE_11AC_VHT20_2G :MODE_11NG_HT20;
+                        /* In case of no channel bonding, use dot11_mode
+			 * to set phy mode
+			 */
+			switch (dot11_mode) {
+			case WNI_CFG_DOT11_MODE_11A:
+				phymode = MODE_11A;
+				break;
+			case WNI_CFG_DOT11_MODE_11B:
+				phymode = MODE_11B;
+				break;
+			case WNI_CFG_DOT11_MODE_11G:
+				phymode = MODE_11G;
+				break;
+			case WNI_CFG_DOT11_MODE_11G_ONLY:
+				phymode = MODE_11GONLY;
+				break;
+			default:
+			/* Configure MODE_11NG_HT20 for
+			 * self vdev(for vht too)
+			 */
+				phymode = MODE_11NG_HT20;
+				break;
+                        }
 			break;
 		case PHY_DOUBLE_CHANNEL_LOW_PRIMARY:
 		case PHY_DOUBLE_CHANNEL_HIGH_PRIMARY:
@@ -6679,8 +6755,9 @@ static WLAN_PHY_MODE wma_chan_to_mode(u8 chan, ePhyChanBondState chan_offset,
 			break;
 		}
 	}
-	WMA_LOGD("%s: phymode %d channel %d offset %d vht_capable %d", __func__,
-		 phymode, chan, chan_offset, vht_capable);
+	WMA_LOGD("%s: phymode %d channel %d offset %d vht_capable %d "
+			"dot11_mode %d", __func__, phymode, chan,
+			chan_offset, vht_capable, dot11_mode);
 
 	return phymode;
 }
@@ -6737,7 +6814,7 @@ static VOS_STATUS wma_vdev_start(tp_wma_handle wma,
 	/* Fill channel info */
 	chan->mhz = vos_chan_to_freq(req->chan);
 	chanmode = wma_chan_to_mode(req->chan, req->chan_offset,
-				req->vht_capable);
+				req->vht_capable, req->dot11_mode);
 
 	intr[cmd->vdev_id].chanmode = chanmode; /* save channel mode */
 	intr[cmd->vdev_id].ht_capable = req->ht_capable;
@@ -7417,6 +7494,7 @@ static void wma_set_channel(tp_wma_handle wma, tpSwitchChannelParams params)
 	req.chan = params->channelNumber;
 	req.chan_offset = params->secondaryChannelOffset;
 	req.vht_capable = params->vhtCapable;
+	req.dot11_mode = params->dot11_mode;
 #ifdef WLAN_FEATURE_VOWIFI
 	req.max_txpow = params->maxTxPower;
 #else
@@ -10308,7 +10386,7 @@ static void wma_add_sta_req_sta_mode(tp_wma_handle wma, tpAddStaParams params)
 	wma_vdev_set_bss_params(wma, params->smesessionId, iface->beaconInterval,
 				iface->dtimPeriod, iface->shortSlotTimeSupported,
 				iface->llbCoexist, maxTxPower);
-	wma_roam_scan_offload_init_connect(wma);
+	wma_roam_scan_offload_init_connect(wma, params->smesessionId);
 
 	params->csaOffloadEnable = 0;
 	if (WMI_SERVICE_IS_ENABLED(wma->wmi_service_bitmap,
@@ -11025,7 +11103,7 @@ static void wma_delete_sta_req_sta_mode(tp_wma_handle wma,
 	 return;
 	}
 #endif
-	wma_roam_scan_offload_end_connect(wma);
+	wma_roam_scan_offload_end_connect(wma, params->smesessionId);
 	params->status = status;
 	WMA_LOGD("%s: vdev_id %d status %d", __func__, params->smesessionId, status);
 	wma_send_msg(wma, WDA_DELETE_STA_RSP, (void *)params, 0);
@@ -11278,6 +11356,14 @@ static void wma_set_tx_power(WMA_HANDLE handle,
 		vos_mem_free(tx_pwr_params);
 		return;
 	}
+
+	if (!(wma_handle->interfaces[vdev_id].vdev_up)) {
+		WMA_LOGE("%s: vdev id %d is not up for %pM", __func__, vdev_id,
+				tx_pwr_params->bssId);
+		vos_mem_free(tx_pwr_params);
+		return;
+	}
+
 	if (tx_pwr_params->power == 0) {
 		/* set to default. Since the app does not care the tx power
 		 * we keep the previous setting */

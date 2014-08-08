@@ -488,6 +488,7 @@ struct wma_txrx_node {
 #if defined WLAN_FEATURE_VOWIFI_11R
         void    *staKeyParams;
 #endif
+	u_int32_t peer_count;
 };
 
 #if defined(QCA_WIFI_FTM) && !defined(QCA_WIFI_ISOC)
@@ -581,7 +582,6 @@ typedef struct {
 	u_int32_t scan_id;
 	struct wma_txrx_node *interfaces;
 	pdev_cli_config_t pdevconfig;
-	u_int32_t peer_count;
 	struct list_head vdev_resp_queue;
 	adf_os_spinlock_t vdev_respq_lock;
         adf_os_spinlock_t vdev_detach_lock;
@@ -611,7 +611,6 @@ typedef struct {
 	void* pGetRssiReq;
 	v_S7_t first_rssi;
 	t_thermal_mgmt thermal_mgmt_info;
-        u_int32_t roam_offload_vdev_id;
         v_BOOL_t  roam_offload_enabled;
         t_wma_roam_preauth_chan_state_t roam_preauth_scan_state;
         u_int32_t roam_preauth_scan_id;
@@ -1227,6 +1226,7 @@ struct wma_vdev_start_req {
 	u_int8_t vht_capable;
 	u_int8_t ht_capable;
 	int32_t dfs_pri_multiplier;
+	u_int8_t dot11_mode;
 };
 
 struct wma_set_key_params {
