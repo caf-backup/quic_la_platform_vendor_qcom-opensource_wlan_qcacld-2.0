@@ -77,9 +77,6 @@
 
 #define SME_INVALID_COUNTRY_CODE "XX"
 
-//Macro to disable split scan
-#define SME_DISABLE_SPLIT_SCAN   255
-
 #define SME_2_4_GHZ_MAX_FREQ    3000
 #define SME_MODE_11A            0    /* 11a mode */
 #define SME_MODE_11G            1    /* 11b/g mode */
@@ -1858,9 +1855,6 @@ VOS_STATUS sme_GetWcnssSoftwareVersion(tHalHandle hHal,
 VOS_STATUS sme_GetWcnssHardwareVersion(tHalHandle hHal,
                                        tANI_U8 *pVersion,
                                        tANI_U32 versionBufferSize);
-eHalStatus sme_RoamRegisterCallback(tHalHandle hHal,
-                                    csrRoamCompleteCallback callback,
-                                    void *pContext);
 
 #ifdef FEATURE_WLAN_WAPI
 /* ---------------------------------------------------------------------------
@@ -3442,7 +3436,7 @@ VOS_STATUS sme_isSta_p2p_clientConnected(tHalHandle hHal);
 eHalStatus sme_LPHBConfigReq(
                       tHalHandle hHal,
                       tSirLPHBReq *lphdReq,
-                      void (*pCallbackfn)(void *pAdapter, void *indParam));
+                      void (*pCallbackfn)(void *pHddCtx, tSirLPHBInd *indParam));
 #endif /* FEATURE_WLAN_LPHB */
 
 /* ---------------------------------------------------------------------------

@@ -455,7 +455,6 @@ MAC_LIM_OBJS := $(MAC_SRC_DIR)/pe/lim/limAIDmgmt.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessCfgUpdates.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessDeauthFrame.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessDisassocFrame.o \
-		$(MAC_SRC_DIR)/pe/lim/limProcessLmmMessages.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessMessageQueue.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessMlmReqMessages.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessMlmRspMessages.o \
@@ -640,7 +639,6 @@ SYS_COMMON_SRC_DIR := $(SYS_DIR)/common/src
 SYS_LEGACY_SRC_DIR := $(SYS_DIR)/legacy/src
 SYS_OBJS :=	$(SYS_COMMON_SRC_DIR)/wlan_qct_sys.o \
 		$(SYS_LEGACY_SRC_DIR)/pal/src/palApiComm.o \
-		$(SYS_LEGACY_SRC_DIR)/pal/src/palTimer.o \
 		$(SYS_LEGACY_SRC_DIR)/platform/src/VossWrapper.o \
 		$(SYS_LEGACY_SRC_DIR)/system/src/macInitApi.o \
 		$(SYS_LEGACY_SRC_DIR)/system/src/sysEntryFunc.o \

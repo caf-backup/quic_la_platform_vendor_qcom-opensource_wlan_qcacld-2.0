@@ -1409,7 +1409,6 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
                     "%s: Set HDD connState to eConnectionState_Associated",
                     __func__);
             hdd_connSetConnectionState( pHddStaCtx, eConnectionState_Associated );
-            pAdapter->maxRateFlags = pRoamInfo->maxRateFlags;
         }
 
         // Save the connection info from CSR...
@@ -1580,6 +1579,14 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
                 {
                     if ( !hddDisconInProgress )
                     {
+                        /* After roaming is completed, active session count is
+                         * incremented as a part of connect indication but
+                         * effectively the active session count should still
+                         * be the same and hence upon successful reassoc
+                         * decrement the active session count here */
+                        wlan_hdd_decr_active_session(pHddCtx,
+                                                     pAdapter->device_mode);
+
                         hddLog(LOG1, "%s ft_carrier_on is %d, sending roamed "
                                      "indication", __FUNCTION__, ft_carrier_on);
                         chan = ieee80211_get_channel(pAdapter->wdev.wiphy,

@@ -69,10 +69,8 @@
 #endif /* FEATURE_WLAN_ESE && !FEATURE_WLAN_ESE_UPLOAD */
 #define CSR_NUM_IBSS_START_CHANNELS_50      4
 #define CSR_NUM_IBSS_START_CHANNELS_24      3
-#define CSR_DEF_IBSS_START_CHANNEL_50       36
-#define CSR_DEF_IBSS_START_CHANNEL_24       1
-#define CSR_WAIT_FOR_KEY_TIMEOUT_PERIOD         ( 5 * PAL_TIMER_TO_SEC_UNIT )  // 5 seconds, for WPA, WPA2, CCKM
-#define CSR_WAIT_FOR_WPS_KEY_TIMEOUT_PERIOD         ( 120 * PAL_TIMER_TO_SEC_UNIT )  // 120 seconds, for WPS
+#define CSR_WAIT_FOR_KEY_TIMEOUT_PERIOD         ( 5 * VOS_TIMER_TO_SEC_UNIT )  // 5 seconds, for WPA, WPA2, CCKM
+#define CSR_WAIT_FOR_WPS_KEY_TIMEOUT_PERIOD         ( 120 * VOS_TIMER_TO_SEC_UNIT )  // 120 seconds, for WPS
 /*---------------------------------------------------------------------------
   OBIWAN recommends [8 10]% : pick 9%
 ---------------------------------------------------------------------------*/
@@ -84,8 +82,7 @@
 #define CSR_MIN_GLOBAL_STAT_QUERY_PERIOD   500 //ms
 #define CSR_MIN_GLOBAL_STAT_QUERY_PERIOD_IN_BMPS 2000 //ms
 #define CSR_MIN_TL_STAT_QUERY_PERIOD       500 //ms
-#define CSR_DIAG_LOG_STAT_PERIOD           3000 //ms
-//We use constatnt 4 here
+//We use constant 4 here
 //This macro returns true when higher AC parameter is bigger than lower AC for a difference
 //The bigger the number, the less chance of TX
 //It must put lower AC as the first parameter.
@@ -1711,7 +1708,9 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
         if (pParam->impsSleepTime)
         {
             //Change the unit from second to microsecond
-            tANI_U32 impsSleepTime = pParam->impsSleepTime * PAL_TIMER_TO_SEC_UNIT;
+            tANI_U32 impsSleepTime =
+                                  pParam->impsSleepTime * VOS_TIMER_TO_SEC_UNIT;
+
             if(CSR_IDLE_SCAN_NO_PS_INTERVAL_MIN <= impsSleepTime)
             {
                 pMac->roam.configParam.impsSleepTime = impsSleepTime;
@@ -1928,7 +1927,8 @@ eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
         pParam->nNumP2PChanCombinedConc = pMac->roam.configParam.nNumP2PChanCombinedConc;
 #endif
         //Change the unit from microsecond to second
-        pParam->impsSleepTime = pMac->roam.configParam.impsSleepTime / PAL_TIMER_TO_SEC_UNIT;
+        pParam->impsSleepTime =
+                   pMac->roam.configParam.impsSleepTime / VOS_TIMER_TO_SEC_UNIT;
         pParam->eBand = pMac->roam.configParam.eBand;
         pParam->nScanResultAgeCount = pMac->roam.configParam.agingCount;
         pParam->scanAgeTimeNCNPS = pMac->roam.configParam.scanAgeTimeNCNPS;
@@ -5691,7 +5691,6 @@ static tANI_BOOLEAN csrRoamProcessResults( tpAniSirGlobal pMac, tSmeCmd *pComman
                     roamInfo.staId = ( tANI_U8 )pJoinRsp->staId;
                     roamInfo.ucastSig = ( tANI_U8 )pJoinRsp->ucastSig;
                     roamInfo.bcastSig = ( tANI_U8 )pJoinRsp->bcastSig;
-                    roamInfo.maxRateFlags = pJoinRsp->maxRateFlags;
                     roamInfo.timingMeasCap = pJoinRsp->timingMeasCap;
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
                     if (pMac->roam.configParam.cc_switch_mode
@@ -6331,12 +6330,6 @@ static tANI_BOOLEAN csrRoamProcessResults( tpAniSirGlobal pMac, tSmeCmd *pComman
         }
     }
     return ( fReleaseCommand );
-}
-
-eHalStatus csrRoamRegisterCallback(tpAniSirGlobal pMac, csrRoamCompleteCallback callback, void *pContext)
-{
-    eHalStatus status = eHAL_STATUS_SUCCESS;
-    return (status);
 }
 
 eHalStatus csrRoamCopyProfile(tpAniSirGlobal pMac, tCsrRoamProfile *pDstProfile, tCsrRoamProfile *pSrcProfile)
@@ -8148,18 +8141,6 @@ static void csrRoamingStateConfigCnfProcessor( tpAniSirGlobal pMac, tANI_U32 res
     }//we have active entry
 }
 
-static void csrRoamRoamingStateAuthRspProcessor( tpAniSirGlobal pMac, tSirSmeAuthRsp *pSmeAuthRsp )
-{
-    //No one is sending eWNI_SME_AUTH_REQ to PE.
-    smsLog(pMac, LOGW, FL("is no-op"));
-    if (eSIR_SME_SUCCESS == pSmeAuthRsp->statusCode) {
-        smsLog(pMac, LOGW, "CSR SmeAuthReq Successful");
-    } else {
-        smsLog(pMac, LOGW, "CSR SmeAuthReq failed with statusCode= 0x%08X [%d]",
-                            pSmeAuthRsp->statusCode, pSmeAuthRsp->statusCode);
-    }
-}
-
 static void csrRoamRoamingStateReassocRspProcessor( tpAniSirGlobal pMac, tpSirSmeJoinRsp pSmeJoinRsp )
 {
     eCsrRoamCompleteResult result;
@@ -8573,14 +8554,6 @@ void csrRoamingStateMsgProcessor( tpAniSirGlobal pMac, void *pMsgBuf )
             {
                 //We sent a JOIN_REQ
                 csrRoamJoinRspProcessor( pMac, (tSirSmeJoinRsp *)pSmeRsp );
-            }
-            break;
-
-        case eWNI_SME_AUTH_RSP:       // or the Authenticate response message...
-            if (CSR_IS_ROAM_SUBSTATE_AUTH_REQ( pMac, pSmeRsp->sessionId) )
-            {
-                //We sent a AUTH_REQ
-                csrRoamRoamingStateAuthRspProcessor( pMac, (tSirSmeAuthRsp *)pSmeRsp );
             }
             break;
 
@@ -10697,7 +10670,8 @@ tANI_BOOLEAN csrRoamCompleteRoaming(tpAniSirGlobal pMac, tANI_U32 sessionId,
     else
     {
         pSession->roamResult = roamResult;
-        if(!HAL_STATUS_SUCCESS(csrRoamStartRoamingTimer(pMac, sessionId, PAL_TIMER_TO_SEC_UNIT)))
+        if(!HAL_STATUS_SUCCESS(csrRoamStartRoamingTimer(pMac, sessionId,
+                                                        VOS_TIMER_TO_SEC_UNIT)))
         {
             csrCallRoamingCompletionCallback(pMac, pSession, NULL, 0, roamResult);
             pSession->roamingReason = eCsrNotRoaming;
@@ -10777,7 +10751,8 @@ eHalStatus csrRoamStartRoamingTimer(tpAniSirGlobal pMac, tANI_U32 sessionId, tAN
 
     smsLog(pMac, LOG1, " csrScanStartRoamingTimer");
     pSession->roamingTimerInfo.sessionId = (tANI_U8)sessionId;
-    status = vos_timer_start(&pSession->hTimerRoaming, interval/PAL_TIMER_TO_MS_UNIT);
+    status = vos_timer_start(&pSession->hTimerRoaming,
+                             interval/VOS_TIMER_TO_MS_UNIT);
 
     return (status);
 }
@@ -10874,7 +10849,8 @@ eHalStatus csrRoamStartWaitForKeyTimer(tpAniSirGlobal pMac, tANI_U32 interval)
     }
 #endif
     smsLog(pMac, LOG1, " csrScanStartWaitForKeyTimer");
-    status = vos_timer_start(&pMac->roam.hTimerWaitForKey, interval/PAL_TIMER_TO_MS_UNIT);
+    status = vos_timer_start(&pMac->roam.hTimerWaitForKey,
+                             interval/VOS_TIMER_TO_MS_UNIT);
 
     return (status);
 }
@@ -16327,6 +16303,9 @@ void csrRoamOffload(tpAniSirGlobal pMac, tSirRoamOffloadScanReq *pRequestBuf,
                                                    tCsrRoamSession *pSession)
 {
         vos_mem_copy(pRequestBuf->PSK_PMK, pSession->psk_pmk, sizeof(pRequestBuf->PSK_PMK));
+        pRequestBuf->R0KH_ID_Length = pSession->ftSmeContext.r0kh_id_len;
+        vos_mem_copy(pRequestBuf->R0KH_ID, pSession->ftSmeContext.r0kh_id,
+                     pRequestBuf->R0KH_ID_Length);
         pRequestBuf->Prefer5GHz = pMac->roam.configParam.nRoamPrefer5GHz;
         pRequestBuf->RoamRssiCatGap = pMac->roam.configParam.bCatRssiOffset;
         pRequestBuf->Select5GHzMargin = pMac->roam.configParam.nSelect5GHzMargin;
@@ -17808,7 +17787,7 @@ eHalStatus csrRoamStartJoinRetryTimer(tpAniSirGlobal pMac, tANI_U32 sessionId,
         pSession->joinRetryTimerInfo.sessionId = (tANI_U8)sessionId;
         status =
             vos_timer_start(&pSession->hTimerJoinRetry,
-                            interval/PAL_TIMER_TO_MS_UNIT);
+                            interval/VOS_TIMER_TO_MS_UNIT);
         if (!HAL_STATUS_SUCCESS(status))
         {
             smsLog(pMac, LOGE, FL(" fail to start timer status %s"), status);

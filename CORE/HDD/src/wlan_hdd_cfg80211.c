@@ -113,7 +113,7 @@
 #define a_mode_rates_size (8)
 #define FREQ_BASE_80211G          (2407)
 #define FREQ_BAND_DIFF_80211G     (5)
-#define MAX_SCAN_SSID 9
+#define MAX_SCAN_SSID 10
 #define MAX_PENDING_LOG 5
 #define MAX_HT_MCS_IDX 8
 #define MAX_VHT_MCS_IDX 10
@@ -10464,7 +10464,7 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR( dev );
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
     int ssidlen = pHddStaCtx->conn_info.SSID.SSID.length;
-    tANI_U32 rate_flags;
+    tANI_U8 rate_flags;
 
     hdd_context_t *pHddCtx = (hdd_context_t*) wiphy_priv(wiphy);
     hdd_config_t  *pCfg    = pHddCtx->cfg_ini;
@@ -10532,13 +10532,6 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 
     wlan_hdd_get_station_stats(pAdapter);
     rate_flags = pAdapter->hdd_stats.ClassA_stat.tx_rate_flags;
-
-    /*overwrite rate_flags if MAX link-speed need to be reported*/
-    if ((eHDD_LINK_SPEED_REPORT_MAX == pCfg->reportMaxLinkSpeed) ||
-        (eHDD_LINK_SPEED_REPORT_MAX_SCALED == pCfg-> reportMaxLinkSpeed &&
-         sinfo->signal >= pCfg->linkSpeedRssiHigh)) {
-        rate_flags = pAdapter->maxRateFlags;
-    }
 
     //convert to the UI units of 100kbps
     myRate = pAdapter->hdd_stats.ClassA_stat.tx_rate * 5;
@@ -12960,26 +12953,29 @@ static int wlan_hdd_cfg80211_set_mac_acl(struct wiphy *wiphy,
 #ifdef FEATURE_WLAN_LPHB
 void wlan_hdd_cfg80211_lphb_ind_handler
 (
-   void *pAdapter,
-   void *indCont
+   void *pHddCtx,
+   tSirLPHBInd *lphbInd
 )
 {
-   tSirLPHBInd     *lphbInd;
    struct sk_buff  *skb;
 
    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
              "LPHB indication arrived");
 
-   if (NULL == indCont)
-   {
+   if (0 != wlan_hdd_validate_context((hdd_context_t *)pHddCtx)) {
       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "LPHB IND, invalid argument");
+                "%s: invalid argument pHddCtx", __func__);
       return;
    }
 
-   lphbInd = (tSirLPHBInd *)indCont;
+   if (NULL == lphbInd) {
+      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                "%s: invalid argument lphbInd", __func__);
+      return;
+   }
+
    skb = cfg80211_testmode_alloc_event_skb(
-                  ((hdd_adapter_t *)pAdapter)->wdev.wiphy,
+                  ((hdd_context_t *)pHddCtx)->wiphy,
                   sizeof(tSirLPHBInd),
                   GFP_ATOMIC);
    if (!skb)

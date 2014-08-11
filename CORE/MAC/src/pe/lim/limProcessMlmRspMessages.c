@@ -435,6 +435,10 @@ limProcessMlmStartCnf(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
              (vos_nv_getChannelEnabledState(channelId) != NV_CHANNEL_DFS)) )
         {
             //Configure beacon and send beacons to HAL
+            VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,
+                   FL("Start Beacon with ssid %s Ch %d"),
+                   psessionEntry->ssId.ssId,
+                   psessionEntry->currentOperChannel);
             limSendBeaconInd(pMac, psessionEntry);
         }
     }
@@ -652,12 +656,6 @@ limProcessMlmAuthCnf(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
                  */
                 psessionEntry->limSmeState = psessionEntry->limPrevSmeState;
                 MTRACE(macTrace(pMac, TRACE_CODE_SME_STATE, psessionEntry->peSessionId, psessionEntry->limSmeState));
-                limSendSmeAuthRsp(
-                            pMac,
-                            ((tLimMlmAuthCnf *) pMsgBuf)->resultCode,
-                            ((tLimMlmAuthCnf *) pMsgBuf)->peerMacAddr,
-                            ((tLimMlmAuthCnf *) pMsgBuf)->authType,
-                            ((tLimMlmAuthCnf *) pMsgBuf)->protStatusCode,psessionEntry,psessionEntry->smeSessionId,psessionEntry->transactionId);
             }
         } // end if (cfgAuthType == eAUTO_SWITCH)
     } // if (((tLimMlmAuthCnf *) pMsgBuf)->resultCode != ...
@@ -791,12 +789,6 @@ limProcessMlmAuthCnf(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
              */
             psessionEntry->limSmeState = psessionEntry->limPrevSmeState;
             MTRACE(macTrace(pMac, TRACE_CODE_SME_STATE, psessionEntry->peSessionId, psessionEntry->limSmeState));
-            limSendSmeAuthRsp(
-                        pMac,
-                        ((tLimMlmAuthCnf *) pMsgBuf)->resultCode,
-                        ((tLimMlmAuthCnf *) pMsgBuf)->peerMacAddr,
-                        ((tLimMlmAuthCnf *) pMsgBuf)->authType,
-                        ((tLimMlmAuthCnf *) pMsgBuf)->protStatusCode,psessionEntry,psessionEntry->smeSessionId,psessionEntry->transactionId);
         }
     } // end if (((tLimMlmAuthCnf *) pMsgBuf)->resultCode != ...
 } /*** end limProcessMlmAuthCnf() ***/
@@ -1395,8 +1387,6 @@ limProcessMlmDisassocCnf(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
             else
                 psessionEntry->limSmeState = eLIM_SME_OFFLINE_STATE;
             MTRACE(macTrace(pMac, TRACE_CODE_SME_STATE, psessionEntry->peSessionId, psessionEntry->limSmeState));
-            // Send Promiscuous mode response to host
-            limSendSmePromiscuousModeRsp(pMac);
         }
         else
         {
@@ -4492,29 +4482,7 @@ returnAfterCleanup:
   vos_mem_free(limMsgQ->bodyptr);
   limMsgQ->bodyptr = NULL;
 }
-/**
- *  @function : limProcessSetMimoRsp()
- *
- *  @brief :  This function is called upon receiving the WDA_SET_MIMOPS_RSP from the HAL
- *                      after Processing the Req from the SME (PMC)
- *
- *      LOGIC:
- *
- *      ASSUMPTIONS:
- *          NA
- *
- *      NOTE:
- *          NA
- *
- * @param  pMac - Pointer to Global MAC structure
- * @param  limMsg - Lim Message structure object with the MimoPSparam in body
- * @return None
- */
 
-void
-limProcessSetMimoRsp(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
-{
-}
 /**
   *     @function : limHandleDelBssInReAssocContext
   *     @brief      : While Processing the ReAssociation Response Frame in STA,

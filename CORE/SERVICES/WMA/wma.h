@@ -163,13 +163,13 @@ static const t_probeTime_dwellTime
 	{28, 20}, /* 1 SSID */
 	{28, 20}, /* 2 SSID */
 	{28, 20}, /* 3 SSID */
-	{28, 12}, /* 4 SSID */
-	{28, 12}, /* 5 SSID */
-	{28, 12}, /* 6 SSID */
-	{28, 12}, /* 7 SSID */
-	{28, 12}, /* 8 SSID */
-	{28, 12}, /* 9 SSID */
-	{28, 9}   /* 10 SSID */
+	{28, 20}, /* 4 SSID */
+	{28, 20}, /* 5 SSID */
+	{28, 20}, /* 6 SSID */
+	{28, 11}, /* 7 SSID */
+	{28, 11}, /* 8 SSID */
+	{28, 11}, /* 9 SSID */
+	{28, 8}   /* 10 SSID */
 };
 
 /* Roaming default values
@@ -431,6 +431,12 @@ struct wma_wow {
 	v_BOOL_t bmiss_enable;
 	v_BOOL_t gtk_pdev_enable;
 	v_BOOL_t gtk_err_enable[WMA_MAX_SUPPORTED_BSS];
+#ifdef FEATURE_WLAN_LPHB
+	/* currently supports only vdev 0.
+	 * cache has two entries: one for TCP and one for UDP.
+	 */
+	tSirLPHBReq lphb_cache[2];
+#endif
 };
 #ifdef WLAN_FEATURE_11W
 #define CMAC_IPN_LEN         (6)

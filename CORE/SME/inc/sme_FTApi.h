@@ -30,7 +30,6 @@
 #define __SME_FTAPI_H
 
 #include <limFTDefs.h>
-#include <palTimer.h>
 
 /**=========================================================================
 
@@ -80,6 +79,11 @@ typedef struct sFTSMEContext
     vos_timer_t       preAuthReassocIntvlTimer;
 
     v_BOOL_t          addMDIE;
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_U32          r0kh_id_len;
+    tANI_U8           r0kh_id[SIR_ROAM_R0KH_ID_MAX_LEN];
+#endif
 
     /* User context for the timer callback */
     tpFTRoamCallbackUsrCtx  pUsrCtx;

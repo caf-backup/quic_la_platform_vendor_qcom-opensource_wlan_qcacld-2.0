@@ -67,35 +67,11 @@
 #define HIDDEN_TIMER (1*60*1000)
 #define CSR_SCAN_RESULT_RSSI_WEIGHT     80 // must be less than 100, represent the persentage of new RSSI
 
-/*---------------------------------------------------------------------------
-  PER filter constant fraction: it is a %
----------------------------------------------------------------------------*/
-#define CSR_SCAN_PER_FILTER_FRAC 100
-
-/*---------------------------------------------------------------------------
-  RSSI filter constant fraction: it is a %
----------------------------------------------------------------------------*/
-#define CSR_SCAN_RSSI_FILTER_FRAC 100
-
-/*---------------------------------------------------------------------------
-Convert RSSI into overall score: Since RSSI is in -dBm values, and the
-overall needs to be weighted inversely (where greater value means better
-system), we convert.
-RSSI *cannot* be more than 0xFF or less than 0 for meaningful WLAN operation
----------------------------------------------------------------------------*/
-#define CSR_SCAN_MAX_SCORE_VAL 0xFF
-#define CSR_SCAN_MIN_SCORE_VAL 0x0
-#define CSR_SCAN_HANDOFF_DELTA 10
 #define MAX_ACTIVE_SCAN_FOR_ONE_CHANNEL 140
 #define MIN_ACTIVE_SCAN_FOR_ONE_CHANNEL 120
 
 #define MAX_ACTIVE_SCAN_FOR_ONE_CHANNEL_FASTREASSOC 30
 #define MIN_ACTIVE_SCAN_FOR_ONE_CHANNEL_FASTREASSOC 20
-
-#define CSR_SCAN_OVERALL_SCORE( rssi )                          \
-    (( rssi < CSR_SCAN_MAX_SCORE_VAL )                          \
-     ? (CSR_SCAN_MAX_SCORE_VAL-rssi) : CSR_SCAN_MIN_SCORE_VAL)
-
 
 #define CSR_SCAN_IS_OVER_BSS_LIMIT(pMac)  \
    ( (pMac)->scan.nBssLimit <= (csrLLCount(&(pMac)->scan.scanResultList)) )
@@ -6516,7 +6492,7 @@ eHalStatus csrScanStartGetResultTimer(tpAniSirGlobal pMac)
 
     if(pMac->scan.fScanEnable)
     {
-        status = vos_timer_start(&pMac->scan.hTimerGetResult, CSR_SCAN_GET_RESULT_INTERVAL/PAL_TIMER_TO_MS_UNIT);
+        status = vos_timer_start(&pMac->scan.hTimerGetResult, CSR_SCAN_GET_RESULT_INTERVAL/VOS_TIMER_TO_MS_UNIT);
     }
     else
     {
@@ -6539,7 +6515,7 @@ void csrScanGetResultTimerHandler(void *pv)
 
     csrScanRequestResult(pMac);
 
-    vos_timer_start(&pMac->scan.hTimerGetResult, CSR_SCAN_GET_RESULT_INTERVAL/PAL_TIMER_TO_MS_UNIT);
+    vos_timer_start(&pMac->scan.hTimerGetResult, CSR_SCAN_GET_RESULT_INTERVAL/VOS_TIMER_TO_MS_UNIT);
 }
 
 #ifdef WLAN_AP_STA_CONCURRENCY
@@ -6689,7 +6665,7 @@ eHalStatus csrScanStartResultAgingTimer(tpAniSirGlobal pMac)
 
     if(pMac->scan.fScanEnable)
     {
-        status = vos_timer_start(&pMac->scan.hTimerResultAging, CSR_SCAN_RESULT_AGING_INTERVAL/PAL_TIMER_TO_MS_UNIT);
+        status = vos_timer_start(&pMac->scan.hTimerResultAging, CSR_SCAN_RESULT_AGING_INTERVAL/VOS_TIMER_TO_MS_UNIT);
     }
     return (status);
 }
@@ -6700,7 +6676,7 @@ eHalStatus csrScanStartResultCfgAgingTimer(tpAniSirGlobal pMac)
 
     if(pMac->scan.fScanEnable)
     {
-        status = vos_timer_start(&pMac->scan.hTimerResultCfgAging, CSR_SCAN_RESULT_CFG_AGING_INTERVAL/PAL_TIMER_TO_MS_UNIT);
+        status = vos_timer_start(&pMac->scan.hTimerResultCfgAging, CSR_SCAN_RESULT_CFG_AGING_INTERVAL/VOS_TIMER_TO_MS_UNIT);
     }
     return (status);
 }
@@ -6811,7 +6787,7 @@ void csrScanResultAgingTimerHandler(void *pv)
         }
         csrLLUnlock(&pMac->scan.scanResultList);
     }
-    vos_timer_start(&pMac->scan.hTimerResultAging, CSR_SCAN_RESULT_AGING_INTERVAL/PAL_TIMER_TO_MS_UNIT);
+    vos_timer_start(&pMac->scan.hTimerResultAging, CSR_SCAN_RESULT_AGING_INTERVAL/VOS_TIMER_TO_MS_UNIT);
 }
 
 static void csrScanResultCfgAgingTimerHandler(void *pv)
@@ -6836,7 +6812,7 @@ static void csrScanResultCfgAgingTimerHandler(void *pv)
         pEntry = tmpEntry;
     }
     csrLLUnlock(&pMac->scan.scanResultList);
-    vos_timer_start(&pMac->scan.hTimerResultCfgAging, CSR_SCAN_RESULT_CFG_AGING_INTERVAL/PAL_TIMER_TO_MS_UNIT);
+    vos_timer_start(&pMac->scan.hTimerResultCfgAging, CSR_SCAN_RESULT_CFG_AGING_INTERVAL/VOS_TIMER_TO_MS_UNIT);
 }
 
 eHalStatus csrScanStartIdleScanTimer(tpAniSirGlobal pMac, tANI_U32 interval)
@@ -6848,7 +6824,7 @@ eHalStatus csrScanStartIdleScanTimer(tpAniSirGlobal pMac, tANI_U32 interval)
     {
         pMac->scan.nIdleScanTimeGap += interval;
         vos_timer_stop(&pMac->scan.hTimerIdleScan);
-        status = vos_timer_start(&pMac->scan.hTimerIdleScan, interval/PAL_TIMER_TO_MS_UNIT);
+        status = vos_timer_start(&pMac->scan.hTimerIdleScan, interval/VOS_TIMER_TO_MS_UNIT);
         if( !HAL_STATUS_SUCCESS(status) )
         {
             smsLog(pMac, LOGE, "  Fail to start Idle scan timer. status = %d interval = %d", status, interval);
@@ -6987,7 +6963,9 @@ eHalStatus csrScanTriggerIdleScan(tpAniSirGlobal pMac, tANI_U32 *pTimeInterval)
             *pTimeInterval = pMac->roam.configParam.impsSleepTime;
         }
         //pmcRequestImps take a period in millisecond unit.
-        status = pmcRequestImps(pMac, pMac->roam.configParam.impsSleepTime / PAL_TIMER_TO_MS_UNIT, csrScanIMPSCallback, pMac);
+        status = pmcRequestImps(pMac,
+                   pMac->roam.configParam.impsSleepTime / VOS_TIMER_TO_MS_UNIT,
+                   csrScanIMPSCallback, pMac);
         if(!HAL_STATUS_SUCCESS(status))
         {
             if(eHAL_STATUS_PMC_ALREADY_IN_IMPS != status)
@@ -8907,6 +8885,12 @@ eHalStatus csrScanSaveRoamOffloadApToScanCache(tpAniSirGlobal pMac,
                 (tANI_U8 *) macHeader->bssId,
                 sizeof(tSirMacAddr));
    pBssDescr->nReceivedTime = (tANI_TIMESTAMP)palGetTickCount(pMac->hHdd);
+
+   if(pParsedFrame->mdiePresent)
+   {
+      pBssDescr->mdiePresent = pParsedFrame->mdiePresent;
+      vos_mem_copy((tANI_U8 *)pBssDescr->mdie, (tANI_U8 *)pParsedFrame->mdie, SIR_MDIE_SIZE);
+   }
 
    VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
                                 "LFR3:%s:BssDescr Info:", __func__);
