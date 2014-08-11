@@ -686,7 +686,9 @@ extern "C" {
 #define WAL_DBGID_SMPS_SWSEL_CHAINMASK              65
 #define WAL_DBGID_SUSPEND                           66
 #define WAL_DBGID_RESUME                            67
-#define WAL_DBGID_DEFINITION_END                    68
+#define WAL_DBGID_PEER_TX_FAIL_CNT_THRES_EXCEEDED   68
+#define WAL_DBGID_RX_FULL_REORDER_SUPPORT           69
+#define WAL_DBGID_DEFINITION_END                    70
 
 #define ANI_DBGID_POLL                               0
 #define ANI_DBGID_CONTROL                            1
@@ -837,7 +839,8 @@ extern "C" {
 #define WOW_ARP_REPLIED          20
 #define WOW_BEACON_OFFLOAD_TX    21
 #define WOW_BEACON_OFFLOAD_CFG   22
-#define WOW_DBGID_DEFINITION_END 23
+#define WOW_IBSS_VDEV_ALLOW      23
+#define WOW_DBGID_DEFINITION_END 24
 
 /* SWBMISS module DBGIDs */
 #define SWBMISS_DBGID_DEFINITION_START  0
@@ -883,12 +886,25 @@ extern "C" {
 #define ROAM_RSN_IE_PARSE_ERROR   34
 #define ROAM_WPA_IE_PARSE_ERROR   35
 #define ROAM_SCAN_CMD_FROM_HOST   36
-#define ROAM_DBGID_DEFINITION_END 37
+#define ROAM_HO_SORT_CANDIDATE    37
+#define ROAM_HO_SAVE_CANDIDATE    38
+#define ROAM_HO_GET_CANDIDATE     39
+#define ROAM_HO_OFFLOAD_SET_PARAM 40
+#define ROAM_HO_SM                41
+#define ROAM_HO_HTT_SAVED         42
+#define ROAM_HO_SYNC_START        43
+#define ROAM_HO_START             44
+#define ROAM_HO_SYNC_COMPLETE     45
+#define ROAM_HO_STOP              46
+#define ROAM_HO_HTT_FORWARD       47
+#define ROAM_DBGID_DEFINITION_END 48
 
 /* DATA_TXRX module DBGIDs*/
 #define DATA_TXRX_DBGID_DEFINITION_START         0
 #define DATA_TXRX_DBGID_RX_DATA_SEQ_LEN_INFO     1
-#define DATA_TXRX_DBGID_DEFINITION_END           2
+#define DATA_TXRX_DBGID_REPLAY_CHECK             2
+#define DATA_TXRX_DBGID_DUP_CHECK                3
+#define DATA_TXRX_DBGID_DEFINITION_END           4
 
 /* TDLS module DBGIDs*/
 #define TDLS_DBGID_DEFINITION_START             0
@@ -943,7 +959,9 @@ extern "C" {
 #define TXBFEE_DBGID_PACKET_IS_STEERED         16
 #define TXBFEE_UPLOADH_EVENT_ALLOC_MEM_FAIL    17
 #define TXBFEE_DBGID_SW_WAR_AID_ZERO           18
-#define TXBFEE_DBGID_END                       19
+#define TXBFEE_DBGID_BRPOLL_RECEIVED           19
+#define TXBFEE_DBGID_GID_RECEIVED              20
+#define TXBFEE_DBGID_END                       21
 
 /* SMPS module DBGIDs */
 #define STA_SMPS_DBGID_DEFINITION_START                 0
@@ -1037,6 +1055,29 @@ extern "C" {
 #define RMC_SET_MODE                           14
 #define RMC_SET_ACTION_PERIOD                  15
 #define RMC_DBGID_DEFINITION_END               16
+
+/* UNIT_TEST module DBGIDs */
+#define UNIT_TEST_GEN                 0
+
+/* MLME module DBGIDs */
+#define MLME_DEBUG_CMN                0
+#define MLME_DEBUG_IF                 1
+#define MLME_DEBUG_AUTH               2
+#define MLME_DEBUG_REASSOC            3
+#define MLME_DEBUG_DEAUTH             4
+#define MLME_DEBUG_DISASSOC           5
+#define MLME_DEBUG_ROAM               6
+#define MLME_DEBUG_RETRY              7
+#define MLME_DEBUG_TIMER              8
+#define MLME_DEBUG_FRAMEPARSE         9
+
+/* SUPPL module DBGIDs */
+#define SUPPL_DBGID_INIT                        0
+#define SUPPL_DBGID_RECV_EAPOL                  1
+#define SUPPL_DBGID_RECV_EAPOL_TIMEOUT          2
+#define SUPPL_DBGID_SEND_EAPOL                  3
+#define SUPPL_DBGID_MIC_MISMATCH                4
+#define SUPPL_DBGID_FINISH                      5
 
 /* Stats Module DBGIDs */
 #define WLAN_STATS_DBGID_DEFINITION_START                0
@@ -1280,6 +1321,59 @@ extern "C" {
 #define IBSS_PS_DBGID_PS_DESC_BIN_HWM           22
 #define IBSS_PS_DBGID_PS_DESC_BIN_LWM           23
 #define IBSS_PS_DBGID_PS_KICKOUT_PEER           24
+#define IBSS_PS_DBGID_SET_PEER_PARAM            25
+#define IBSS_PS_DBGID_BCN_ATIM_WIN_MISMATCH     26
+#define IBSS_PS_DBGID_RX_CHAINMASK_CHANGE       27
+
+/* HIF UART Interface DBGIDs */
+#define HIF_UART_DBGID_START               0
+#define HIF_UART_DBGID_POWER_STATE         1
+#define HIF_UART_DBGID_TXRX_FLOW           2
+#define HIF_UART_DBGID_TXRX_CTRL_CHAR      3
+#define HIF_UART_DBGID_TXRX_BUF_DUMP       4
+
+/* EXTSCAN DBGIDs */
+#define EXTSCAN_START                                    0
+#define EXTSCAN_STOP                                     1
+#define EXTSCAN_CLEAR_ENTRY_CONTENT                      2
+#define EXTSCAN_GET_FREE_ENTRY_SUCCESS                   3
+#define EXTSCAN_GET_FREE_ENTRY_INCONSISTENT              4
+#define EXTSCAN_GET_FREE_ENTRY_NO_MORE_ENTRIES           5
+#define EXTSCAN_CREATE_ENTRY_SUCCESS                     6
+#define EXTSCAN_CREATE_ENTRY_ERROR                       7
+#define EXTSCAN_SEARCH_SCAN_ENTRY_QUEUE                  8
+#define EXTSCAN_SEARCH_SCAN_ENTRY_KEY_FOUND              9
+#define EXTSCAN_SEARCH_SCAN_ENTRY_KEY_NOT_FOUND         10
+#define EXTSCAN_ADD_ENTRY                               11
+#define EXTSCAN_BUCKET_SEND_OPERATION_EVENT             12
+#define EXTSCAN_BUCKET_SEND_OPERATION_EVENT_FAILED      13
+#define EXTSCAN_BUCKET_START_SCAN_CYCLE                 14
+#define EXTSCAN_BUCKET_PERIODIC_TIMER                   15
+#define EXTSCAN_SEND_START_STOP_EVENT                   16
+#define EXTSCAN_NOTIFY_WLAN_CHANGE                      17
+#define EXTSCAN_NOTIFY_WLAN_HOTLIST_MATCH               18
+#define EXTSCAN_MAIN_RECEIVED_FRAME                     19
+#define EXTSCAN_MAIN_NO_SSID_IE                         20
+#define EXTSCAN_MAIN_MALFORMED_FRAME                    21
+#define EXTSCAN_FIND_BSSID_BY_REFERENCE                 22
+#define EXTSCAN_FIND_BSSID_BY_REFERENCE_ERROR           23
+#define EXTSCAN_NOTIFY_TABLE_USAGE                      24
+#define EXTSCAN_FOUND_RSSI_ENTRY                        25
+#define EXTSCAN_BSSID_FOUND_RSSI_SAMPLE                 26
+#define EXTSCAN_BSSID_ADDED_RSSI_SAMPLE                 27
+#define EXTSCAN_BSSID_REPLACED_RSSI_SAMPLE              28
+#define EXTSCAN_BSSID_TRANSFER_CURRENT_SAMPLES          29
+#define EXTSCAN_BUCKET_PROCESS_SCAN_EVENT               30
+#define EXTSCAN_BUCKET_CANNOT_FIND_BUCKET               31
+#define EXTSCAN_START_SCAN_REQUEST_FAILED               32
+#define EXTSCAN_BUCKET_STOP_CURRENT_SCANS               33
+#define EXTSCAN_BUCKET_SCAN_STOP_REQUEST                34
+#define EXTSCAN_BUCKET_PERIODIC_TIMER_ERROR             35
+#define EXTSCAN_BUCKET_START_OPERATION                  36
+#define EXTSCAN_START_INTERNAL_ERROR                    37
+#define EXTSCAN_NOTIFY_HOTLIST_MATCH                    38
+#define EXTSCAN_CONFIG_HOTLIST_TABLE                    39
+#define EXTSCAN_CONFIG_WLAN_CHANGE_TABLE                40
 
 #ifdef __cplusplus
 }

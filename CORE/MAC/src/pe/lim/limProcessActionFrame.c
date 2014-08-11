@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -97,7 +96,7 @@ void limStopTxAndSwitchChannel(tpAniSirGlobal pMac, tANI_U8 sessionId)
 
     if( NULL == psessionEntry )
     {
-      limLog(pMac, LOGE, FL("Session %d  not active\n "), sessionId);
+      limLog(pMac, LOGE, FL("Session %d not active"), sessionId);
       return;
     }
 
@@ -313,15 +312,6 @@ __limProcessChannelSwitchActionFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo
                         (tANI_U8 *) &pHdr->sa,
                         sizeof(tSirMacAddr)))
     {
-        #if 0
-        if (wlan_cfgGetInt(pMac, WNI_CFG_BEACON_INTERVAL, &val) != eSIR_SUCCESS)
-        {
-            vos_mem_free(pChannelSwitchFrame);
-            limLog(pMac, LOGP, FL("could not retrieve Beacon interval"));
-            return;
-        }
-        #endif// TO SUPPORT BT-AMP
-
         /* copy the beacon interval from psessionEntry*/
         val = psessionEntry->beaconParams.beaconInterval;
 
@@ -1090,7 +1080,7 @@ __limProcessQosMapConfigureFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
      pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
      frameLen = WDA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
      retval = sirConvertQosMapConfigureFrame2Struct(pMac, pBody, frameLen,
-                                                        &pMac->QosMapSet);
+                                                        &psessionEntry->QosMapSet);
      if (retval != eSIR_SUCCESS)
      {
          PELOGW(limLog(pMac, LOGE,
@@ -2545,13 +2535,23 @@ limProcessActionFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession ps
               }
            }
             break;
+
+         case SIR_MAC_ACTION_2040_BSS_COEXISTENCE:
+           {
+              tpSirMacMgmtHdr     pHdr;
+              tANI_U32            frameLen;
+
+              pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
+              frameLen = WDA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
+
+              limSendSmeMgmtFrameInd(pMac, pHdr->fc.subType,
+                    (tANI_U8*)pHdr, frameLen + sizeof(tSirMacMgmtHdr), 0,
+                    WDA_GET_RX_CH( pRxPacketInfo ), psessionEntry, 0);
+            }
+
 #ifdef FEATURE_WLAN_TDLS
            case SIR_MAC_TDLS_DIS_RSP:
            {
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-               //LIM_LOG_TDLS(printk("Public Action TDLS Discovery RSP ..")) ;
-               limProcessTdlsPublicActionFrame(pMac, (tANI_U32*)pRxPacketInfo, psessionEntry) ;
-#else
                tpSirMacMgmtHdr     pHdr;
                tANI_U32            frameLen;
                tANI_S8             rssi;
@@ -2564,7 +2564,6 @@ limProcessActionFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,tpPESession ps
                limSendSmeMgmtFrameInd(pMac, pHdr->fc.subType,
                   (tANI_U8*)pHdr, frameLen + sizeof(tSirMacMgmtHdr), 0,
                   WDA_GET_RX_CH( pRxPacketInfo ), psessionEntry, rssi);
-#endif
            }
                break;
 #endif

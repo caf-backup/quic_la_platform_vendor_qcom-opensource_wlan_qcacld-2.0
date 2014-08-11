@@ -42,15 +42,17 @@
 #define AR6320_REV1_VERSION_1        AR6320_REV1_1_VERSION
 #define AR6320_REV1_3_VERSION        0x5000003
 #define AR6320_REV2_VERSION          AR6320_REV1_1_VERSION
-#define AR6320_REV2_1_VERSION	     0x5010000
-#define AR6320_REV3_VERSION	     0x5020000
+#define AR6320_REV2_1_VERSION        0x5010000
+#define AR6320_REV3_VERSION          0x5020000
 #define AR6320_REV4_VERSION          AR6320_REV2_1_VERSION
 #define AR6320_DEV_VERSION           0x1000000
 #define QCA_FIRMWARE_FILE            "athwlan.bin"
 #define QCA_UTF_FIRMWARE_FILE        "utf.bin"
 #define QCA_BOARD_DATA_FILE          "fakeboar.bin"
 #define QCA_OTP_FILE                 "otp.bin"
+#define QCA_SETUP_FILE               "athsetup.bin"
 #define AR61X4_SINGLE_FILE           "qca61x4.bin"
+#define QCA_FIRMWARE_EPPING_FILE     "epping.bin"
 
 /* Configuration for statistics pushed by firmware */
 #define PDEV_DEFAULT_STATS_UPDATE_PERIOD    500
@@ -70,7 +72,7 @@
 #define REGISTER_LOCATION       0x00000800
 
 #define DRAM_LOCATION           0x00400000
-#define DRAM_SIZE               0x00070000
+#define DRAM_SIZE               0x000a8000
 
 #define IRAM_LOCATION           0x00980000
 #define IRAM_SIZE               0x00038000

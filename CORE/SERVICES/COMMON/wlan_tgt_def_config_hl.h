@@ -207,8 +207,11 @@
 /*
  * total number of descriptors to use in the target
  */
+#ifndef HIF_SDIO
 #define CFG_TGT_NUM_MSDU_DESC    (32)
-
+#else
+#define CFG_TGT_NUM_MSDU_DESC    (0)
+#endif
 /*
  * Maximum number of frag table entries
  */

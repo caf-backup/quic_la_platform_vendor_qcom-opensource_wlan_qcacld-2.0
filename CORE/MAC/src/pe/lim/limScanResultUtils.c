@@ -39,6 +39,9 @@
 #include "limUtils.h"
 #include "limSerDesUtils.h"
 #include "limApi.h"
+#ifdef WLAN_FEATURE_VOWIFI_11R
+#include "limFTDefs.h"
+#endif
 #include "limSession.h"
 #if defined WLAN_FEATURE_VOWIFI
 #include "rrmApi.h"
@@ -290,7 +293,9 @@ limCollectBssDescription(tpAniSirGlobal pMac,
                   pBody + SIR_MAC_B_PR_SSID_OFFSET,
                   ieLen);
 
-    //sirDumpBuf( pMac, SIR_LIM_MODULE_ID, LOGW, (tANI_U8 *) pBssDescr, pBssDescr->length + 2 );
+    /*set channel number in beacon in case it is not present*/
+    pBPR->channelNumber = pBssDescr->channelId;
+
     limLog( pMac, LOG3,
         FL("Collected BSS Description for Channel(%1d), length(%u), aniIndicator(%d), IE Fields(%u)"),
         pBssDescr->channelId,

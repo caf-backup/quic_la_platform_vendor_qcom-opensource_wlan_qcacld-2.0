@@ -762,6 +762,10 @@ limStartBssReqSerDes(tpAniSirGlobal pMac, tpSirSmeStartBssReq pStartBssReq, tANI
     len -= sizeof(tSirAddIeParams);
     pBuf += sizeof(tSirAddIeParams);
 
+    /* extract obssEnabled */
+    pStartBssReq->obssEnabled = *pBuf++;
+    len--;
+
     if (len)
     {
         limLog(pMac, LOGW, FL("Extra bytes left in SME_START_BSS_REQ, len=%d"), len);
@@ -1912,16 +1916,6 @@ limSetContextReqSerDes(tpAniSirGlobal pMac, tpSirSmeSetContextReq pSetContextReq
     if (limCheckRemainingLength(pMac, len) == eSIR_FAILURE)
         return eSIR_FAILURE;
 
-
-//    pSetContextReq->qosInfoPresent = limGetU32(pBuf);
-//    pBuf += sizeof(tAniBool);
-
-//    if (pSetContextReq->qosInfoPresent)
-//    {
-//        len   = limGetQosInfo(&pSetContextReq->qos, pBuf);
-//        pBuf += len;
-//    }
-
     pSetContextReq->keyMaterial.length = limGetU16(pBuf);
     pBuf += sizeof(tANI_U16);
     len  -= sizeof(tANI_U16);
@@ -2263,10 +2257,6 @@ limDeauthReqSerDes(tpAniSirGlobal pMac, tSirSmeDeauthReq *pDeauthReq, tANI_U8 *p
 
     return eSIR_SUCCESS;
 } /*** end limDisassocReqSerDes() ***/
-
-
-
-
 
 
 /**

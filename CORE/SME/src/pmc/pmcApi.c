@@ -37,7 +37,6 @@
 
 #include "palTypes.h"
 #include "aniGlobal.h"
-#include "palTimer.h"
 #include "csrLinkList.h"
 #include "smsDebug.h"
 #include "pmcApi.h"
@@ -383,94 +382,6 @@ eHalStatus pmcClose (tHalHandle hHal)
     pmcCloseDeferredMsgList(pMac);
 
     return eHAL_STATUS_SUCCESS;
-}
-
-
-/******************************************************************************
-*
-* Name:  pmcSignalPowerEvent
-*
-* Description:
-*    Signals to PMC that a power event has occurred.
-*
-* Parameters:
-*    hHal - HAL handle for device
-*    event - the event that has occurred
-*
-* Returns:
-*    eHAL_STATUS_SUCCESS - signaling successful
-*    eHAL_STATUS_FAILURE - signaling not successful
-*
-******************************************************************************/
-eHalStatus pmcSignalPowerEvent (tHalHandle hHal, tPmcPowerEvent event)
-{
-    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-#ifndef GEN6_ONWARDS
-    tSirMacHTMIMOPowerSaveState  htMimoPowerSaveState;
-#endif
-
-    pmcLog(pMac, LOG2, FL("Entering pmcSignalPowerEvent, event %d"), event);
-
-    /* Take action based on the event being signaled. */
-    switch (event)
-    {
-#ifndef GEN6_ONWARDS
-    case ePMC_SYSTEM_HIBERNATE:
-        return pmcEnterLowPowerState(hHal);
-
-    case ePMC_SYSTEM_RESUME:
-        return pmcExitLowPowerState(hHal);
-
-    case ePMC_HW_WLAN_SWITCH_OFF:
-        pMac->pmc.hwWlanSwitchState = ePMC_SWITCH_OFF;
-        return pmcEnterLowPowerState(hHal);
-
-    case ePMC_HW_WLAN_SWITCH_ON:
-        pMac->pmc.hwWlanSwitchState = ePMC_SWITCH_ON;
-        return pmcExitLowPowerState(hHal);
-
-    case ePMC_SW_WLAN_SWITCH_OFF:
-        pMac->pmc.swWlanSwitchState = ePMC_SWITCH_OFF;
-        return pmcEnterLowPowerState(hHal);
-
-    case ePMC_SW_WLAN_SWITCH_ON:
-        pMac->pmc.swWlanSwitchState = ePMC_SWITCH_ON;
-        return pmcExitLowPowerState(hHal);
-
-    case ePMC_BATTERY_OPERATION:
-        pMac->pmc.powerSource = BATTERY_POWER;
-
-        /* Turn on SMPS. */
-        if (pMac->pmc.smpsEnabled)
-        {
-            if (pMac->pmc.smpsConfig.mode == ePMC_DYNAMIC_SMPS)
-                htMimoPowerSaveState = eSIR_HT_MIMO_PS_DYNAMIC;
-            if (pMac->pmc.smpsConfig.mode == ePMC_STATIC_SMPS)
-                htMimoPowerSaveState = eSIR_HT_MIMO_PS_STATIC;
-            if (pmcSendMessage(hHal, eWNI_PMC_SMPS_STATE_IND, &htMimoPowerSaveState,
-                               sizeof(tSirMacHTMIMOPowerSaveState)) != eHAL_STATUS_SUCCESS)
-                return eHAL_STATUS_FAILURE;
-        }
-        return eHAL_STATUS_SUCCESS;
-
-    case ePMC_AC_OPERATION:
-        pMac->pmc.powerSource = AC_POWER;
-
-        /* Turn off SMPS. */
-        if (!pMac->pmc.smpsConfig.enterOnAc)
-        {
-            htMimoPowerSaveState = eSIR_HT_MIMO_PS_NO_LIMIT;
-            if (pmcSendMessage(hHal, eWNI_PMC_SMPS_STATE_IND, &htMimoPowerSaveState,
-                               sizeof(tSirMacHTMIMOPowerSaveState)) != eHAL_STATUS_SUCCESS)
-                return eHAL_STATUS_FAILURE;
-        }
-        return eHAL_STATUS_SUCCESS;
-#endif //GEN6_ONWARDS
-    default:
-        pmcLog(pMac, LOGE, FL("Invalid event %d"), event);
-        PMC_ABORT;
-        return eHAL_STATUS_FAILURE;
-    }
 }
 
 
@@ -4005,6 +3916,31 @@ eHalStatus pmcOffloadStopUapsd(tHalHandle hHal,  tANI_U32 sessionId)
     return status;
 }
 
+tANI_BOOLEAN pmcOffloadIsStaInPowerSave(tpAniSirGlobal pMac, tANI_U32 sessionId)
+{
+    tpPsOffloadPerSessionInfo pmc;
+    tANI_BOOLEAN StainPS = TRUE;
+
+    if(!CSR_IS_SESSION_VALID(pMac, sessionId))
+    {
+        smsLog(pMac, LOGE, FL("Invalid SessionId %x"), sessionId);
+        return TRUE;
+    }
+
+    /* Check whether the give session is Infra and in Connected State */
+    if(!csrIsConnStateConnectedInfra(pMac, sessionId))
+    {
+       smsLog(pMac, LOG1, FL("Sta not infra/connected state %d"), sessionId);
+       return TRUE;
+    }
+    else
+    {
+       pmc = &pMac->pmcOffloadInfo.pmc[sessionId];
+       StainPS = (pmc->pmcState == BMPS) || (pmc->pmcState == UAPSD);
+       return StainPS;
+    }
+}
+
 tANI_BOOLEAN pmcOffloadProcessCommand(tpAniSirGlobal pMac, tSmeCmd *pCommand)
 {
     eHalStatus status = eHAL_STATUS_SUCCESS;
@@ -4324,11 +4260,13 @@ tANI_BOOLEAN pmcOffloadIsPowerSaveEnabled (tHalHandle hHal, tANI_U32 sessionId,
 }
 
 eHalStatus PmcOffloadEnableDeferredStaModePowerSave(tHalHandle hHal,
-                                                    tANI_U32 sessionId)
+                                                    tANI_U32 sessionId,
+                                                    tANI_BOOLEAN isReassoc)
 {
     tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
     tpPsOffloadPerSessionInfo pmc = &pMac->pmcOffloadInfo.pmc[sessionId];
     eHalStatus status = eHAL_STATUS_FAILURE;
+    tANI_U32 timer_value;
 
     if (!pMac->pmcOffloadInfo.staPsEnabled)
     {
@@ -4337,8 +4275,16 @@ eHalStatus PmcOffloadEnableDeferredStaModePowerSave(tHalHandle hHal,
         return status;
     }
 
+    if(isReassoc)
+        timer_value = AUTO_PS_ENTRY_TIMER_DEFAULT_VALUE;
+    else
+        timer_value = AUTO_DEFERRED_PS_ENTRY_TIMER_DEFAULT_VALUE;
+
+    pmcLog(pMac, LOG1, FL("Start AutoPsTimer for %d isReassoc:%d "),
+                            timer_value, isReassoc);
+
     status = pmcOffloadStartAutoStaPsTimer(pMac, sessionId,
-                AUTO_DEFERRED_PS_ENTRY_TIMER_DEFAULT_VALUE);
+                                       timer_value);
     if (eHAL_STATUS_SUCCESS == status)
     {
        smsLog(pMac, LOG2,

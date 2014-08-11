@@ -2625,10 +2625,10 @@ sirConvertAssocRespFrame2Struct(tpAniSirGlobal pMac,
 
     if ( ar.QosMapSet.present )
     {
-        pMac->QosMapSet.present = 1;
-        ConvertQosMapsetFrame( pMac, &pMac->QosMapSet, &ar.QosMapSet);
+        pAssocRsp->QosMapSet.present = 1;
+        ConvertQosMapsetFrame( pMac, &pAssocRsp->QosMapSet, &ar.QosMapSet);
         limLog( pMac, LOG1, FL("Received Assoc Response with Qos Map Set"));
-        limLogQosMapSet(pMac, &pMac->QosMapSet);
+        limLogQosMapSet(pMac, &pAssocRsp->QosMapSet);
     }
 
     return eSIR_SUCCESS;
@@ -3360,8 +3360,14 @@ sirParseBeaconIE(tpAniSirGlobal        pMac,
         vos_mem_copy( &pBeaconStruct->OperatingMode, &pBies->OperatingMode,
                       sizeof( tDot11fIEOperatingMode) );
     }
-
 #endif
+
+    if( pBies->MobilityDomain.present)
+    {
+        pBeaconStruct->mdiePresent = 1;
+        vos_mem_copy( pBeaconStruct->mdie, &pBies->MobilityDomain.MDID, SIR_MDIE_SIZE);
+    }
+
     pBeaconStruct->Vendor1IEPresent = pBies->Vendor1IE.present;
     pBeaconStruct->Vendor2IEPresent = pBies->Vendor2IE.present;
     pBeaconStruct->Vendor3IEPresent = pBies->Vendor3IE.present;
@@ -3674,6 +3680,15 @@ sirConvertBeaconFrame2Struct(tpAniSirGlobal       pMac,
                       sizeof( tDot11fIEWiderBWChanSwitchAnn));
     }
 #endif
+
+    /* IBSS Peer Params */
+    if(pBeacon->IBSSParams.present)
+    {
+        pBeaconStruct->IBSSParams.present = 1;
+        vos_mem_copy( &pBeaconStruct->IBSSParams, &pBeacon->IBSSParams,
+                      sizeof( tDot11fIEIBSSParams ));
+    }
+
     pBeaconStruct->Vendor1IEPresent = pBeacon->Vendor1IE.present;
     pBeaconStruct->Vendor2IEPresent = pBeacon->Vendor2IE.present;
     pBeaconStruct->Vendor3IEPresent = pBeacon->Vendor3IE.present;
@@ -4181,7 +4196,7 @@ sirConvertQosMapConfigureFrame2Struct(tpAniSirGlobal    pMac,
     }
     pQosMapSet->present = mapConfigure.QosMapSet.present;
     ConvertQosMapsetFrame(pMac->hHdd, pQosMapSet, &mapConfigure.QosMapSet);
-    limLogQosMapSet(pMac, &pMac->QosMapSet);
+    limLogQosMapSet(pMac, pQosMapSet);
     return eSIR_SUCCESS;
 }
 

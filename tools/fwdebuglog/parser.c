@@ -66,6 +66,15 @@ extern int optionflag;
 
 module_dbg_print mod_print[WLAN_MODULE_ID_MAX];
 
+extern A_BOOL
+dbglog_nan_print_handler(
+    A_UINT32 mod_id,
+    A_UINT16 vap_id,
+    A_UINT32 dbg_id,
+    A_UINT32 timestamp,
+    A_UINT16 numargs,
+    A_UINT32 *args);
+
 const char *dbglog_get_module_str(A_UINT32 module_id)
 {
     switch (module_id) {
@@ -129,6 +138,18 @@ const char *dbglog_get_module_str(A_UINT32 module_id)
         return "TDLS";
     case WLAN_MODULE_P2P:
         return "P2P";
+    case WLAN_MODULE_WOW:
+        return "WoW";
+    case WLAN_MODULE_IBSS_PWRSAVE:
+        return "IBSS PS";
+    case WLAN_MODULE_EXTSCAN:
+        return "ExtScan";
+    case WLAN_MODULE_UNIT_TEST:
+        return "UNIT_TEST";
+    case WLAN_MODULE_MLME:
+        return "MLME";
+    case WLAN_MODULE_SUPPL:
+        return "SUPPLICANT";
     default:
         return "UNKNOWN";
     }
@@ -539,6 +560,22 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "ROAM_CANCEL_LOW_PRIO_SCAN",
         "ROAM_FINAL_BMISS_RECVD",
         "ROAM_CONFIG_SCAN_MODE",
+        "ROAM_BMISS_FINAL_SCAN_ENABLE",
+        "ROAM_SUITABLE_AP_EVENT",
+        "ROAM_RSN_IE_PARSE_ERROR",
+        "ROAM_WPA_IE_PARSE_ERROR",
+        "ROAM_SCAN_CMD_FROM_HOST",
+        "ROAM_HO_SORT_CANDIDATE",
+        "ROAM_HO_SAVE_CANDIDATE",
+        "ROAM_HO_GET_CANDIDATE",
+        "ROAM_HO_OFFLOAD_SET_PARAM",
+        "ROAM_HO_SM",
+        "ROAM_HO_HTT_SAVED",
+        "ROAM_HO_SYNC_START",
+        "ROAM_HO_START",
+        "ROAM_HO_COMPLETE",
+        "ROAM_HO_STOP",
+        "ROAM_HO_HTT_FORWARD",
         "ROAM_DBGID_DEFINITION_END"
     },
     {
@@ -1120,6 +1157,87 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "IBSS_PS_DBGID_PS_DESC_BIN_HWM",
         "IBSS_PS_DBGID_PS_DESC_BIN_LWM",
         "IBSS_PS_DBGID_PS_KICKOUT_PEER",
+        "IBSS_PS_DBGID_SET_PEER_PARAM",
+        "IBSS_PS_DBGID_BCN_ATIM_WIN_MISMATCH",
+    },
+    {
+       /* HIF UART Interface DBGIDs */
+       "HIF_UART_DBGID_START",
+       "HIF_UART_DBGID_POWER_STATE",
+       "HIF_UART_DBGID_TXRX_FLOW",
+       "HIF_UART_DBGID_TXRX_CTRL_CHAR",
+       "HIF_UART_DBGID_TXRX_BUF_DUMP",
+    },
+    {
+       /* LPI */
+       ""
+    },
+    {
+       /* EXTSCAN DBGIDs */
+       "EXTSCAN_START",
+       "EXTSCAN_STOP",
+       "EXTSCAN_CLEAR_ENTRY_CONTENT",
+       "EXTSCAN_GET_FREE_ENTRY_SUCCESS",
+       "EXTSCAN_GET_FREE_ENTRY_INCONSISTENT",
+       "EXTSCAN_GET_FREE_ENTRY_NO_MORE_ENTRIES",
+       "EXTSCAN_CREATE_ENTRY_SUCCESS",
+       "EXTSCAN_CREATE_ENTRY_ERROR",
+       "EXTSCAN_SEARCH_SCAN_ENTRY_QUEUE",
+       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_FOUND",
+       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_NOT_FOUND",
+       "EXTSCAN_ADD_ENTRY",
+       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT",
+       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT_FAILED",
+       "EXTSCAN_BUCKET_START_SCAN_CYCLE",
+       "EXTSCAN_BUCKET_PERIODIC_TIMER",
+       "EXTSCAN_SEND_START_STOP_EVENT",
+       "EXTSCAN_NOTIFY_WLAN_CHANGE",
+       "EXTSCAN_NOTIFY_WLAN_HOTLIST_MATCH",
+       "EXTSCAN_MAIN_RECEIVED_FRAME",
+       "EXTSCAN_MAIN_NO_SSID_IE",
+       "EXTSCAN_MAIN_MALFORMED_FRAME",
+       "EXTSCAN_FIND_BSSID_BY_REFERENCE",
+       "EXTSCAN_FIND_BSSID_BY_REFERENCE_ERROR",
+       "EXTSCAN_NOTIFY_TABLE_USAGE",
+       "EXTSCAN_FOUND_RSSI_ENTRY",
+       "EXTSCAN_BSSID_FOUND_RSSI_SAMPLE",
+       "EXTSCAN_BSSID_ADDED_RSSI_SAMPLE",
+       "EXTSCAN_BSSID_REPLACED_RSSI_SAMPLE",
+       "EXTSCAN_BSSID_TRANSFER_CURRENT_SAMPLES",
+       "EXTSCAN_BUCKET_PROCESS_SCAN_EVENT",
+       "EXTSCAN_BUCKET_CANNOT_FIND_BUCKET",
+       "EXTSCAN_START_SCAN_REQUEST_FAILED",
+       "EXTSCAN_BUCKET_STOP_CURRENT_SCANS",
+       "EXTSCAN_BUCKET_SCAN_STOP_REQUEST",
+       "EXTSCAN_BUCKET_PERIODIC_TIMER_ERROR",
+       "EXTSCAN_BUCKET_START_OPERATION",
+       "EXTSCAN_START_INTERNAL_ERROR",
+       "EXTSCAN_NOTIFY_HOTLIST_MATCH",
+       "EXTSCAN_CONFIG_HOTLIST_TABLE",
+       "EXTSCAN_CONFIG_WLAN_CHANGE_TABLE",
+    },
+    {  /* UNIT_TEST */
+       "UNIT_TEST_GEN",
+    },
+    {  /* MLME */
+       "MLME_DEBUG_CMN",
+       "MLME_IF",
+       "MLME_AUTH",
+       "MLME_REASSOC",
+       "MLME_DEAUTH",
+       "MLME_DISASSOC",
+       "MLME_ROAM",
+       "MLME_RETRY",
+       "MLME_TIMER",
+       "MLME_FRMPARSE",
+    },
+    {  /*SUPPLICANT */
+       "SUPPL_INIT",
+       "SUPPL_RECV_EAPOL",
+       "SUPPL_RECV_EAPOL_TIMEOUT",
+       "SUPPL_SEND_EAPOL",
+       "SUPPL_MIC_MISMATCH",
+       "SUPPL_FINISH",
     },
 };
 
@@ -1237,59 +1355,6 @@ dbglog_default_print_handler(A_UINT32 mod_id, A_UINT16 vap_id, A_UINT32 dbg_id,
         printf("%s", tempbuf);
     }
     return TRUE;
-}
-
-#define DBGLOG_PARSE_ARGS_STRING_LENGTH    (DBGLOG_NUM_ARGS_MAX * 11 + 10)
-static int
-dbglog_print_raw_data(A_UINT32 *buffer, A_UINT32 length)
-{
-    A_UINT32 timestamp;
-    A_UINT32 debugid;
-    A_UINT32 moduleid;
-    A_UINT16 numargs, curArgs;
-    A_UINT32 count = 0, totalWriteLen, writeLen;
-    char parseArgsString[DBGLOG_PARSE_ARGS_STRING_LENGTH];
-    char *dbgidString;
-
-    buffer = (A_UINT32 *)buf;
-
-    while (count < length) {
-
-        debugid = DBGLOG_GET_DBGID(buffer[count + 1]);
-        moduleid = DBGLOG_GET_MODULEID(buffer[count + 1]);
-        numargs = DBGLOG_GET_NUMARGS(buffer[count + 1]);
-        timestamp = DBGLOG_GET_TIME_STAMP(buffer[count]);
-
-        if (moduleid < WLAN_MODULE_ID_MAX && debugid < MAX_DBG_MSGS && numargs <= DBGLOG_NUM_ARGS_MAX) {
-
-            memset(parseArgsString, 0, sizeof(parseArgsString));
-            totalWriteLen = 0;
-
-            for (curArgs = 0; curArgs < numargs; curArgs++){
-                writeLen = snprintf(parseArgsString + totalWriteLen, sizeof(parseArgsString), "%x ", buffer[count + 2 + curArgs]);
-                totalWriteLen += writeLen;
-            }
-
-            dbgidString = DBG_MSG_ARR[moduleid][debugid];
-            if (dbgidString != NULL) {
-                printf("fw:%s(%x %x):%s\n",
-                       dbgidString,
-                       timestamp, buffer[count+1],
-                       parseArgsString);
-            } else {
-                /* host need sync with FW id */
-                printf("fw:%s:m:%x,id:%x(%x %x):%s\n",
-                       "UNKNOWN", moduleid, debugid,
-                       timestamp, buffer[count+1],
-                       parseArgsString);
-            }
-        }
-
-        count += numargs + 2; /* 32 bit Time stamp + 32 bit Dbg header*/
-    }
-
-    return 0;
-
 }
 
 int
@@ -2723,6 +2788,7 @@ int parser_init()
     dbglog_reg_modprint(WLAN_MODULE_STA_SMPS, dbglog_smps_print_handler);
     dbglog_reg_modprint(WLAN_MODULE_P2P, dbglog_p2p_print_handler);
     dbglog_reg_modprint(WLAN_MODULE_PCIELP, dbglog_pcielp_print_handler);
+    dbglog_reg_modprint(WLAN_MODULE_NAN, dbglog_nan_print_handler);
 
     return 0;
 }

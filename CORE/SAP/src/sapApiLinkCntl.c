@@ -128,6 +128,7 @@ WLANSAP_ScanCallback
 (
   tHalHandle halHandle,
   void *pContext,           /* Opaque SAP handle */
+  v_U8_t sessionId,
   v_U32_t scanID,
   eCsrScanStatus scanStatus
 )
@@ -153,7 +154,7 @@ WLANSAP_ScanCallback
             VOS_TRACE( VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, CSR scanStatus = %s (%d)", __func__, "eCSR_SCAN_SUCCESS", scanStatus);
 
             // Get scan results, Run channel selection algorithm, select channel and keep in pSapContext->Channel
-            scanGetResultStatus = sme_ScanGetResult(halHandle, 0, NULL, &pResult);
+            scanGetResultStatus = sme_ScanGetResult(halHandle, psapContext->sessionId, NULL, &pResult);
 
             if ((scanGetResultStatus != eHAL_STATUS_SUCCESS)&& (scanGetResultStatus != eHAL_STATUS_E_NULL_VALUE))
             {
@@ -166,6 +167,7 @@ WLANSAP_ScanCallback
             operChannel = sapSelectChannel(halHandle, psapContext, pResult);
 
             sme_ScanResultPurge(halHandle, pResult);
+            sme_ScanFlushResult(halHandle, psapContext->sessionId);
             event = eSAP_MAC_SCAN_COMPLETE;
             break;
 
@@ -424,20 +426,34 @@ WLANSAP_RoamCallback
            sapSignalHDDevent(sapContext, pCsrRoamInfo,
                             eSAP_MAC_TRIG_STOP_BSS_EVENT,
                             (v_PVOID_t) eSAP_STATUS_SUCCESS );
-        break;
+           break;
 
        case eCSR_ROAM_DFS_RADAR_IND:
            VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
-                     "In %s, Received Radar Indication", __func__);
+                   FL("Received Radar Indication"));
+
+           /* sync to latest DFS-NOL */
+           sapSignalHDDevent(sapContext, NULL, eSAP_DFS_NOL_GET,
+                   (v_PVOID_t) eSAP_STATUS_SUCCESS);
+
            pMac->sap.SapDfsInfo.target_channel =
                      sapIndicateRadar(sapContext, &pCsrRoamInfo->dfs_event);
+
+           /* if there is an assigned next channel hopping */
            if (0 < pMac->sap.SapDfsInfo.user_provided_target_channel)
            {
-              pMac->sap.SapDfsInfo.target_channel =
-                     pMac->sap.SapDfsInfo.user_provided_target_channel;
+               pMac->sap.SapDfsInfo.target_channel =
+                   pMac->sap.SapDfsInfo.user_provided_target_channel;
+               pMac->sap.SapDfsInfo.user_provided_target_channel = 0;
            }
+
            pMac->sap.SapDfsInfo.cac_state = eSAP_DFS_DO_NOT_SKIP_CAC;
            sap_CacResetNotify(hHal);
+
+           /* set DFS-NOL back to keep it update-to-date in CNSS */
+           sapSignalHDDevent(sapContext, NULL, eSAP_DFS_NOL_SET,
+                   (v_PVOID_t) eSAP_STATUS_SUCCESS);
+
            break;
 
        case eCSR_ROAM_DFS_CHAN_SW_NOTIFY:

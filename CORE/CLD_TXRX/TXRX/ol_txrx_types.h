@@ -151,6 +151,9 @@ struct ol_tx_desc_t {
 	/* used by tx encap, to restore the os buf start offset after tx complete*/
 	u_int8_t orig_l2_hdr_bytes;
 #endif
+#if defined(CONFIG_PER_VDEV_TX_DESC_POOL)
+	struct ol_txrx_vdev_t* vdev;
+#endif
 };
 
 typedef TAILQ_HEAD(, ol_tx_desc_t) ol_tx_desc_list;
@@ -318,6 +321,10 @@ typedef enum _throttle_phase {
 
 #define THROTTLE_TX_THRESHOLD (100)
 
+#ifdef IPA_UC_OFFLOAD
+typedef void (*ipa_uc_op_cb_type)(u_int8_t op_code, void *osif_ctxt);
+#endif /* IPA_UC_OFFLOAD */
+
 /*
  * As depicted in the diagram below, the pdev contains an array of
  * NUM_EXT_TID ol_tx_active_queues_in_tid_t elements.
@@ -384,6 +391,7 @@ struct ol_txrx_pdev_t {
 		int is_high_latency;
 		int host_addba;
 		int ll_pause_txq_limit;
+                int default_tx_comp_req;
 	} cfg;
 
 	/* WDI subscriber's event list */
@@ -678,6 +686,11 @@ struct ol_txrx_pdev_t {
 		/* mark as true if traffic is paused due to thermal throttling */
 		a_bool_t is_paused;
 	} tx_throttle;
+
+#ifdef IPA_UC_OFFLOAD
+    ipa_uc_op_cb_type ipa_uc_op_cb;
+    void *osif_dev;
+#endif /* IPA_UC_OFFLOAD */
 };
 
 struct ol_txrx_vdev_t {
@@ -765,6 +778,9 @@ struct ol_txrx_vdev_t {
 #if defined(CONFIG_HL_SUPPORT) && defined(FEATURE_WLAN_TDLS)
         union ol_txrx_align_mac_addr_t hl_tdls_ap_mac_addr;
         bool hlTdlsFlag;
+#endif
+#if defined(CONFIG_PER_VDEV_TX_DESC_POOL)
+	adf_os_atomic_t tx_desc_count;
 #endif
 };
 
@@ -877,6 +893,13 @@ struct ol_txrx_peer_t {
 
         /* Bit to indicate if PN check is done in fw */
         adf_os_atomic_t fw_pn_check;
+
+#ifdef WLAN_FEATURE_11W
+	/* PN counter for Robust Management Frames */
+	u_int64_t last_rmf_pn;
+	u_int32_t rmf_pn_replays;
+	u_int8_t last_rmf_pn_valid;
+#endif
 };
 
 #endif /* _OL_TXRX_TYPES__H_ */

@@ -145,6 +145,14 @@ const char *dbglog_get_module_str(A_UINT32 module_id)
         return "WoW";
     case WLAN_MODULE_IBSS_PWRSAVE:
         return "IBSS PS";
+    case WLAN_MODULE_EXTSCAN:
+        return "ExtScan";
+    case WLAN_MODULE_UNIT_TEST:
+        return "UNIT_TEST";
+    case WLAN_MODULE_MLME:
+        return "MLME";
+    case WLAN_MODULE_SUPPL:
+        return "SUPPLICANT";
     default:
         return "UNKNOWN";
     }
@@ -555,6 +563,22 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
         "ROAM_CANCEL_LOW_PRIO_SCAN",
         "ROAM_FINAL_BMISS_RECVD",
         "ROAM_CONFIG_SCAN_MODE",
+        "ROAM_BMISS_FINAL_SCAN_ENABLE",
+        "ROAM_SUITABLE_AP_EVENT",
+        "ROAM_RSN_IE_PARSE_ERROR",
+        "ROAM_WPA_IE_PARSE_ERROR",
+        "ROAM_SCAN_CMD_FROM_HOST",
+        "ROAM_HO_SORT_CANDIDATE",
+        "ROAM_HO_SAVE_CANDIDATE",
+        "ROAM_HO_GET_CANDIDATE",
+        "ROAM_HO_OFFLOAD_SET_PARAM",
+        "ROAM_HO_SM",
+        "ROAM_HO_HTT_SAVED",
+        "ROAM_HO_SYNC_START",
+        "ROAM_HO_START",
+        "ROAM_HO_COMPLETE",
+        "ROAM_HO_STOP",
+        "ROAM_HO_HTT_FORWARD",
         "ROAM_DBGID_DEFINITION_END"
     },
     {
@@ -1152,6 +1176,88 @@ char * DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] =
        "IBSS_PS_DBGID_PS_DESC_BIN_HWM",
        "IBSS_PS_DBGID_PS_DESC_BIN_LWM",
        "IBSS_PS_DBGID_PS_KICKOUT_PEER",
+       "IBSS_PS_DBGID_SET_PEER_PARAM",
+       "IBSS_PS_DBGID_BCN_ATIM_WIN_MISMATCH",
+       "IBSS_PS_DBGID_RX_CHAINMASK_CHANGE",
+    },
+    {
+       /* HIF UART Interface DBGIDs */
+       "HIF_UART_DBGID_START",
+       "HIF_UART_DBGID_POWER_STATE",
+       "HIF_UART_DBGID_TXRX_FLOW",
+       "HIF_UART_DBGID_TXRX_CTRL_CHAR",
+       "HIF_UART_DBGID_TXRX_BUF_DUMP",
+    },
+    {
+       /* LPI */
+       ""
+    },
+    {
+       /* EXTSCAN DBGIDs */
+       "EXTSCAN_START",
+       "EXTSCAN_STOP",
+       "EXTSCAN_CLEAR_ENTRY_CONTENT",
+       "EXTSCAN_GET_FREE_ENTRY_SUCCESS",
+       "EXTSCAN_GET_FREE_ENTRY_INCONSISTENT",
+       "EXTSCAN_GET_FREE_ENTRY_NO_MORE_ENTRIES",
+       "EXTSCAN_CREATE_ENTRY_SUCCESS",
+       "EXTSCAN_CREATE_ENTRY_ERROR",
+       "EXTSCAN_SEARCH_SCAN_ENTRY_QUEUE",
+       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_FOUND",
+       "EXTSCAN_SEARCH_SCAN_ENTRY_KEY_NOT_FOUND",
+       "EXTSCAN_ADD_ENTRY",
+       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT",
+       "EXTSCAN_BUCKET_SEND_OPERATION_EVENT_FAILED",
+       "EXTSCAN_BUCKET_START_SCAN_CYCLE",
+       "EXTSCAN_BUCKET_PERIODIC_TIMER",
+       "EXTSCAN_SEND_START_STOP_EVENT",
+       "EXTSCAN_NOTIFY_WLAN_CHANGE",
+       "EXTSCAN_NOTIFY_WLAN_HOTLIST_MATCH",
+       "EXTSCAN_MAIN_RECEIVED_FRAME",
+       "EXTSCAN_MAIN_NO_SSID_IE",
+       "EXTSCAN_MAIN_MALFORMED_FRAME",
+       "EXTSCAN_FIND_BSSID_BY_REFERENCE",
+       "EXTSCAN_FIND_BSSID_BY_REFERENCE_ERROR",
+       "EXTSCAN_NOTIFY_TABLE_USAGE",
+       "EXTSCAN_FOUND_RSSI_ENTRY",
+       "EXTSCAN_BSSID_FOUND_RSSI_SAMPLE",
+       "EXTSCAN_BSSID_ADDED_RSSI_SAMPLE",
+       "EXTSCAN_BSSID_REPLACED_RSSI_SAMPLE",
+       "EXTSCAN_BSSID_TRANSFER_CURRENT_SAMPLES",
+       "EXTSCAN_BUCKET_PROCESS_SCAN_EVENT",
+       "EXTSCAN_BUCKET_CANNOT_FIND_BUCKET",
+       "EXTSCAN_START_SCAN_REQUEST_FAILED",
+       "EXTSCAN_BUCKET_STOP_CURRENT_SCANS",
+       "EXTSCAN_BUCKET_SCAN_STOP_REQUEST",
+       "EXTSCAN_BUCKET_PERIODIC_TIMER_ERROR",
+       "EXTSCAN_BUCKET_START_OPERATION",
+       "EXTSCAN_START_INTERNAL_ERROR",
+       "EXTSCAN_NOTIFY_HOTLIST_MATCH",
+       "EXTSCAN_CONFIG_HOTLIST_TABLE",
+       "EXTSCAN_CONFIG_WLAN_CHANGE_TABLE",
+    },
+    {  /* UNIT_TEST */
+       "UNIT_TEST_GEN",
+    },
+    {  /* MLME */
+       "MLME_DEBUG_CMN",
+       "MLME_IF",
+       "MLME_AUTH",
+       "MLME_REASSOC",
+       "MLME_DEAUTH",
+       "MLME_DISASSOC",
+       "MLME_ROAM",
+       "MLME_RETRY",
+       "MLME_TIMER",
+       "MLME_FRMPARSE",
+    },
+    {  /*SUPPLICANT */
+       "SUPPL_INIT",
+       "SUPPL_RECV_EAPOL",
+       "SUPPL_RECV_EAPOL_TIMEOUT",
+       "SUPPL_SEND_EAPOL",
+       "SUPPL_MIC_MISMATCH",
+       "SUPPL_FINISH",
     },
 };
 
@@ -2037,6 +2143,8 @@ dbglog_ibss_powersave_print_handler(
         "ATIM_WINDOW_PRE_BCN",
         "ATIM_WINDOW_POST_BCN",
         "OUT_OF_ATIM_WINDOW",
+        "PAUSE_PENDING",
+        "PAUSED",
     };
 
     static const char *ps_states[] = {
@@ -2046,6 +2154,8 @@ dbglog_ibss_powersave_print_handler(
         "SLEEP_DOZE",
         "SLEEP_AWAKE",
         "ACTIVE_TX_SEND",
+        "PAUSE_TX_SEND",
+        "PAUSED",
     };
 
     static const char *peer_ps_states[] = {
@@ -2074,9 +2184,11 @@ dbglog_ibss_powersave_print_handler(
         "TRAFFIC_EXCHANGE_DONE",
         "POWER_SAVE_STATE_CHANGE",
         "NEW_PEER_JOIN",
-        "IBSS_VDEV_PAUSE",
-        "IBSS_VDEV_UNPAUSE",
-        "PS_STATE_CHANGE"
+        "IBSS_VDEV_PAUSE_REQUEST",
+        "IBSS_VDEV_PAUSE_RESPONSE",
+        "IBSS_VDEV_PAUSE_TIMEOUT",
+        "IBSS_VDEV_UNPAUSE_REQUEST",
+        "PS_STATE_CHANGE",
     };
 
     enum wlan_ibss_ps_sub_module sub_module;
@@ -2249,7 +2361,7 @@ dbglog_ibss_powersave_print_handler(
     case IBSS_PS_DBGID_BC_ATIM_SEND:
         if (numargs == 2) {
             dbglog_printf(timestamp, vap_id,
-                          "IBSS PS: MC Data, num_of_peers:%d mc_atim_sent:%d",
+                          "IBSS PS: MC Data, num_of_peers:%d bc_atim_sent:%d",
                           args[1], args[0]);
         }
         break;
@@ -2270,6 +2382,11 @@ dbglog_ibss_powersave_print_handler(
         if (numargs == 0) {
             dbglog_printf(timestamp, vap_id,
                            "IBSS PS: power collapse not allowed by INI");
+        } else if(numargs == 1) {
+            dbglog_printf(timestamp, vap_id, "IBSS PS: power collapse not allowed since peer id:%d is not PS capable",
+                args[0]);
+        } else if(numargs == 2) {
+            dbglog_printf(timestamp, vap_id, "IBSS PS: power collapse not allowed - no peers in NW");
         } else if (numargs == 3) {
                   if (args[0] == 2) {
                       dbglog_printf(timestamp, vap_id,
@@ -2331,6 +2448,35 @@ dbglog_ibss_powersave_print_handler(
             dbglog_printf(timestamp, vap_id,
                           "IBSS PS: Kickout peer id:%d atim_fail_cnt:%d status:%d",
                           args[0], args[1], args[2]);
+        }
+        break;
+
+    case IBSS_PS_DBGID_SET_PEER_PARAM:
+        if(numargs == 3) {
+            dbglog_printf(timestamp, vap_id, "IBSS PS: Set Peer Id:%d Param ID:%0x Value:%0x",
+                args[0], args[1], args[2]);
+        }
+        break;
+
+    case IBSS_PS_DBGID_BCN_ATIM_WIN_MISMATCH:
+        if(numargs == 4) {
+            if(args[0] == 0xDEAD) {
+                dbglog_printf(timestamp, vap_id, "IBSS PS: ATIM window length mismatch, our's:%d, peer id:%d, peer's:%d",
+                    args[1], args[2], args[3]);
+            } else if(args[0] == 0xBEEF) {
+                dbglog_printf(timestamp, vap_id, "IBSS PS: Peer ATIM window length changed, peer id:%d, peer recorded atim window:%d new atim window:%d",
+                    args[1], args[2], args[3]);
+            }
+        }
+        break;
+
+    case IBSS_PS_DBGID_RX_CHAINMASK_CHANGE:
+        if(numargs == 2) {
+            if(args[1] == 0x1) {
+                dbglog_printf(timestamp, vap_id, "IBSS PS: Voting for low power chainmask from :%d", args[0]);
+            } else {
+                dbglog_printf(timestamp, vap_id, "IBSS PS: Voting for high power chainmask from :%d", args[0]);
+            }
         }
         break;
 

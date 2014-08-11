@@ -681,21 +681,38 @@ void WAR_PCI_WRITE32(char *addr, u32 offset, u32 value);
 #define A_TARGET_WRITE(targid, offset, value) \
         WAR_PCI_WRITE32(TARGID_TO_PCI_ADDR(targid), (offset), (value))
 #endif
+#define A_TARGET_ACCESS_BEGIN_RET(targid) \
+        do {A_target_id_t unused = (A_target_id_t)(targid); unused = unused;} while(0)
+
+#define A_TARGET_ACCESS_BEGIN_RET_EXT(targid, val) \
+        do {A_target_id_t unused = (A_target_id_t)(targid); unused = unused;} while(0)
+
+#define A_TARGET_ACCESS_BEGIN_RET_PTR(targid) \
+        do {A_target_id_t unused = (A_target_id_t)(targid); unused = unused;} while(0)
+
+#define A_TARGET_ACCESS_END_RET(targid) \
+        do {A_target_id_t unused = (A_target_id_t)(targid); unused = unused;} while(0)
+
+#define A_TARGET_ACCESS_END_RET_EXT(targid, val) \
+        do {A_target_id_t unused = (A_target_id_t)(targid); unused = unused;} while(0)
+
+#define A_TARGET_ACCESS_END_RET_PTR(targid) \
+        do {A_target_id_t unused = (A_target_id_t)(targid); unused = unused;} while(0)
 
 #else /* CONFIG_ATH_PCIE_MAX_PERF */
 
 void WAR_PCI_WRITE32(char *addr, u32 offset, u32 value);
 
 #define A_TARGET_ACCESS_BEGIN_RET_EXT(targid, val) \
-        if (Q_TARGET_ACCESS_BEGIN(targid) < 0 ) \
+        if (!WLAN_IS_EPPING_ENABLED(vos_get_conparam()) && Q_TARGET_ACCESS_BEGIN(targid) < 0 ) \
              val = -1;
 
 #define A_TARGET_ACCESS_BEGIN_RET(targid) \
-        if (Q_TARGET_ACCESS_BEGIN(targid) < 0) \
+        if (!WLAN_IS_EPPING_ENABLED(vos_get_conparam()) && Q_TARGET_ACCESS_BEGIN(targid) < 0) \
             return -1;
 
 #define A_TARGET_ACCESS_BEGIN_RET_PTR(targid) \
-        if (Q_TARGET_ACCESS_BEGIN(targid) < 0) \
+        if (!WLAN_IS_EPPING_ENABLED(vos_get_conparam()) && Q_TARGET_ACCESS_BEGIN(targid) < 0) \
             return NULL;
 
 #define A_TARGET_ACCESS_BEGIN(targid) \
@@ -706,15 +723,15 @@ void WAR_PCI_WRITE32(char *addr, u32 offset, u32 value);
         HIFTargetSleepStateAdjust((targid), FALSE, TRUE)
 
 #define A_TARGET_ACCESS_END_RET(targid) \
-        if (Q_TARGET_ACCESS_END(targid) < 0) \
+        if (!WLAN_IS_EPPING_ENABLED(vos_get_conparam()) && Q_TARGET_ACCESS_END(targid) < 0) \
             return -1;
 
 #define A_TARGET_ACCESS_END_RET_EXT(targid, val) \
-        if (Q_TARGET_ACCESS_END(targid) < 0) \
+        if (!WLAN_IS_EPPING_ENABLED(vos_get_conparam()) && Q_TARGET_ACCESS_END(targid) < 0) \
            val = -1;
 
 #define A_TARGET_ACCESS_END_RET_PTR(targid) \
-        if (Q_TARGET_ACCESS_END(targid) < 0) \
+        if (!WLAN_IS_EPPING_ENABLED(vos_get_conparam()) && Q_TARGET_ACCESS_END(targid) < 0) \
             return NULL;
 
 #define A_TARGET_ACCESS_END(targid) \
@@ -789,6 +806,18 @@ void sim_target_register_write(struct ol_softc *scn, u_int32_t addr, u_int32_t v
 #define HIFDeviceToOsDevice(hif_device) NULL
 
 #endif
+
+#ifdef IPA_UC_OFFLOAD
+/*
+ * IPA micro controller data path offload feature enabled,
+ * HIF should release copy engine related resource information to IPA UC
+ * IPA UC will access hardware resource with released information
+ */
+void HIFIpaGetCEResource(HIF_DEVICE *hif_device,
+                          A_UINT32 *ce_sr_base_paddr,
+                          A_UINT32 *ce_sr_ring_size,
+                          A_UINT32 *ce_reg_paddr);
+#endif /* IPA_UC_OFFLOAD */
 
 #ifdef __cplusplus
 }

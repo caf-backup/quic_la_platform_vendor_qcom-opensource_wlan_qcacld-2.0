@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -25,28 +25,24 @@
  * to the Linux Foundation.
  */
 
-/*
+/******************************************************************************
+ * wlan_logging_sock_svc.h
  *
- * This file limProcessLmmMessages.cc contains the code
- * for processing SME/LMM messages related to ANI feature set.
- * Author:        Chandra Modumudi
- * Date:          10/20/02
- * History:-
- * Date           Modified by    Modification Information
- * --------------------------------------------------------------------
- *
- */
+ ******************************************************************************/
 
-#include "aniGlobal.h"
-#include "wniApi.h"
-#include "wniCfgSta.h"
-#include "cfgApi.h"
-#include "sirApi.h"
-#include "schApi.h"
-#include "utilsApi.h"
-#include "limTypes.h"
-#include "limUtils.h"
-#include "limAssocUtils.h"
-#include "limSerDesUtils.h"
-#include "limPropExtsUtils.h"
-#include "limSession.h"
+#ifndef WLAN_LOGGING_SOCK_SVC_H
+#define WLAN_LOGGING_SOCK_SVC_H
+
+#include <wlan_nlink_srv.h>
+#include <vos_status.h>
+#include <wlan_hdd_includes.h>
+#include <vos_trace.h>
+#include <wlan_nlink_common.h>
+
+int wlan_logging_sock_init_svc(void);
+int wlan_logging_sock_deinit_svc(void);
+int wlan_logging_sock_activate_svc(int log_fe_to_console, int num_buf);
+int wlan_logging_sock_deactivate_svc(void);
+int wlan_log_to_user(VOS_TRACE_LEVEL log_level, char *to_be_sent, int length);
+
+#endif /* WLAN_LOGGING_SOCK_SVC_H */

@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2011-2014 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -77,13 +76,6 @@ typedef enum eSmeCommandType
     eSmeCommandTdlsAddPeer,
     eSmeCommandTdlsDelPeer,
     eSmeCommandTdlsLinkEstablish,
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-    eSmeCommandTdlsDiscovery,
-    eSmeCommandTdlsLinkSetup,
-    eSmeCommandTdlsLinkTear,
-    eSmeCommandTdlsEnterUapsd,
-    eSmeCommandTdlsExitUapsd,
-#endif
 #endif
     //PMC
     eSmePmcCommandMask = 0x20000, //To identify PMC commands
@@ -124,6 +116,20 @@ typedef struct sStatsExtEvent {
     tANI_U8 event_data[];
 } tStatsExtEvent, *tpStatsExtEvent;
 
+#define MAX_ACTIVE_CMD_STATS    16
+
+typedef struct sActiveCmdStats {
+    eSmeCommandType command;
+    tANI_U32 reason;
+    tANI_U32 sessionId;
+    v_U64_t timestamp;
+} tActiveCmdStats;
+
+typedef struct sSelfRecoveryStats {
+    tActiveCmdStats activeCmdStats[MAX_ACTIVE_CMD_STATS];
+    tANI_U8 cmdStatsIndx;
+} tSelfRecoveryStats;
+
 typedef struct tagSmeStruct
 {
     eSmeState state;
@@ -137,7 +143,7 @@ typedef struct tagSmeStruct
     void *pTxPerHitCbContext;
     tVOS_CON_MODE currDeviceMode;
 #ifdef FEATURE_WLAN_LPHB
-    void (*pLphbIndCb) (void *pAdapter, void *indParam);
+    void (*pLphbIndCb) (void *pHddCtx, tSirLPHBInd *indParam);
 #endif /* FEATURE_WLAN_LPHB */
     //pending scan command list
     tDblLinkList smeScanCmdPendingList;
@@ -149,6 +155,13 @@ typedef struct tagSmeStruct
 #ifdef FEATURE_WLAN_CH_AVOID
     void (*pChAvoidNotificationCb) (void *hdd_context, void *indi_param);
 #endif /* FEATURE_WLAN_CH_AVOID */
+#ifdef WLAN_FEATURE_LINK_LAYER_STATS
+    void(*pLinkLayerStatsIndCallback)(void *callbackContext,
+                                        int indType, void *pRsp);
+#endif /* WLAN_FEATURE_LINK_LAYER_STATS */
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+    void (*pAutoShutdownNotificationCb) (void);
+#endif
     /* Maximum interfaces allowed by the host */
     tANI_U8 max_intf_count;
     void (* StatsExtCallback) (void *, tStatsExtEvent *);
@@ -158,6 +171,10 @@ typedef struct tagSmeStruct
 #ifdef FEATURE_WLAN_EXTSCAN
     void (*pExtScanIndCb) (void *, const tANI_U16, void *);
 #endif /* FEATURE_WLAN_EXTSCAN */
+#ifdef WLAN_FEATURE_NAN
+    void (*nanCallback) (void*, tSirNanEvent*);
+#endif
+    v_BOOL_t enableSelfRecovery;
 } tSmeStruct, *tpSmeStruct;
 
 

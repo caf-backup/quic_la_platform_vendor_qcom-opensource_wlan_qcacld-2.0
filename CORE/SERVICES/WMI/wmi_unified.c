@@ -51,33 +51,63 @@
 #endif
 
 #define WMI_MIN_HEAD_ROOM 64
-#ifdef WMI_INTERFACE_EVENT_LOGGING
 
+#ifdef WMI_INTERFACE_EVENT_LOGGING
+/* WMI commands */
 u_int32_t g_wmi_command_buf_idx = 0;
 struct wmi_command_debug wmi_command_log_buffer[WMI_EVENT_DEBUG_MAX_ENTRY];
 
+/* WMI commands TX completed */
+u_int32_t g_wmi_command_tx_cmp_buf_idx = 0;
+struct wmi_command_debug wmi_command_tx_cmp_log_buffer[WMI_EVENT_DEBUG_MAX_ENTRY];
 
+/* WMI events when processed */
 u_int32_t g_wmi_event_buf_idx = 0;
 struct wmi_event_debug wmi_event_log_buffer[WMI_EVENT_DEBUG_MAX_ENTRY];
+
+/* WMI events when queued */
+u_int32_t g_wmi_rx_event_buf_idx = 0;
+struct wmi_event_debug wmi_rx_event_log_buffer[WMI_EVENT_DEBUG_MAX_ENTRY];
 
 #define WMI_COMMAND_RECORD(a, b) {					\
 	if (WMI_EVENT_DEBUG_MAX_ENTRY <= g_wmi_command_buf_idx)		\
 		g_wmi_command_buf_idx = 0;				\
 	wmi_command_log_buffer[g_wmi_command_buf_idx].command = a;	\
-	adf_os_mem_copy(wmi_command_log_buffer[g_wmi_command_buf_idx].data, b , 16);\
+	adf_os_mem_copy(wmi_command_log_buffer[g_wmi_command_buf_idx].data, b, 16);\
 	wmi_command_log_buffer[g_wmi_command_buf_idx].time =		\
 		adf_get_boottime();					\
 	g_wmi_command_buf_idx++;					\
+}
+
+#define WMI_COMMAND_TX_CMP_RECORD(a, b) {				\
+	if (WMI_EVENT_DEBUG_MAX_ENTRY <= g_wmi_command_tx_cmp_buf_idx)	\
+		g_wmi_command_tx_cmp_buf_idx = 0;			\
+	wmi_command_tx_cmp_log_buffer[g_wmi_command_tx_cmp_buf_idx].command = a;\
+	adf_os_mem_copy(wmi_command_tx_cmp_log_buffer			\
+		[g_wmi_command_tx_cmp_buf_idx].data, b, 16);		\
+	wmi_command_tx_cmp_log_buffer[g_wmi_command_tx_cmp_buf_idx].time =\
+		adf_get_boottime();					\
+	g_wmi_command_tx_cmp_buf_idx++;					\
 }
 
 #define WMI_EVENT_RECORD(a, b) {					\
 	if (WMI_EVENT_DEBUG_MAX_ENTRY <= g_wmi_event_buf_idx)		\
 		g_wmi_event_buf_idx = 0;				\
 	wmi_event_log_buffer[g_wmi_event_buf_idx].event = a;		\
-	adf_os_mem_copy(wmi_event_log_buffer[g_wmi_event_buf_idx].data, b , 16);\
+	adf_os_mem_copy(wmi_event_log_buffer[g_wmi_event_buf_idx].data, b, 16);\
 	wmi_event_log_buffer[g_wmi_event_buf_idx].time =		\
 		adf_get_boottime();					\
 	g_wmi_event_buf_idx++;						\
+}
+
+#define WMI_RX_EVENT_RECORD(a,b) {					\
+	if (WMI_EVENT_DEBUG_MAX_ENTRY <= g_wmi_rx_event_buf_idx)	\
+		g_wmi_rx_event_buf_idx = 0;					\
+	wmi_rx_event_log_buffer[g_wmi_rx_event_buf_idx].event = a;	\
+	adf_os_mem_copy(wmi_rx_event_log_buffer[g_wmi_rx_event_buf_idx].data, b, 16);\
+	wmi_rx_event_log_buffer[g_wmi_rx_event_buf_idx].time =		\
+		adf_get_boottime();					\
+	g_wmi_rx_event_buf_idx++;					\
 }
 
 #endif /*WMI_INTERFACE_EVENT_LOGGING*/
@@ -282,7 +312,6 @@ static u_int8_t* get_wmi_cmd_string(WMI_CMD_ID wmi_command)
 		CASE_RETURN_STRING(WMI_ROAM_AP_PROFILE);
 		/** set channel list for roam scans */
 		CASE_RETURN_STRING(WMI_ROAM_CHAN_LIST);
-
 		/** offload scan specific commands */
 		/** set offload scan AP profile   */
 		CASE_RETURN_STRING(WMI_OFL_SCAN_ADD_AP_PROFILE);
@@ -547,6 +576,12 @@ static u_int8_t* get_wmi_cmd_string(WMI_CMD_ID wmi_command)
 		CASE_RETURN_STRING(WMI_EXTSCAN_GET_WLAN_CHANGE_RESULTS_CMDID);
 		CASE_RETURN_STRING(WMI_EXTSCAN_SET_CAPABILITIES_CMDID);
 		CASE_RETURN_STRING(WMI_EXTSCAN_GET_CAPABILITIES_CMDID);
+		CASE_RETURN_STRING(WMI_ROAM_SYNCH_COMPLETE);
+		CASE_RETURN_STRING(WMI_D0_WOW_ENABLE_DISABLE_CMDID);
+		CASE_RETURN_STRING(WMI_EXTWOW_ENABLE_CMDID);
+		CASE_RETURN_STRING(WMI_EXTWOW_SET_APP_TYPE1_PARAMS_CMDID);
+		CASE_RETURN_STRING(WMI_EXTWOW_SET_APP_TYPE2_PARAMS_CMDID);
+		CASE_RETURN_STRING(WMI_UNIT_TEST_CMDID);
 	}
 	return "Invalid WMI cmd";
 }
@@ -568,15 +603,11 @@ int wmi_unified_cmd_send(wmi_unified_t wmi_handle, wmi_buf_t buf, int len,
 		return -EBUSY;
 	}
 
-	/* Do sanity check on the TLV parameter structure. Can be #ifdef DEBUG if desired */
+	/* Do sanity check on the TLV parameter structure */
 	{
 		void *buf_ptr = (void *) adf_nbuf_data(buf);
-#if 0
+
 		if (wmitlv_check_command_tlv_params(NULL, buf_ptr, len, cmd_id) != 0)
-#else
-		/* TODO: Once all the TLV's are converted use #if 0 condition checking not equal to zero */
-		if (wmitlv_check_command_tlv_params(NULL, buf_ptr, len, cmd_id) < 0)
-#endif
 		{
 			adf_os_print("\nERROR: %s: Invalid WMI Parameter Buffer for Cmd:%d\n",
 				     __func__, cmd_id);
@@ -748,15 +779,75 @@ void wmi_control_rx(void *ctx, HTC_PACKET *htc_packet)
 	struct wmi_unified *wmi_handle = (struct wmi_unified *)ctx;
 	wmi_buf_t evt_buf;
 
+#ifndef QCA_CONFIG_SMP
+	/* MDM is single core apps processor
+	 * As a result, PAUSE event cannot be processed fast enough
+	 * if RX process reserve CPU
+	 * To ensure PAUSE event processed fast enough
+	 * only PAUSE event should not be scheduled on worker thread */
+	u_int32_t len;
+	void *wmi_cmd_struct_ptr = NULL;
+	u_int32_t idx = 0;
+	int tlv_ok_status = 0;
+#endif /* QCA_CONFIG_SMP */
+
+#if (!defined(QCA_WIFI_ISOC) && defined(WMI_INTERFACE_EVENT_LOGGING)) ||\
+		!defined(QCA_CONFIG_SMP)
+	u_int32_t id;
+	u_int8_t *data;
+#endif
 	evt_buf = (wmi_buf_t) htc_packet->pPktContext;
+#ifndef QCA_CONFIG_SMP
+	id = WMI_GET_FIELD(adf_nbuf_data(evt_buf), WMI_CMD_HDR, COMMANDID);
+	/* TX_PAUSE EVENT should be handled with tasklet context */
+	if (WMI_TX_PAUSE_EVENTID == id) {
+		if (adf_nbuf_pull_head(evt_buf, sizeof(WMI_CMD_HDR)) == NULL)
+			return;
+
+		data = adf_nbuf_data(evt_buf);
+		len = adf_nbuf_len(evt_buf);
+		tlv_ok_status = wmitlv_check_and_pad_event_tlvs(
+					wmi_handle->scn_handle,
+					data, len, id,
+					&wmi_cmd_struct_ptr);
+		if (tlv_ok_status != 0) {
+			if (tlv_ok_status == 1) {
+				wmi_cmd_struct_ptr = data;
+			} else {
+				return;
+			}
+		}
+
+		idx = wmi_unified_get_event_handler_ix(wmi_handle, id);
+		if (idx == -1) {
+			wmitlv_free_allocated_event_tlvs(id,
+				&wmi_cmd_struct_ptr);
+			adf_nbuf_free(evt_buf);
+			return;
+		}
+		wmi_handle->event_handler[idx](wmi_handle->scn_handle,
+			       wmi_cmd_struct_ptr, len);
+		wmitlv_free_allocated_event_tlvs(id, &wmi_cmd_struct_ptr);
+		adf_nbuf_free(evt_buf);
+		return;
+	}
+#endif /* QCA_CONFIG_SMP */
 
 #ifdef QCA_WIFI_ISOC
 	__wmi_control_rx(wmi_handle, evt_buf);
 #else
+#ifdef WMI_INTERFACE_EVENT_LOGGING
+	id = WMI_GET_FIELD(adf_nbuf_data(evt_buf), WMI_CMD_HDR, COMMANDID);
+	data = adf_nbuf_data(evt_buf);
+
+	adf_os_spin_lock_bh(&wmi_handle->wmi_record_lock);
+	/* Exclude 4 bytes of TLV header */
+	WMI_RX_EVENT_RECORD(id, ((u_int8_t *)data + 4));
+	adf_os_spin_unlock_bh(&wmi_handle->wmi_record_lock);
+#endif
 	adf_os_spin_lock_bh(&wmi_handle->eventq_lock);
 	adf_nbuf_queue_add(&wmi_handle->event_queue, evt_buf);
 	adf_os_spin_unlock_bh(&wmi_handle->eventq_lock);
-
 	schedule_work(&wmi_handle->rx_event_work);
 #endif
 }
@@ -782,16 +873,15 @@ void __wmi_control_rx(struct wmi_unified *wmi_handle, wmi_buf_t evt_buf)
 							data, len, id,
 							&wmi_cmd_struct_ptr);
 	if (tlv_ok_status != 0) {
-		if (tlv_ok_status == 1) {
-			pr_err("%s No TLV definition for command %d\n",
-			       __func__, id);
-			wmi_cmd_struct_ptr = data;
-		} else {
 			pr_err("%s: Error: id=0x%d, wmitlv_check_and_pad_tlvs ret=%d\n",
 				__func__, id, tlv_ok_status);
 			goto end;
-		}
 	}
+
+#ifdef FEATURE_WLAN_D0WOW
+	if (wmi_handle->in_d0wow)
+		pr_debug("%s: WMI event ID is 0x%x\n", __func__, id);
+#endif
 
 	if (id >= WMI_EVT_GRP_START_ID(WMI_GRP_START)) {
 		u_int32_t idx = 0;
@@ -856,7 +946,7 @@ void wmi_rx_event_work(struct work_struct *work)
 /* WMI Initialization functions */
 
 void *
-wmi_unified_attach(ol_scn_t scn_handle)
+wmi_unified_attach(ol_scn_t scn_handle, wma_wow_tx_complete_cbk func)
 {
     struct wmi_unified *wmi_handle;
     wmi_handle = (struct wmi_unified *)OS_MALLOC(NULL, sizeof(struct wmi_unified), GFP_ATOMIC);
@@ -871,11 +961,16 @@ wmi_unified_attach(ol_scn_t scn_handle)
 #ifndef QCA_WIFI_ISOC
     adf_os_spinlock_init(&wmi_handle->eventq_lock);
     adf_nbuf_queue_init(&wmi_handle->event_queue);
+#ifdef CONFIG_CNSS
+    cnss_init_work(&wmi_handle->rx_event_work, wmi_rx_event_work);
+#else
     INIT_WORK(&wmi_handle->rx_event_work, wmi_rx_event_work);
+#endif
 #endif
 #ifdef WMI_INTERFACE_EVENT_LOGGING
     adf_os_spinlock_init(&wmi_handle->wmi_record_lock);
 #endif
+    wmi_handle->wma_wow_tx_complete_cbk = func;
     return wmi_handle;
 }
 
@@ -904,8 +999,21 @@ void wmi_htc_tx_complete(void *ctx, HTC_PACKET *htc_pkt)
 {
 	struct wmi_unified *wmi_handle = (struct wmi_unified *)ctx;
 	wmi_buf_t wmi_cmd_buf = GET_HTC_PACKET_NET_BUF_CONTEXT(htc_pkt);
+#ifdef WMI_INTERFACE_EVENT_LOGGING
+	u_int32_t cmd_id;
+#endif
 
 	ASSERT(wmi_cmd_buf);
+#ifdef WMI_INTERFACE_EVENT_LOGGING
+	cmd_id = WMI_GET_FIELD(adf_nbuf_data(wmi_cmd_buf),
+		WMI_CMD_HDR, COMMANDID);
+	adf_os_spin_lock_bh(&wmi_handle->wmi_record_lock);
+	/* Record 16 bytes of WMI cmd tx complete data
+	   - exclude TLV and WMI headers */
+	WMI_COMMAND_TX_CMP_RECORD(cmd_id,
+		((u_int32_t *)adf_nbuf_data(wmi_cmd_buf) + 2));
+	adf_os_spin_unlock_bh(&wmi_handle->wmi_record_lock);
+#endif
 	adf_nbuf_free(wmi_cmd_buf);
 	adf_os_mem_free(htc_pkt);
 	adf_os_atomic_dec(&wmi_handle->pending_cmds);
@@ -965,3 +1073,10 @@ void wmi_set_target_suspend(wmi_unified_t wmi_handle, A_BOOL val)
 {
 	adf_os_atomic_set(&wmi_handle->is_target_suspended, val);
 }
+
+#ifdef FEATURE_WLAN_D0WOW
+void wmi_set_d0wow_flag(wmi_unified_t wmi_handle, A_BOOL flag)
+{
+	wmi_handle->in_d0wow = flag;
+}
+#endif

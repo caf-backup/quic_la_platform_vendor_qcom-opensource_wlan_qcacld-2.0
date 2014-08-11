@@ -77,10 +77,11 @@
 /** Private **/
 #define WMA_CFG_NV_DNLD_TIMEOUT            500
 #define WMA_READY_EVENTID_TIMEOUT          2000
-#define WMA_TGT_SUSPEND_COMPLETE_TIMEOUT   1000
+#define WMA_TGT_SUSPEND_COMPLETE_TIMEOUT   3000
 #define WMA_WAKE_LOCK_TIMEOUT              1000
 #define WMA_MAX_RESUME_RETRY               1000
 #define WMA_RESUME_TIMEOUT                 3000
+#define WMA_TGT_WOW_TX_COMPLETE_TIMEOUT    2000
 #define MAX_MEM_CHUNKS                     32
 /*
    In prima 12 HW stations are supported including BCAST STA(staId 0)
@@ -149,6 +150,27 @@
 #define WMA_GO_MIN_ACTIVE_SCAN_BURST_DURATION   (40)
 #define WMA_GO_MAX_ACTIVE_SCAN_BURST_DURATION   (120)
 #define WMA_DWELL_TIME_PASSIVE_DEFAULT          (110)
+#define WMA_DWELL_TIME_PROBE_TIME_MAP_SIZE      (11)
+
+typedef struct probeTime_dwellTime {
+	u_int8_t dwell_time;
+	u_int8_t probe_time;
+} t_probeTime_dwellTime;
+
+static const t_probeTime_dwellTime
+	probeTime_dwellTime_map[WMA_DWELL_TIME_PROBE_TIME_MAP_SIZE] = {
+	{28, 0}, /* 0 SSID */
+	{28, 20}, /* 1 SSID */
+	{28, 20}, /* 2 SSID */
+	{28, 20}, /* 3 SSID */
+	{28, 20}, /* 4 SSID */
+	{28, 20}, /* 5 SSID */
+	{28, 20}, /* 6 SSID */
+	{28, 11}, /* 7 SSID */
+	{28, 11}, /* 8 SSID */
+	{28, 11}, /* 9 SSID */
+	{28, 8}   /* 10 SSID */
+};
 
 /* Roaming default values
  * All time and period values are in milliseconds.
@@ -168,7 +190,8 @@
 #define WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT     (120000)
 #define WMA_ROAM_OPP_SCAN_AGING_PERIOD_DEFAULT (WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT * 5)
 #define WMA_ROAM_PREAUTH_SCAN_TIME           (50)
-#define WMA_ROAM_PREAUTH_REST_TIME           (100)
+#define WMA_ROAM_PREAUTH_REST_TIME           (0)
+#define WMA_ROAM_PREAUTH_MAX_SCAN_TIME       (10000)
 #define WMA_ROAM_BMISS_FIRST_BCNT_DEFAULT    (10)
 #define WMA_ROAM_BMISS_FINAL_BCNT_DEFAULT    (10)
 
@@ -177,6 +200,14 @@
 
 #define WMA_MAX_RF_CHAINS(x)	((1 << x) - 1)
 #define WMA_MIN_RF_CHAINS		(1)
+
+#ifdef FEATURE_WLAN_EXTSCAN
+#define WMA_MAX_EXTSCAN_MSG_SIZE        1536
+#define WMA_EXTSCAN_REST_TIME           100
+#define WMA_EXTSCAN_MAX_SCAN_TIME       50000
+#define WMA_EXTSCAN_REPEAT_PROBE        10
+#define WMA_EXTSCAN_BURST_DURATION      150
+#endif
 
 typedef struct {
 	HTC_ENDPOINT_ID endpoint_id;
@@ -400,6 +431,12 @@ struct wma_wow {
 	v_BOOL_t bmiss_enable;
 	v_BOOL_t gtk_pdev_enable;
 	v_BOOL_t gtk_err_enable[WMA_MAX_SUPPORTED_BSS];
+#ifdef FEATURE_WLAN_LPHB
+	/* currently supports only vdev 0.
+	 * cache has two entries: one for TCP and one for UDP.
+	 */
+	tSirLPHBReq lphb_cache[2];
+#endif
 };
 #ifdef WLAN_FEATURE_11W
 #define CMAC_IPN_LEN         (6)
@@ -492,6 +529,8 @@ struct wma_txrx_node {
 #endif
 	v_BOOL_t ps_enabled;
 	u_int32_t dtim_policy;
+	u_int32_t peer_count;
+	v_BOOL_t roam_synch_in_progress;
 };
 
 #if defined(QCA_WIFI_FTM) && !defined(QCA_WIFI_ISOC)
@@ -527,6 +566,8 @@ typedef struct {
 	u_int32_t isAwakeonTxRxEnabled;
 	u_int32_t inactivityCount;
 	u_int32_t txSPEndInactivityTime;
+	u_int32_t ibssPsWarmupTime;
+	u_int32_t ibssPs1RxChainInAtimEnable;
 }ibss_power_save_params;
 
 typedef struct {
@@ -542,6 +583,7 @@ typedef struct {
 	vos_event_t wma_ready_event;
 	vos_event_t wma_resume_event;
 	vos_event_t target_suspend;
+	vos_event_t wow_tx_complete;
 	t_cfg_nv_param cfg_nv;
 
 	v_U16_t max_station;
@@ -605,7 +647,6 @@ typedef struct {
 	u_int32_t scan_id;
 	struct wma_txrx_node *interfaces;
 	pdev_cli_config_t pdevconfig;
-	u_int32_t peer_count;
 	struct list_head vdev_resp_queue;
 	adf_os_spinlock_t vdev_respq_lock;
         adf_os_spinlock_t vdev_detach_lock;
@@ -635,7 +676,6 @@ typedef struct {
 	void* pGetRssiReq;
 	v_S7_t first_rssi;
 	t_thermal_mgmt thermal_mgmt_info;
-        u_int32_t roam_offload_vdev_id;
         v_BOOL_t  roam_offload_enabled;
         t_wma_roam_preauth_chan_state_t roam_preauth_scan_state;
         u_int32_t roam_preauth_scan_id;
@@ -677,10 +717,17 @@ typedef struct {
 	u_int16_t RArateLimitInterval;
 #endif
 
+
 	/* Powersave Configuration Parameters */
 	u_int8_t staMaxLIModDtim;
 	u_int8_t staModDtim;
 	u_int8_t staDynamicDtim;
+
+	int32_t dfs_pri_multiplier;
+
+	u_int32_t hw_bd_id;
+	u_int32_t hw_bd_info[HW_BD_INFO_SIZE];
+
 }t_wma_handle, *tp_wma_handle;
 
 struct wma_target_cap {
@@ -1234,6 +1281,8 @@ struct wma_tx_ack_work_ctx {
 #define WMA_TARGET_REQ_TYPE_VDEV_STOP  0x2
 #define WMA_TARGET_REQ_TYPE_VDEV_DEL   0x3
 
+#define WMA_VDEV_START_REQUEST_TIMEOUT (3000) /* 3 seconds */
+
 struct wma_target_req {
 	vos_timer_t event_timeout;
 	struct list_head node;
@@ -1257,6 +1306,8 @@ struct wma_vdev_start_req {
 	u_int8_t pmf_enabled;
 	u_int8_t vht_capable;
 	u_int8_t ht_capable;
+	int32_t dfs_pri_multiplier;
+	u_int8_t dot11_mode;
 };
 
 struct wma_set_key_params {
@@ -1311,6 +1362,8 @@ enum wma_cfg_cmd_id {
 	WMA_VDEV_IBSS_SET_AWAKE_ON_TX_RX,
 	WMA_VDEV_IBSS_SET_INACTIVITY_TIME,
 	WMA_VDEV_IBSS_SET_TXSP_END_INACTIVITY_TIME,
+	WMA_VDEV_IBSS_PS_SET_WARMUP_TIME_SECS,
+	WMA_VDEV_IBSS_PS_SET_1RX_CHAIN_IN_ATIM_WINDOW,
 
 	/* dfs control interface */
 	WMA_VDEV_DFS_CONTROL_CMDID,
@@ -1349,6 +1402,9 @@ VOS_STATUS wma_send_snr_request(tp_wma_handle wma_handle, void *pGetRssiReq,
 #define WMA_ASSOC_REQ_RECV_WAKE_LOCK_DURATION	(30 * 1000) /* in msec */
 #define WMA_DEAUTH_RECV_WAKE_LOCK_DURATION	(30 * 1000) /* in msec */
 #define WMA_DISASSOC_RECV_WAKE_LOCK_DURATION	(30 * 1000) /* in msec */
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+#define WMA_AUTO_SHUTDOWN_WAKE_LOCK_DURATION    (30 * 1000) /* in msec */
+#endif
 #ifdef FEATURE_WLAN_RA_FILTERING
 #define WMA_RA_MATCH_RECV_WAKE_LOCK_DURATION    (5 * 1000) /* in msec */
 #endif
@@ -1604,6 +1660,10 @@ enum uapsd_up {
 	UAPSD_UP_NC,
 	UAPSD_UP_MAX
 };
+
+A_UINT32 eCsrAuthType_to_rsn_authmode (eCsrAuthType authtype,
+                                       eCsrEncryptionType encr);
+A_UINT32 eCsrEncryptionType_to_rsn_cipherset (eCsrEncryptionType encr);
 
 #define WMA_TGT_INVALID_SNR (-1)
 #define WMA_DYNAMIC_DTIM_SETTING_THRESHOLD 2

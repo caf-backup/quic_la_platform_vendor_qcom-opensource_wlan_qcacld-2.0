@@ -45,9 +45,7 @@
 #include <net/arp.h>
 #include "qwlan_version.h"
 
-#ifdef QCA_WIFI_2_0
 static struct hdd_context_s *pHddCtx;
-#endif /* QCA_WIFI_2_0 */
 
 
 /*---------------------------------------------------------------------------------------------
@@ -249,7 +247,6 @@ int iw_set_oem_data_req(
     return rc;
 }
 
-#ifdef QCA_WIFI_2_0
 
 /* Forward declaration */
 static int oem_msg_callback(struct sk_buff *skb);
@@ -331,9 +328,11 @@ int iw_get_oem_data_cap(
        oemDataCap.allowed_dwell_time_min = pConfig->nNeighborScanMinChanTime;
        oemDataCap.allowed_dwell_time_max = pConfig->nNeighborScanMaxChanTime;
        oemDataCap.curr_dwell_time_min =
-               sme_getNeighborScanMinChanTime(pHddContext->hHal);
+               sme_getNeighborScanMinChanTime(pHddContext->hHal,
+                                              pAdapter->sessionId);
        oemDataCap.curr_dwell_time_max =
-               sme_getNeighborScanMaxChanTime(pHddContext->hHal);
+               sme_getNeighborScanMaxChanTime(pHddContext->hHal,
+                                              pAdapter->sessionId);
        oemDataCap.supported_bands = pConfig->nBandCapability;
 
        /* request for max num of channels */
@@ -1051,5 +1050,4 @@ int oem_msg_callback(struct sk_buff *skb)
    return 0;
 }
 
-#endif /* QCA_WIFI_2_0 */
 #endif

@@ -641,14 +641,7 @@ limSendSmeStartBssRsp(tpAniSirGlobal pMac,
 
                 limGetPhyMode(pMac, (tANI_U32 *)&pSirSmeRsp->bssDescription.nwType, psessionEntry);
 
-#if 0
-            if (wlan_cfgGetInt(pMac, WNI_CFG_CURRENT_CHANNEL, &len) != eSIR_SUCCESS)
-                limLog(pMac, LOGP, FL("could not retrieve CURRENT_CHANNEL from CFG"));
-
-#endif// TO SUPPORT BT-AMP
-
                 pSirSmeRsp->bssDescription.channelId = psessionEntry->currentOperChannel;
-
                 pSirSmeRsp->bssDescription.aniIndicator = 1;
 
                 curLen = psessionEntry->schBeaconOffsetBegin - ieOffset;
@@ -939,6 +932,8 @@ limSendSmeLfrScanRsp(tpAniSirGlobal pMac, tANI_U16 length,
     tANI_U8               *pbBuf;
     tSirBssDescription    *pDesc;
     tANI_S16              scanEntriesLeft = 0;
+    tANI_U8               *currentBssid =
+        pMac->roam.roamSession[smesessionId].connectedProfile.bssid;
 
     PELOG1(limLog(pMac, LOG1,
        FL("Sending message SME_SCAN_RSP with length=%d reasonCode %s\n"),
@@ -970,6 +965,14 @@ limSendSmeLfrScanRsp(tpAniSirGlobal pMac, tANI_U16 length,
         ptemp = pMac->lim.gLimCachedLfrScanHashTable[i];
         while(ptemp)
         {
+            if (vos_mem_compare(ptemp->bssDescription.bssId,
+                                currentBssid,
+                                sizeof(tSirMacAddr)))
+            {
+                ptemp = ptemp->next;
+                continue;
+            }
+
             pbBuf = ((tANI_U8 *)pSirSmeScanRsp) + msgLen;
             if(0 == bssCount)
             {
@@ -1043,6 +1046,14 @@ limSendSmeLfrScanRsp(tpAniSirGlobal pMac, tANI_U16 length,
                                               (tANI_U8 *) &pSsid->length,
                                               (tANI_U8) (pSsid->length + 1)))
                 {
+                    if (vos_mem_compare(ptemp->bssDescription.bssId,
+                                        currentBssid,
+                                        sizeof(tSirMacAddr)))
+                    {
+                        ptemp = ptemp->next;
+                        continue;
+                    }
+
                     pbBuf = ((tANI_U8 *)pSirSmeScanRsp) + msgLen;
                     if(0 == bssCount)
                     {
@@ -1284,80 +1295,6 @@ void limSendSmeOemDataRsp(tpAniSirGlobal pMac, tANI_U32* pMsgBuf, tSirResultCode
 }  /*** limSendSmeOemDataRsp ***/
 
 #endif
-
-
-/**
- * limSendSmeAuthRsp()
- *
- *FUNCTION:
- * This function is called by limProcessSmeMessages() to send
- * eWNI_SME_AUTH_RSP message to host
- *
- *PARAMS:
- *
- *LOGIC:
- *
- *ASSUMPTIONS:
- * NA
- *
- *NOTE:
- * NA
- *
- * @param  pMac        Pointer to Global MAC structure
- * @param statusCode   Indicates the result of previously issued
- *                     eWNI_SME_AUTH_REQ message
- *
- * @return None
- */
-void
-limSendSmeAuthRsp(tpAniSirGlobal pMac,
-                  tSirResultCodes statusCode,
-                  tSirMacAddr peerMacAddr,
-                  tAniAuthType authType,
-                  tANI_U16   protStatusCode,
-                  tpPESession psessionEntry,tANI_U8 smesessionId,
-                  tANI_U16 smetransactionId)
-{
-#if 0
-    tSirMsgQ       mmhMsg;
-    tSirSmeAuthRsp *pSirSmeAuthRsp;
-
-    pSirSmeAuthRsp = vos_mem_malloc(sizeof(tSirSmeAuthRsp));
-    if (NULL == pSirSmeAuthRsp)
-    {
-        // Log error
-        limLog(pMac, LOGP,
-               FL("call to AllocateMemory failed for eWNI_SME_AUTH_RSP"));
-
-        return;
-    }
-
-
-
-    if(psessionEntry != NULL)
-    {
-        vos_mem_copy( (tANI_U8 *) pSirSmeAuthRsp->peerMacAddr,
-                  (tANI_U8 *) peerMacAddr, sizeof(tSirMacAddr));
-        pSirSmeAuthRsp->authType    = authType;
-
-    }
-
-    pSirSmeAuthRsp->messageType = eWNI_SME_AUTH_RSP;
-    pSirSmeAuthRsp->length      = sizeof(tSirSmeAuthRsp);
-    pSirSmeAuthRsp->statusCode  = statusCode;
-    pSirSmeAuthRsp->protStatusCode = protStatusCode;
-
-    /* Update SME session and transaction Id*/
-    pSirSmeAuthRsp->sessionId = smesessionId;
-    pSirSmeAuthRsp->transactionId = smetransactionId;
-
-    mmhMsg.type = eWNI_SME_AUTH_RSP;
-    mmhMsg.bodyptr = pSirSmeAuthRsp;
-    mmhMsg.bodyval = 0;
-    MTRACE(macTraceMsgTx(pMac, 0, mmhMsg.type));
-    limSysProcessMmhMsgApi(pMac, &mmhMsg,  ePROT);
-#endif
-} /*** end limSendSmeAuthRsp() ***/
 
 
 void limSendSmeDisassocDeauthNtf( tpAniSirGlobal pMac,
@@ -2213,56 +2150,6 @@ limSendSmeRemoveKeyRsp(tpAniSirGlobal pMac,
 
 
 /**
- * limSendSmePromiscuousModeRsp()
- *
- *FUNCTION:
- * This function is called by limProcessSmeMessages() to send
- * eWNI_PROMISCUOUS_MODE_RSP message to host
- *
- *PARAMS:
- *
- *LOGIC:
- *
- *ASSUMPTIONS:
- * NA
- *
- *NOTE:
- * This function is used for sending eWNI_SME_PROMISCUOUS_MODE_RSP to
- * host as a reply to eWNI_SME_PROMISCUOUS_MODE_REQ directive from it.
- *
- * @param None
- * @return None
- */
-void
-limSendSmePromiscuousModeRsp(tpAniSirGlobal pMac)
-{
-#if 0
-    tSirMsgQ   mmhMsg;
-    tSirMbMsg  *pMbMsg;
-
-    pMbMsg = vos_mem_malloc(sizeof(tSirMbMsg));
-    if ( NULL == pMbMsg )
-    {
-        // Log error
-        limLog(pMac, LOGP, FL("call to AllocateMemory failed"));
-
-        return;
-    }
-
-    pMbMsg->type   = eWNI_SME_PROMISCUOUS_MODE_RSP;
-    pMbMsg->msgLen = 4;
-
-    mmhMsg.type = eWNI_SME_PROMISCUOUS_MODE_RSP;
-    mmhMsg.bodyptr = pMbMsg;
-    mmhMsg.bodyval = 0;
-    MTRACE(macTraceMsgTx(pMac, 0, mmhMsg.type));
-    limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT);
-#endif
-} /*** end limSendSmePromiscuousModeRsp() ***/
-
-
-
-/**
  * limSendSmeNeighborBssInd()
  *
  *FUNCTION:
@@ -2377,7 +2264,6 @@ limSendSmeAddtsRsp(tpAniSirGlobal pMac, tANI_U8 rspReqd, tANI_U32 status, tpPESe
     rsp->messageType = eWNI_SME_ADDTS_RSP;
     rsp->rc = status;
     rsp->rsp.status = (enum eSirMacStatusCodes) status;
-    //vos_mem_copy( (tANI_U8 *) &rsp->rsp.tspec, (tANI_U8 *) &addts->tspec, sizeof(addts->tspec));
     rsp->rsp.tspec = tspec;
     /* Update SME session Id and transcation Id */
     rsp->sessionId = smesessionId;
@@ -2810,7 +2696,6 @@ limSendSmeIBSSPeerInd(
     }
 
     mmhMsg.type    = msgType;
-//    mmhMsg.bodyval = (tANI_U32) pNewPeerInd;
     mmhMsg.bodyptr = pNewPeerInd;
     MTRACE(macTraceMsgTx(pMac, sessionId, mmhMsg.type));
     limSysProcessMmhMsgApi(pMac, &mmhMsg, ePROT);
@@ -2882,21 +2767,25 @@ void limHandleCSAoffloadMsg(tpAniSirGlobal pMac,tpSirMsgQ MsgQ)
    tANI_U8 sessionId;
    tANI_U16 aid = 0 ;
 
-   if(!csa_params)
-   {
+   if (!csa_params) {
       limLog(pMac, LOGE, FL("limMsgQ body ptr is NULL"));
       return;
    }
 
    psessionEntry = peFindSessionByBssid(pMac, csa_params->bssId, &sessionId);
-   if(!psessionEntry)
-   {
-      limLog(pMac, LOGP, FL("Session does not exist for given sessionID"));
+   if (!psessionEntry) {
+      limLog(pMac, LOGE, FL("Session does not exist for given sessionID"));
       goto err;
    }
 
    pStaDs = dphLookupHashEntry(pMac, psessionEntry->bssId, &aid,
                                       &psessionEntry->dph.dphHashTable);
+
+   if (!pStaDs) {
+      limLog(pMac, LOGE, FL("pStaDs does not exist for given sessionID"));
+      goto err;
+   }
+
 
    if (psessionEntry->limSystemRole == eLIM_STA_ROLE)
    {
@@ -3139,20 +3028,20 @@ void limSendSmeMaxAssocExceededNtf(tpAniSirGlobal pMac, tSirMacAddr peerMacAddr,
   \sa
   ----------------------------------------------------------------- */
 void
-limSendSmeCandidateFoundInd(tpAniSirGlobal pMac, tANI_U8  sessionId)
+limSendSmeCandidateFoundInd(tpAniSirGlobal pMac, tANI_U8 sessionId)
 {
     tSirMsgQ  mmhMsg;
     tSirSmeCandidateFoundInd *pSirSmeCandidateFoundInd;
 
     pSirSmeCandidateFoundInd = vos_mem_malloc(sizeof(tSirSmeCandidateFoundInd));
-    if ( NULL == pSirSmeCandidateFoundInd )
-    {
-        limLog(pMac, LOGP, FL("AllocateMemory failed for eWNI_SME_CANDIDATE_FOUND_IND\n"));
+    if (NULL == pSirSmeCandidateFoundInd) {
+        limLog(pMac, LOGP,
+               FL("AllocateMemory failed for eWNI_SME_CANDIDATE_FOUND_IND"));
         return;
     }
 
     pSirSmeCandidateFoundInd->messageType = eWNI_SME_CANDIDATE_FOUND_IND;
-    pSirSmeCandidateFoundInd->length = sizeof(tSirSmeDisassocInd);
+    pSirSmeCandidateFoundInd->length = sizeof(tSirSmeCandidateFoundInd);
 
     pSirSmeCandidateFoundInd->sessionId     =  sessionId;
 

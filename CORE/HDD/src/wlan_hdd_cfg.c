@@ -61,196 +61,254 @@
 #include <wlan_hdd_misc.h>
 
 #if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
-static void cbNotifySetRoamPrefer5GHz(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetRoamPrefer5GHz(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    sme_UpdateRoamPrefer5GHz((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nRoamPrefer5GHz);
+    sme_UpdateRoamPrefer5GHz(pHddCtx->hHal, pHddCtx->cfg_ini->nRoamPrefer5GHz);
 }
 
-static void cbNotifySetImmediateRoamRssiDiff(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetImmediateRoamRssiDiff(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    sme_UpdateImmediateRoamRssiDiff((tHalHandle)(pHddCtx->hHal),
-                                    pHddCtx->cfg_ini->nImmediateRoamRssiDiff);
+    sme_UpdateImmediateRoamRssiDiff(pHddCtx->hHal,
+                                    pHddCtx->cfg_ini->nImmediateRoamRssiDiff,
+                                    0);
 }
 
-static void cbNotifySetRoamRssiDiff(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetRoamRssiDiff(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    sme_UpdateRoamRssiDiff((tHalHandle)(pHddCtx->hHal),
-                                    pHddCtx->cfg_ini->RoamRssiDiff);
+    sme_UpdateRoamRssiDiff(pHddCtx->hHal,
+                           0,
+                           pHddCtx->cfg_ini->RoamRssiDiff);
 }
 
-static void cbNotifySetFastTransitionEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetFastTransitionEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    sme_UpdateFastTransitionEnabled((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->isFastTransitionEnabled);
+    sme_UpdateFastTransitionEnabled(pHddCtx->hHal,
+                                    pHddCtx->cfg_ini->isFastTransitionEnabled);
 }
 
-static void cbNotifySetRoamIntraBand(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetRoamIntraBand(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    sme_setRoamIntraBand((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nRoamIntraBand);
+    sme_setRoamIntraBand(pHddCtx->hHal, pHddCtx->cfg_ini->nRoamIntraBand);
 }
 
-static void cbNotifySetWESMode(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetWESMode(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_UpdateWESMode((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->isWESModeEnabled);
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_UpdateWESMode(pHddCtx->hHal,
+                      pHddCtx->cfg_ini->isWESModeEnabled,
+                      0);
 }
 
-static void cbNotifySetRoamScanNProbes(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetRoamScanNProbes(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    sme_UpdateRoamScanNProbes((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nProbes);
+    sme_UpdateRoamScanNProbes(pHddCtx->hHal, 0,
+                              pHddCtx->cfg_ini->nProbes);
 }
 
-static void cbNotifySetRoamScanHomeAwayTime(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetRoamScanHomeAwayTime(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-     sme_UpdateRoamScanHomeAwayTime((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nRoamScanHomeAwayTime, eANI_BOOLEAN_TRUE);
+     sme_UpdateRoamScanHomeAwayTime(pHddCtx->hHal, 0,
+                                    pHddCtx->cfg_ini->nRoamScanHomeAwayTime,
+                                    eANI_BOOLEAN_TRUE);
 }
 #endif
 
 #ifdef FEATURE_WLAN_OKC
-static void cbNotifySetOkcFeatureEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetOkcFeatureEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
 }
 #endif
 
 #ifdef FEATURE_WLAN_LFR
-static void NotifyIsFastRoamIniFeatureEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+NotifyIsFastRoamIniFeatureEnabled(hdd_context_t *pHddCtx,
+                                  unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_UpdateIsFastRoamIniFeatureEnabled((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->isFastRoamIniFeatureEnabled );
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_UpdateIsFastRoamIniFeatureEnabled(pHddCtx->hHal, 0,
+                               pHddCtx->cfg_ini->isFastRoamIniFeatureEnabled );
 }
 
-static void NotifyIsMAWCIniFeatureEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+NotifyIsMAWCIniFeatureEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    /* at the point this routine is called, the value in the cfg_ini table has already been updated */
-    sme_UpdateIsMAWCIniFeatureEnabled((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->MAWCEnabled );
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_UpdateIsMAWCIniFeatureEnabled(pHddCtx->hHal,
+                                      pHddCtx->cfg_ini->MAWCEnabled );
 }
 #endif
 
 #ifdef FEATURE_WLAN_ESE
-static void cbNotifySetEseFeatureEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetEseFeatureEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_UpdateIsEseFeatureEnabled((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->isEseIniFeatureEnabled );
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_UpdateIsEseFeatureEnabled(pHddCtx->hHal, 0,
+                                  pHddCtx->cfg_ini->isEseIniFeatureEnabled );
 }
 #endif
 
-static void cbNotifySetFwRssiMonitoring(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetFwRssiMonitoring(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_UpdateConfigFwRssiMonitoring((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->fEnableFwRssiMonitoring );
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_UpdateConfigFwRssiMonitoring(pHddCtx->hHal,
+                                     pHddCtx->cfg_ini->fEnableFwRssiMonitoring);
 }
 
 #ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
 static void cbNotifySetOpportunisticScanThresholdDiff(hdd_context_t *pHddCtx,
                                                       unsigned long NotifyId)
 {
-    /*
-     * at the point this routine is called, the value in the cfg_ini table
-     * has already been updated
-     */
-    sme_SetRoamOpportunisticScanThresholdDiff((tHalHandle)(pHddCtx->hHal),
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_SetRoamOpportunisticScanThresholdDiff(pHddCtx->hHal, 0,
                           pHddCtx->cfg_ini->nOpportunisticThresholdDiff );
 }
 
 static void cbNotifySetRoamRescanRssiDiff(hdd_context_t *pHddCtx,
                                           unsigned long NotifyId)
 {
-    /*
-     * at the point this routine is called, the value in the cfg_ini table
-     * has already been updated
-     */
-    sme_SetRoamRescanRssiDiff((tHalHandle)(pHddCtx->hHal),
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_SetRoamRescanRssiDiff(pHddCtx->hHal,
+                              0,
                               pHddCtx->cfg_ini->nRoamRescanRssiDiff);
 }
 
-static void cbNotifySetNeighborLookupRssiThreshold(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetNeighborLookupRssiThreshold(hdd_context_t *pHddCtx,
+                                       unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_setNeighborLookupRssiThreshold((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nNeighborLookupRssiThreshold );
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_setNeighborLookupRssiThreshold(pHddCtx->hHal, 0,
+                               pHddCtx->cfg_ini->nNeighborLookupRssiThreshold);
 }
 
-static void cbNotifySetNeighborScanPeriod(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetNeighborScanPeriod(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_setNeighborScanPeriod((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nNeighborScanPeriod );
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_setNeighborScanPeriod(pHddCtx->hHal, 0,
+                              pHddCtx->cfg_ini->nNeighborScanPeriod );
 }
 
-static void cbNotifySetNeighborResultsRefreshPeriod(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetNeighborResultsRefreshPeriod(hdd_context_t *pHddCtx,
+                                        unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_setNeighborScanRefreshPeriod((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nNeighborResultsRefreshPeriod );
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_setNeighborScanRefreshPeriod(pHddCtx->hHal, 0,
+                               pHddCtx->cfg_ini->nNeighborResultsRefreshPeriod);
 }
 
-static void cbNotifySetEmptyScanRefreshPeriod(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetEmptyScanRefreshPeriod(hdd_context_t *pHddCtx,
+                                  unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_UpdateEmptyScanRefreshPeriod((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nEmptyScanRefreshPeriod);
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_UpdateEmptyScanRefreshPeriod(pHddCtx->hHal, 0,
+                                     pHddCtx->cfg_ini->nEmptyScanRefreshPeriod);
 }
 
-static void cbNotifySetNeighborScanMinChanTime(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetNeighborScanMinChanTime(hdd_context_t *pHddCtx,
+                                   unsigned long NotifyId)
 {
-    // at the point this routine is called, the value in the cfg_ini table has already been updated
-    sme_setNeighborScanMinChanTime((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nNeighborScanMinChanTime);
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_setNeighborScanMinChanTime(pHddCtx->hHal,
+                                   pHddCtx->cfg_ini->nNeighborScanMinChanTime,
+                                   0);
 }
 
-static void cbNotifySetNeighborScanMaxChanTime(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetNeighborScanMaxChanTime(hdd_context_t *pHddCtx,
+                                   unsigned long NotifyId)
 {
-    sme_setNeighborScanMaxChanTime((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->nNeighborScanMaxChanTime);
+    sme_setNeighborScanMaxChanTime(pHddCtx->hHal, 0,
+                                   pHddCtx->cfg_ini->nNeighborScanMaxChanTime);
 }
 static void cbNotifySetRoamBmissFirstBcnt(hdd_context_t *pHddCtx,
                                           unsigned long NotifyId)
 {
-    /*
-     * at the point this routine is called, the value in the cfg_ini table
-     * has already been updated
-     */
-    sme_SetRoamBmissFirstBcnt((tHalHandle)(pHddCtx->hHal),
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_SetRoamBmissFirstBcnt(pHddCtx->hHal,
+                              0,
                               pHddCtx->cfg_ini->nRoamBmissFirstBcnt);
 }
 
 static void cbNotifySetRoamBmissFinalBcnt(hdd_context_t *pHddCtx,
                                           unsigned long NotifyId)
 {
-    sme_SetRoamBmissFinalBcnt((tHalHandle)(pHddCtx->hHal),
+    sme_SetRoamBmissFinalBcnt(pHddCtx->hHal, 0,
                               pHddCtx->cfg_ini->nRoamBmissFinalBcnt);
 }
 
 static void cbNotifySetRoamBeaconRssiWeight(hdd_context_t *pHddCtx,
                                           unsigned long NotifyId)
 {
-    sme_SetRoamBeaconRssiWeight((tHalHandle)(pHddCtx->hHal),
+    sme_SetRoamBeaconRssiWeight(pHddCtx->hHal, 0,
                               pHddCtx->cfg_ini->nRoamBeaconRssiWeight);
 }
+
+static void
+cbNotifySetDFSScanMode(hdd_context_t *pHddCtx, unsigned long NotifyId)
+{
+    /* At the point this routine is called, the value in the cfg_ini
+       table has already been updated */
+    sme_UpdateDFSScanMode(pHddCtx->hHal, 0,
+                          pHddCtx->cfg_ini->allowDFSChannelRoam);
+}
+
 #endif
 
 static void cbNotifySetEnableSSR(hdd_context_t *pHddCtx, unsigned long NotifyId)
 {
-    sme_UpdateEnableSSR((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->enableSSR);
+    sme_UpdateEnableSSR(pHddCtx->hHal, pHddCtx->cfg_ini->enableSSR);
 }
 
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-static void cbNotifyUpdateRoamScanOffloadEnabled(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifyUpdateRoamScanOffloadEnabled(hdd_context_t *pHddCtx,
+                                     unsigned long NotifyId)
 {
-    sme_UpdateRoamScanOffloadEnabled((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->isRoamOffloadScanEnabled);
-    if (0 == pHddCtx->cfg_ini->isRoamOffloadScanEnabled)
-    {
+    sme_UpdateRoamScanOffloadEnabled(pHddCtx->hHal,
+                                    pHddCtx->cfg_ini->isRoamOffloadScanEnabled);
+    if (0 == pHddCtx->cfg_ini->isRoamOffloadScanEnabled) {
         pHddCtx->cfg_ini->bFastRoamInConIniFeatureEnabled = 0;
-        sme_UpdateEnableFastRoamInConcurrency((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->bFastRoamInConIniFeatureEnabled );
+        sme_UpdateEnableFastRoamInConcurrency(pHddCtx->hHal,
+                             pHddCtx->cfg_ini->bFastRoamInConIniFeatureEnabled);
     }
 }
 
-static void cbNotifySetEnableFastRoamInConcurrency(hdd_context_t *pHddCtx, unsigned long NotifyId)
+static void
+cbNotifySetEnableFastRoamInConcurrency(hdd_context_t *pHddCtx,
+                                       unsigned long NotifyId)
 {
-    sme_UpdateEnableFastRoamInConcurrency((tHalHandle)(pHddCtx->hHal), pHddCtx->cfg_ini->bFastRoamInConIniFeatureEnabled );
-}
-
-static void cbNotifySetDFSScanMode(hdd_context_t *pHddCtx, unsigned long NotifyId)
-{
-    /* at the point this routine is called, the value in the cfg_ini table has
-     * already been updated
-     */
-    sme_UpdateDFSScanMode((tHalHandle)(pHddCtx->hHal),
-                          pHddCtx->cfg_ini->allowDFSChannelRoam);
+    sme_UpdateEnableFastRoamInConcurrency(pHddCtx->hHal,
+                             pHddCtx->cfg_ini->bFastRoamInConIniFeatureEnabled);
 }
 
 #endif
@@ -2479,14 +2537,12 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_THERMAL_MIGRATION_ENABLE_MIN,
                  CFG_THERMAL_MIGRATION_ENABLE_MAX ),
 
-#ifndef QCA_WIFI_ISOC
    REG_VARIABLE( CFG_THROTTLE_PERIOD_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, throttlePeriod,
                  VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
                  CFG_THROTTLE_PERIOD_DEFAULT,
                  CFG_THROTTLE_PERIOD_MIN,
                  CFG_THROTTLE_PERIOD_MAX ),
-#endif
 
    REG_VARIABLE( CFG_ENABLE_MODULATED_DTIM_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, enableModulatedDTIM,
@@ -2608,6 +2664,13 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_DISABLE_DFS_CH_SWITCH_DEFAULT,
                  CFG_DISABLE_DFS_CH_SWITCH_MIN,
                  CFG_DISABLE_DFS_CH_SWITCH_MAX ),
+
+   REG_VARIABLE( CFG_ENABLE_DFS_MASTER_CAPABILITY, WLAN_PARAM_Integer,
+                 hdd_config_t, enableDFSMasterCap,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_ENABLE_DFS_MASTER_CAPABILITY_DEFAULT,
+                 CFG_ENABLE_DFS_MASTER_CAPABILITY_MIN,
+                 CFG_ENABLE_DFS_MASTER_CAPABILITY_MAX ),
 
    REG_VARIABLE( CFG_ENABLE_FIRST_SCAN_2G_ONLY_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, enableFirstScan2GOnly,
@@ -2750,14 +2813,12 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_TDLS_RSSI_TEARDOWN_THRESHOLD_MIN,
                  CFG_TDLS_RSSI_TEARDOWN_THRESHOLD_MAX ),
 
-#ifdef QCA_WIFI_2_0
    REG_VARIABLE( CFG_TDLS_RSSI_DELTA, WLAN_PARAM_SignedInteger,
                  hdd_config_t, fTDLSRSSIDelta,
                  VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
                  CFG_TDLS_RSSI_DELTA_DEFAULT,
                  CFG_TDLS_RSSI_DELTA_MIN,
                  CFG_TDLS_RSSI_DELTA_MAX ),
-#endif
 
    REG_VARIABLE( CFG_TDLS_QOS_WMM_UAPSD_MASK_NAME , WLAN_PARAM_HexInteger,
                  hdd_config_t, fTDLSUapsdMask,
@@ -2787,7 +2848,7 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM_MIN,
                  CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM_MAX ),
 
-   REG_VARIABLE( CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM, WLAN_PARAM_Integer,
+   REG_VARIABLE( CFG_TDLS_PREFERRED_OFF_CHANNEL_BW, WLAN_PARAM_Integer,
                  hdd_config_t, fTDLSPrefOffChanBandwidth,
                  VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
                  CFG_TDLS_PREFERRED_OFF_CHANNEL_BW_DEFAULT,
@@ -2910,6 +2971,13 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_VHT_SU_BEAMFORMEE_CAP_FEATURE_DEFAULT,
                  CFG_VHT_SU_BEAMFORMEE_CAP_FEATURE_MIN,
                  CFG_VHT_SU_BEAMFORMEE_CAP_FEATURE_MAX ),
+
+   REG_VARIABLE( CFG_VHT_ENABLE_TXBF_IN_20MHZ, WLAN_PARAM_Integer,
+                 hdd_config_t, enableTxBFin20MHz,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_VHT_ENABLE_TXBF_IN_20MHZ_DEFAULT,
+                 CFG_VHT_ENABLE_TXBF_IN_20MHZ_MIN,
+                 CFG_VHT_ENABLE_TXBF_IN_20MHZ_MAX ),
 
    REG_VARIABLE( CFG_VHT_CSN_BEAMFORMEE_ANT_SUPPORTED, WLAN_PARAM_Integer,
                  hdd_config_t, txBFCsnValue,
@@ -3249,7 +3317,20 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_IBSS_TXSP_END_INACTIVITY_MIN,
                  CFG_IBSS_TXSP_END_INACTIVITY_MAX ),
 
-#ifndef QCA_WIFI_ISOC
+   REG_VARIABLE( CFG_IBSS_PS_WARMUP_TIME_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, ibssPsWarmupTime,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_IBSS_PS_WARMUP_TIME_DEFAULT,
+                 CFG_IBSS_PS_WARMUP_TIME_MIN,
+                 CFG_IBSS_PS_WARMUP_TIME_MAX ),
+
+   REG_VARIABLE( CFG_IBSS_PS_1RX_CHAIN_IN_ATIM_WINDOW_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, ibssPs1RxChainInAtimEnable,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_IBSS_PS_1RX_CHAIN_IN_ATIM_WINDOW_DEFAULT,
+                 CFG_IBSS_PS_1RX_CHAIN_IN_ATIM_WINDOW_MIN,
+                 CFG_IBSS_PS_1RX_CHAIN_IN_ATIM_WINDOW_MAX ),
+
    REG_VARIABLE( CFG_THERMAL_TEMP_MIN_LEVEL0_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, thermalTempMinLevel0,
                  VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -3319,7 +3400,6 @@ REG_TABLE_ENTRY g_registry_table[] =
                 CFG_SET_TXPOWER_LIMIT5G_DEFAULT,
                 CFG_SET_TXPOWER_LIMIT5G_MIN,
                 CFG_SET_TXPOWER_LIMIT5G_MAX ),
-#endif /*#ifndef QCA_WIFI_ISOC*/
 
    REG_VARIABLE( CFG_ENABLE_DEBUG_CONNECT_ISSUE, WLAN_PARAM_Integer,
                  hdd_config_t, gEnableDebugLog,
@@ -3498,16 +3578,6 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_DEBUG_P2P_REMAIN_ON_CHANNEL_MIN,
                  CFG_DEBUG_P2P_REMAIN_ON_CHANNEL_MAX ),
 
-   REG_VARIABLE( CFG_SAP_DOT11_MODE_NAME, WLAN_PARAM_Integer,
-                 hdd_config_t, sapDot11Mode,
-#ifndef WLAN_FEATURE_MBSSID
-                 VAR_FLAGS_DYNAMIC_CFG |
-#endif
-                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
-                 CFG_SAP_DOT11_MODE_DEFAULT,
-                 CFG_SAP_DOT11_MODE_MIN,
-                 CFG_SAP_DOT11_MODE_MAX ),
-
    REG_VARIABLE( CFG_ENABLE_PACKET_LOG, WLAN_PARAM_Integer,
                  hdd_config_t, enablePacketLog,
                  VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -3515,6 +3585,14 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_ENABLE_PACKET_LOG_MIN,
                  CFG_ENABLE_PACKET_LOG_MAX ),
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+   REG_VARIABLE( CFG_ROAMING_OFFLOAD_NAME,  WLAN_PARAM_Integer,
+                 hdd_config_t, isRoamOffloadEnabled,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
+                 CFG_ROAMING_OFFLOAD_DEFAULT,
+                 CFG_ROAMING_OFFLOAD_MIN,
+                 CFG_ROAMING_OFFLOAD_MAX),
+#endif
 #ifdef MSM_PLATFORM
    REG_VARIABLE( CFG_BUS_BANDWIDTH_HIGH_THRESHOLD, WLAN_PARAM_Integer,
                  hdd_config_t, busBandwidthHighThreshold,
@@ -3545,7 +3623,6 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_BUS_BANDWIDTH_COMPUTE_INTERVAL_MAX),
 #endif
 
-#ifdef QCA_WIFI_2_0
 
    REG_VARIABLE( CFG_ENABLE_FW_LOG_TYPE , WLAN_PARAM_Integer,
                 hdd_config_t, enableFwLogType,
@@ -3566,7 +3643,6 @@ REG_TABLE_ENTRY g_registry_table[] =
                 VAR_FLAGS_OPTIONAL,
                 (void *) CFG_ENABLE_FW_MODULE_LOG_DEFAULT),
 
-#endif
 
 
 #ifdef WLAN_FEATURE_11W
@@ -3622,6 +3698,100 @@ REG_TABLE_ENTRY g_registry_table[] =
                 CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_DEFAULT,
                 CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MIN,
                 CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MAX ),
+
+   REG_VARIABLE(CFG_DFS_RADAR_PRI_MULTIPLIER_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, dfsRadarPriMultiplier,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_DFS_RADAR_PRI_MULTIPLIER_DEFAULT,
+                CFG_DFS_RADAR_PRI_MULTIPLIER_MIN,
+                CFG_DFS_RADAR_PRI_MULTIPLIER_MAX),
+
+   REG_VARIABLE( CFG_REORDER_OFFLOAD_SUPPORT_NAME, WLAN_PARAM_Integer,
+                        hdd_config_t, reorderOffloadSupport,
+                        VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                        CFG_REORDER_OFFLOAD_SUPPORT_DEFAULT,
+                        CFG_REORDER_OFFLOAD_SUPPORT_MIN,
+                        CFG_REORDER_OFFLOAD_SUPPORT_MAX ),
+#ifdef IPA_UC_OFFLOAD
+   REG_VARIABLE( CFG_IPA_UC_OFFLOAD_ENABLED_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, IpaUcOffloadEnabled,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
+                 CFG_IPA_UC_OFFLOAD_ENABLED_DEFAULT,
+                 CFG_IPA_UC_OFFLOAD_ENABLED_MIN,
+                 CFG_IPA_UC_OFFLOAD_ENABLED_MAX ),
+
+   REG_VARIABLE( CFG_IPA_UC_TX_BUF_COUNT_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, IpaUcTxBufCount,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
+                 CFG_IPA_UC_TX_BUF_COUNT_DEFAULT,
+                 CFG_IPA_UC_TX_BUF_COUNT_MIN,
+                 CFG_IPA_UC_TX_BUF_COUNT_MAX ),
+
+   REG_VARIABLE( CFG_IPA_UC_TX_BUF_SIZE_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, IpaUcTxBufSize,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
+                 CFG_IPA_UC_TX_BUF_SIZE_DEFAULT,
+                 CFG_IPA_UC_TX_BUF_SIZE_MIN,
+                 CFG_IPA_UC_TX_BUF_SIZE_MAX ),
+
+   REG_VARIABLE( CFG_IPA_UC_RX_IND_RING_COUNT_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, IpaUcRxIndRingCount,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
+                 CFG_IPA_UC_RX_IND_RING_COUNT_DEFAULT,
+                 CFG_IPA_UC_RX_IND_RING_COUNT_MIN,
+                 CFG_IPA_UC_RX_IND_RING_COUNT_MAX ),
+
+   REG_VARIABLE( CFG_IPA_UC_TX_PARTITION_BASE_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, IpaUcTxPartitionBase,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
+                 CFG_IPA_UC_TX_PARTITION_BASE_DEFAULT,
+                 CFG_IPA_UC_TX_PARTITION_BASE_MIN,
+                 CFG_IPA_UC_TX_PARTITION_BASE_MAX ),
+#endif /* IPA_UC_OFFLOAD */
+#ifdef WLAN_LOGGING_SOCK_SVC_ENABLE
+   REG_VARIABLE(CFG_WLAN_LOGGING_SUPPORT_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, wlanLoggingEnable,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_WLAN_LOGGING_SUPPORT_DEFAULT,
+                CFG_WLAN_LOGGING_SUPPORT_DISABLE,
+                CFG_WLAN_LOGGING_SUPPORT_ENABLE ),
+
+   REG_VARIABLE(CFG_WLAN_LOGGING_FE_CONSOLE_SUPPORT_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, wlanLoggingFEToConsole,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_WLAN_LOGGING_FE_CONSOLE_SUPPORT_DEFAULT,
+                CFG_WLAN_LOGGING_FE_CONSOLE_SUPPORT_DISABLE,
+                CFG_WLAN_LOGGING_FE_CONSOLE_SUPPORT_ENABLE ),
+
+   REG_VARIABLE(CFG_WLAN_LOGGING_NUM_BUF_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, wlanLoggingNumBuf,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_WLAN_LOGGING_NUM_BUF_DEFAULT,
+                CFG_WLAN_LOGGING_NUM_BUF_MIN,
+                CFG_WLAN_LOGGING_NUM_BUF_MAX ),
+#endif /* WLAN_LOGGING_SOCK_SVC_ENABLE */
+
+   REG_VARIABLE( CFG_ENABLE_SIFS_BURST, WLAN_PARAM_Integer,
+              hdd_config_t, enableSifsBurst,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_ENABLE_SIFS_BURST_DEFAULT,
+              CFG_ENABLE_SIFS_BURST_MIN,
+              CFG_ENABLE_SIFS_BURST_MAX ),
+
+#ifdef WLAN_FEATURE_LPSS
+   REG_VARIABLE(CFG_ENABLE_LPASS_SUPPORT, WLAN_PARAM_Integer,
+               hdd_config_t, enablelpasssupport,
+               VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+               CFG_ENABLE_LPASS_SUPPORT_DEFAULT,
+               CFG_ENABLE_LPASS_SUPPORT_MIN,
+               CFG_ENABLE_LPASS_SUPPORT_MAX),
+#endif
+   REG_VARIABLE( CFG_ENABLE_SELF_RECOVERY, WLAN_PARAM_Integer,
+              hdd_config_t, enableSelfRecovery,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_ENABLE_SELF_RECOVERY_DEFAULT,
+              CFG_ENABLE_SELF_RECOVERY_MIN,
+              CFG_ENABLE_SELF_RECOVERY_MAX ),
 };
 
 #ifdef WLAN_FEATURE_MBSSID
@@ -3680,14 +3850,6 @@ REG_TABLE_ENTRY mbssid_sap_dyn_ini_reg_table[] =
                  CFG_ACS_BAND_SWITCH_THRESHOLD_DEFAULT,
                  CFG_ACS_BAND_SWITCH_THRESHOLD_MIN,
                  CFG_ACS_BAND_SWITCH_THRESHOLD_MAX ),
-
-   REG_VARIABLE( CFG_SAP_DOT11_MODE_NAME, WLAN_PARAM_Integer,
-                 mbssid_sap_dyn_ini_config_t, sapDot11Mode,
-                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK
-                 | VAR_FLAGS_DYNAMIC_CFG,
-                 CFG_SAP_DOT11_MODE_DEFAULT,
-                 CFG_SAP_DOT11_MODE_MIN,
-                 CFG_SAP_DOT11_MODE_MAX ),
 
 };
 #endif
@@ -3885,7 +4047,7 @@ config_exit:
 }
 
 
-static void print_hdd_cfg(hdd_context_t *pHddCtx)
+void print_hdd_cfg(hdd_context_t *pHddCtx)
 {
   int i;
 
@@ -3964,6 +4126,17 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
 #endif
 #ifdef FEATURE_WLAN_OKC
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [OkcEnabled] Value = [%u] ",pHddCtx->cfg_ini->isOkcIniFeatureEnabled);
+#endif
+#ifdef FEATURE_WLAN_SCAN_PNO
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [configPNOScanSupport] Value = [%u] ",pHddCtx->cfg_ini->configPNOScanSupport);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [configPNOScanTimerRepeatValue] Value = [%u] ",pHddCtx->cfg_ini->configPNOScanTimerRepeatValue);
+#endif
+#ifdef FEATURE_WLAN_TDLS
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fEnableTDLSSupport] Value = [%u] ",pHddCtx->cfg_ini->fEnableTDLSSupport);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fEnableTDLSImplicitTrigger] Value = [%u] ",pHddCtx->cfg_ini->fEnableTDLSImplicitTrigger);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fTDLSExternalControl] Value = [%u] ",pHddCtx->cfg_ini->fTDLSExternalControl);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fTDLSUapsdMask] Value = [%u] ",pHddCtx->cfg_ini->fTDLSUapsdMask);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fEnableTDLSBufferSta] Value = [%u] ",pHddCtx->cfg_ini->fEnableTDLSBufferSta);
 #endif
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [InfraDirAcVo] Value = [%u] ",pHddCtx->cfg_ini->InfraDirAcVo);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [InfraNomMsduSizeAcVo] Value = [0x%x] ",pHddCtx->cfg_ini->InfraNomMsduSizeAcVo);
@@ -4093,6 +4266,10 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssAwakeOnTxRx] Value = [%u] ",pHddCtx->cfg_ini->isIbssAwakeOnTxRx);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssInactivityTime] Value = [%u] ",pHddCtx->cfg_ini->ibssInactivityCount);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssTxSpEndInactivityTime] Value = [%u] ",pHddCtx->cfg_ini->ibssTxSpEndInactivityTime);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gIbssPsWarmupTime] Value = [%u] ",pHddCtx->cfg_ini->ibssPsWarmupTime);
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+          "Name = [gIbssPs1RxChainInAtim] Value = [%u] ",
+          pHddCtx->cfg_ini->ibssPs1RxChainInAtimEnable);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [fDfsPhyerrFilterOffload] Value = [%u] ",pHddCtx->cfg_ini->fDfsPhyerrFilterOffload);
 
 #ifdef IPA_OFFLOAD
@@ -4138,10 +4315,24 @@ static void print_hdd_cfg(hdd_context_t *pHddCtx)
           "Name = [gEnableGreenAp] Value = [%u] ",
           pHddCtx->cfg_ini->enableGreenAP);
 #endif
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [isRoamOffloadEnabled] Value = [%u]",
+                   pHddCtx->cfg_ini->isRoamOffloadEnabled);
+#endif
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gEnableSifsBurst] Value = [%u]",
+                   pHddCtx->cfg_ini->enableSifsBurst);
 
+#ifdef WLAN_FEATURE_LPSS
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+            "Name = [gEnableLpassSupport] Value = [%u] ",
+            pHddCtx->cfg_ini->enablelpasssupport);
+#endif
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gEnableSelfRecovery] Value = [%u]",
+                   pHddCtx->cfg_ini->enableSelfRecovery);
 }
-
-
 
 #define CFG_VALUE_MAX_LEN 256
 #define CFG_ENTRY_MAX_LEN (32+CFG_VALUE_MAX_LEN)
@@ -4646,13 +4837,9 @@ static VOS_STATUS hdd_apply_cfg_ini( hdd_context_t *pHddCtx, tCfgIniEntry* iniTa
       }
    }
 
-   // Keep qcacld-2.0 specific ini params disabled for non-qcacld-2.0
-#ifndef QCA_WIFI_2_0
-   pHddCtx->cfg_ini->enablePowersaveOffload = 0;
-#endif
    print_hdd_cfg(pHddCtx);
 
-  return( ret_status );
+   return( ret_status );
 }
 
 #ifdef WLAN_FEATURE_MBSSID
@@ -4670,8 +4857,6 @@ v_VOID_t hdd_mbssid_apply_def_cfg_ini(hdd_adapter_t *pAdapter)
    sap_ini_cfg->acsBandSwitchThreshold = iniConfig->acsBandSwitchThreshold;
    vos_mem_copy(sap_ini_cfg->acsAllowedChnls, iniConfig->acsAllowedChnls,
                                                               CFG_MAX_STR_LEN);
-
-   sap_ini_cfg->sapDot11Mode = iniConfig->sapDot11Mode;
 
 }
 #endif
@@ -5280,6 +5465,23 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
         fStatus = FALSE;
         hddLog(LOGE,"Failure: Could not pass on WNI_CFG_11D_ENABLED configuration info to CCM");
     }
+
+    if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_DFS_MASTER_ENABLED,
+                     pConfig->enableDFSMasterCap, NULL,
+                     eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE) {
+        fStatus = FALSE;
+        hddLog(LOGE,
+               "Failure: Could not set value for WNI_CFG_DFS_MASTER_ENABLED");
+    }
+
+    if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_VHT_ENABLE_TXBF_20MHZ,
+                     pConfig->enableTxBFin20MHz, NULL,
+                     eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE) {
+        fStatus = FALSE;
+        hddLog(LOGE,
+               "Failure: Could not set value for WNI_CFG_VHT_ENABLE_TXBF_20MHZ");
+    }
+
     if(ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_HEART_BEAT_THRESHOLD, pConfig->HeartbeatThresh24,
                         NULL, eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE)
     {
@@ -5490,11 +5692,7 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
      }
      else
      {
-#ifndef QCA_WIFI_2_0
-            val = WNI_CFG_ASSOC_STA_LIMIT_STADEF;
-#else
             val = pConfig->maxNumberOfPeers;
-#endif
 
      }
      if(ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_ASSOC_STA_LIMIT, val,
@@ -5907,12 +6105,10 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    /* Update the Directed scan offload setting */
    smeConfig->fScanOffload =  pHddCtx->cfg_ini->fScanOffload;
 
-#ifdef QCA_WIFI_2_0
    /* Update the p2p listen offload setting */
    smeConfig->fP2pListenOffload =  pHddCtx->cfg_ini->fP2pListenOffload;
    smeConfig->csrConfig.scanBandPreference =
                               pHddCtx->cfg_ini->acsScanBandPreference;
-#endif
 
 #ifdef FEATURE_WLAN_SCAN_PNO
    /* Update PNO offoad status */
@@ -5925,6 +6121,12 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    smeConfig->fEnableDebugLog = pHddCtx->cfg_ini->gEnableDebugLog;
 
    smeConfig->enable5gEBT = pHddCtx->cfg_ini->enable5gEBT;
+
+   smeConfig->enableSelfRecovery = pHddCtx->cfg_ini->enableSelfRecovery;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+   smeConfig->csrConfig.isRoamOffloadEnabled =
+                        pHddCtx->cfg_ini->isRoamOffloadEnabled;
+#endif
 
    halStatus = sme_UpdateConfig( pHddCtx->hHal, smeConfig);
    if ( !HAL_STATUS_SUCCESS( halStatus ) )

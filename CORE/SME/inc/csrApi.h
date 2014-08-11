@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2011-2014 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -92,6 +91,9 @@ typedef enum
 #endif /* FEATURE_WLAN_WAPI */
 #ifdef FEATURE_WLAN_ESE
     eCSR_ENCRYPT_TYPE_KRK,
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    eCSR_ENCRYPT_TYPE_BTK,
+#endif
 #endif /* FEATURE_WLAN_ESE */
 #ifdef WLAN_FEATURE_11W
     //11w BIP
@@ -206,10 +208,26 @@ typedef enum
     eCSR_BW_160MHz_VAL = 160
 }eCSR_BW_Val;
 
-#define CSR_SCAN_TIME_DEFAULT       0
-#define CSR_VALUE_IGNORED           0xFFFFFFFF
+typedef enum
+{
+   eCSR_INI_SINGLE_CHANNEL_CENTERED = 0,
+   eCSR_INI_DOUBLE_CHANNEL_HIGH_PRIMARY,
+   eCSR_INI_DOUBLE_CHANNEL_LOW_PRIMARY,
+#ifdef WLAN_FEATURE_11AC
+   eCSR_INI_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_CENTERED,
+   eCSR_INI_QUADRUPLE_CHANNEL_20MHZ_CENTERED_40MHZ_CENTERED,
+   eCSR_INI_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_CENTERED,
+   eCSR_INI_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_LOW,
+   eCSR_INI_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_LOW,
+   eCSR_INI_QUADRUPLE_CHANNEL_20MHZ_LOW_40MHZ_HIGH,
+   eCSR_INI_QUADRUPLE_CHANNEL_20MHZ_HIGH_40MHZ_HIGH,
+#endif
+   eCSR_INI_CHANNEL_BONDING_STATE_MAX
+}eIniChanBondState;
+
+
 #define CSR_RSN_PMKID_SIZE          16
-#define CSR_MAX_PMKID_ALLOWED       16
+#define CSR_MAX_PMKID_ALLOWED       32
 #define CSR_WEP40_KEY_LEN       5
 #define CSR_WEP104_KEY_LEN      13
 #define CSR_TKIP_KEY_LEN        32
@@ -227,7 +245,6 @@ typedef enum
 #ifdef FEATURE_WLAN_ESE
 #define CSR_KRK_KEY_LEN 16
 #endif
-
 
 
 typedef struct tagCsrChannelInfo
@@ -347,7 +364,10 @@ typedef struct tagCsrEseCckmInfo
 {
     tANI_U32       reassoc_req_num;
     tANI_BOOLEAN   krk_plumbed;
-    tANI_U8        krk[CSR_KRK_KEY_LEN];
+    tANI_U8        krk[SIR_KRK_KEY_LEN];
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_U8        btk[SIR_BTK_KEY_LEN];
+#endif
 } tCsrEseCckmInfo;
 #endif
 
@@ -503,7 +523,10 @@ typedef enum
     eCSR_ROAM_SET_CHANNEL_RSP,
 
     // Channel sw update notification
-    eCSR_ROAM_DFS_CHAN_SW_NOTIFY
+    eCSR_ROAM_DFS_CHAN_SW_NOTIFY,
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    eCSR_ROAM_AUTHORIZED_EVENT
+#endif
 }eRoamCmdStatus;
 
 
@@ -591,11 +614,9 @@ typedef enum
     eCSR_ROAM_RESULT_TEARDOWN_TDLS_PEER_IND,
     eCSR_ROAM_RESULT_DELETE_ALL_TDLS_PEER_IND,
     eCSR_ROAM_RESULT_LINK_ESTABLISH_REQ_RSP,
-#ifdef QCA_WIFI_2_0
     eCSR_ROAM_RESULT_TDLS_SHOULD_DISCOVER,
     eCSR_ROAM_RESULT_TDLS_SHOULD_TEARDOWN,
     eCSR_ROAM_RESULT_TDLS_SHOULD_PEER_DISCONNECTED,
-#endif
 #endif
 
     eCSR_ROAM_RESULT_DFS_RADAR_FOUND_IND,
@@ -1204,6 +1225,12 @@ typedef struct tagCsrConfigParam
     tANI_U8  cc_switch_mode;
 #endif
     tANI_U8  allowDFSChannelRoam;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_BOOLEAN isRoamOffloadEnabled;
+#endif
+
+    tANI_BOOLEAN obssEnabled;
+
 }tCsrConfigParam;
 
 //Tush
@@ -1211,6 +1238,19 @@ typedef struct tagCsrUpdateConfigParam
 {
    tCsr11dinfo  Csr11dinfo;
 }tCsrUpdateConfigParam;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+#define csrRoamIsRoamOffloadEnabled(pMac)\
+        (pMac->roam.configParam.isRoamOffloadEnabled)
+
+#define DEFAULT_REASSOC_FAILURE_TIMEOUT 1000
+#endif
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+#define CSR_ROAM_AUTH_STATUS_CONNECTED      0x1 /** connected,
+                                                    but not authenticated */
+#define CSR_ROAM_AUTH_STATUS_AUTHENTICATED  0x2 /** connected
+                                                    and authenticated */
+#endif
 
 typedef struct tagCsrRoamInfo
 {
@@ -1285,6 +1325,10 @@ typedef struct tagCsrRoamInfo
     tSirSmeDfsEventInd dfs_event;
     tSirChanChangeResponse *channelChangeRespEvent;
     tANI_U8 timingMeasCap;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_U8 roamSynchInProgress;
+    tANI_U8 synchAuthStatus;
+#endif
 }tCsrRoamInfo;
 
 
@@ -1464,25 +1508,6 @@ typedef struct tagCsrTdlsSendMgmt
 
 }tCsrTdlsSendMgmt;
 
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-typedef struct tagCsrTdlsDisRequest
-{
-        tSirMacAddr peerMac;
-            tANI_U8 disType;
-}tCsrTdlsDisRequest;
-
-typedef struct tagCsrTdlsSetupRequest
-{
-        tSirMacAddr peerMac;
-            tANI_U8 linkIndex;
-}tCsrTdlsSetupRequest;
-
-typedef struct tagCsrTdlsTeardownRequest
-{
-        tSirMacAddr peerMac;
-            tANI_U8 linkIndex;
-}tCsrTdlsTeardownRequest ;
-#endif
 #endif
 
 typedef void * tScanResultHandle;
@@ -1490,21 +1515,17 @@ typedef void * tScanResultHandle;
 #define CSR_INVALID_SCANRESULT_HANDLE       (NULL)
 
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-#ifndef QCA_WIFI_ISOC
 typedef enum
 {
     REASSOC     = 0,
     FASTREASSOC = 1
 }handoff_src;
-#endif
 
 typedef struct tagCsrHandoffRequest
 {
     tCsrBssid bssid;
     tANI_U8 channel;
-#ifndef QCA_WIFI_ISOC
     tANI_U8 src;     /* To check if its a REASSOC or a FASTREASSOC IOCTL */
-#endif
 }tCsrHandoffRequest;
 #endif
 
@@ -1528,7 +1549,10 @@ typedef struct tagCsrEseBeaconReq
 
 //void *p2 -- the second context pass in for the caller
 //***what if callback is called before requester gets the scanId??
-typedef eHalStatus (*csrScanCompleteCallback)(tHalHandle, void *p2, tANI_U32 scanID, eCsrScanStatus status);
+typedef eHalStatus (*csrScanCompleteCallback)(tHalHandle, void *p2,
+                                              tANI_U8 sessionId,
+                                              tANI_U32 scanID,
+                                              eCsrScanStatus status);
 
 
 
@@ -1698,10 +1722,11 @@ eHalStatus csrRoamIssueFTPreauthReq(tHalHandle hHal, tANI_U32 sessionId, tpSirBs
 
   \param hHal - handle to Hal context
   \param eBand - band value
+  \param sessionId - Session Identifier
   \return  eHalStatus
 
 ---------------------------------------------------------------------------*/
-eHalStatus csrSetBand(tHalHandle hHal, eCsrBand eBand);
+eHalStatus csrSetBand(tHalHandle hHal, tANI_U8 sessionId, eCsrBand eBand);
 
 /*---------------------------------------------------------------------------
   This is the function to get the current operating band value
@@ -1712,4 +1737,8 @@ eHalStatus csrSetBand(tHalHandle hHal, eCsrBand eBand);
 eCsrBand csrGetCurrentBand (tHalHandle hHal);
 
 typedef void (*csrReadyToSuspendCallback)(void *pContext, boolean suspended);
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+eHalStatus csrRoamIssueFTRoamOffloadSynch(tHalHandle hHal, tANI_U32 sessionId,
+                                          tSirBssDescription *pBssDescription);
+#endif
 #endif

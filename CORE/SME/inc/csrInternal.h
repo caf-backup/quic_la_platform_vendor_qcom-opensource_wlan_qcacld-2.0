@@ -20,12 +20,10 @@
  */
 
 /*
- * Copyright (c) 2011-2014 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
-
 
 /** ------------------------------------------------------------------------- *
     ------------------------------------------------------------------------- *
@@ -41,7 +39,7 @@
 #include "vos_status.h"
 #include "vos_lock.h"
 
-#include "palTimer.h"
+#include "vos_timer.h"
 #include "csrSupport.h"
 #include "vos_nvitem.h"
 #include "wlan_qct_tl.h"
@@ -52,11 +50,6 @@
 
 #define CSR_MAX_STA (HAL_NUM_STA)
 
-#define CSR_SME_SCAN_FLAGS_DELETE_CACHE     0x80
-
-#define CSR_TITAN_MAX_RATE_MIMO_CB 240
-#define CSR_TITAN_MAX_RATE_MIMO    126
-
 //define scan return criteria. LIM should use these define as well
 #define CSR_SCAN_RETURN_AFTER_ALL_CHANNELS          (    0 )
 #define CSR_SCAN_RETURN_AFTER_FIRST_MATCH           ( 0x01 )
@@ -64,7 +57,6 @@
 #define CSR_SCAN_RETURN_AFTER_24_BAND_11d_FOUND     ( 0x40 )
 #define CSR_SCAN_RETURN_AFTER_EITHER_BAND_11d_FOUND ( CSR_SCAN_RETURN_AFTER_5_BAND_11d_FOUND | CSR_SCAN_RETURN_AFTER_24_BAND_11d_FOUND )
 #define CSR_NUM_RSSI_CAT        15
-#define CSR_MAX_STATISTICS_REQ        10
 #define CSR_ROAM_SCAN_CHANNEL_SWITCH_TIME        3
 
 //Support for multiple session
@@ -202,6 +194,9 @@ typedef enum
     eCsrLostLink1Abort,
     eCsrLostLink2Abort,
     eCsrLostLink3Abort,
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    eCsrPerformRoamOffloadSynch,
+#endif
 
 }eCsrRoamReason;
 
@@ -295,18 +290,6 @@ typedef enum
    eCSR_REASON_HANDOFF,
 
 }eCsrDiagWlanStatusEventReason;
-
-typedef enum
-{
-   eCSR_WLAN_HANDOFF_EVENT =0,
-
-}eCsrDiagWlanHandoffEventSubtype;
-
-typedef enum
-{
-   eCSR_WLAN_VCC_EVENT =0,
-
-}eCsrDiagWlanVccEventSubtype;
 
 #endif //FEATURE_WLAN_DIAG_SUPPORT
 
@@ -687,6 +670,10 @@ typedef struct tagCsrConfig
     tANI_U8 cc_switch_mode;
 #endif
     tANI_U8 allowDFSChannelRoam;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_BOOLEAN  isRoamOffloadEnabled;
+#endif
+    tANI_BOOLEAN obssEnabled;
 }tCsrConfig;
 
 typedef struct tagCsrChannelPowerInfo
@@ -729,13 +716,12 @@ typedef struct tagCsrScanStruct
     vos_timer_t hTimerIdleScan;
     vos_timer_t hTimerResultAging;
     vos_timer_t hTimerResultCfgAging;
-    tPalTimerHandle hTimerBgScan;
     //changes on every scan, it is used as a flag for whether 11d info is found on every scan
     tANI_U8 channelOf11dInfo;
     tANI_U8 scanResultCfgAgingTime;
     //changes on every scan, a flag to tell whether conflict 11d info found on each BSS
     tANI_BOOLEAN fAmbiguous11dInfoFound;
-    //Tush: changes on every scan, a flag to tell whether the applied 11d info present in one of the scan results
+    //changes on every scan, a flag to tell whether the applied 11d info present in one of the scan results
     tANI_BOOLEAN fCurrent11dInfoMatch;
     tANI_BOOLEAN f11dInfoReset;     //to indicate whether the 11d info in CFG is reset to default
     tSirScanType curScanType;
@@ -759,10 +745,6 @@ typedef struct tagCsrScanStruct
     tANI_S8 currentCountryRSSI;     // RSSI for current country code
     tANI_BOOLEAN f11dInfoApplied;
     tANI_BOOLEAN fCancelIdleScan;
-#ifdef FEATURE_WLAN_WAPI
-//    tANI_U16 NumBkidCandidate;
-//    tBkidCandidateInfo BkidCandidateInfo[CSR_MAX_BKID_ALLOWED]; /* Move this as part of SessionEntry */
-#endif /* FEATURE_WLAN_WAPI */
     tANI_U8 numBGScanChannel;   //number of valid channels in the bgScanChannelList
     tANI_U8 bgScanChannelList[WNI_CFG_BG_SCAN_CHANNEL_LIST_LEN];
     //the ChannelInfo member is not used in this structure.
@@ -797,30 +779,13 @@ typedef struct tagCsrScanStruct
 #ifdef WLAN_AP_STA_CONCURRENCY
     tDblLinkList scanCmdPendingList;
 #endif
-    tCsrChannel occupiedChannels;   //This includes all channels on which candidate APs are found
+    /* This includes all channels on which candidate APs are found */
+    tCsrChannel occupiedChannels[CSR_ROAM_SESSION_MAX];
     tANI_S8     inScanResultBestAPRssi;
     eCsrBand  scanBandPreference;  //This defines the band perference for scan
     csrScanCompleteCallback callback11dScanDone;
 }tCsrScanStruct;
 
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-/*
- * struct to carry TDLS discovery info..
- */
-typedef struct sCsrTdlsContext
-{
-    tDblLinkList tdlsPotentialPeerList ;
-    tANI_U16 tdlsCommonFlag ;
-    tANI_U16 tdlsCommonState ;
-    tANI_U16 tdlsPeerCount ;
-}tCsrTdlsCtxStruct;
-
-typedef struct sCsrTdlsPeerLinkInfo
-{
-    tListElem tdlsPeerStaLink ;
-    tSirTdlsPeerInfo tdlsDisPeerInfo ;
-}tCsrTdlsPeerLinkinfo ;
-#endif
 
 
 
@@ -891,6 +856,36 @@ typedef struct tagCsrTlStatsReqInfo
    vos_timer_t            hTlStatsTimer;
    tANI_U8                numClient;
 }tCsrTlStatsReqInfo;
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+typedef enum
+{
+
+    /* reassociation is done but couldn't finish security handshake */
+    eSIR_ROAM_AUTH_STATUS_CONNECTED = 1,
+
+    /* roam successfully completed by firmware */
+    eSIR_ROAM_AUTH_STATUS_AUTHENTICATED = 2,
+
+    /* unknown error */
+    eSIR_ROAM_AUTH_STATUS_UNKNOWN = 0xff
+
+} tCsrRoamOffloadAuthStatus;
+typedef struct tagCsrRoamOffloadSynchStruct
+{
+    tANI_U8 roamedVdevId; /* vdevId after roaming */
+    tANI_S8 txMgmtPower;  /* HAL fills in the tx power used for */
+    tANI_U8 rssi;  /* RSSI */
+    tANI_U8 roamReason;  /* Roam reason */
+    tANI_U8 nss;  /* no of spatial streams */
+    tANI_U16 chainMask;  /* chainmask */
+    tANI_U16 smpsMode;  /* smps.mode */
+    tSirMacAddr bssid;  /* MAC address of roamed AP */
+    tANI_BOOLEAN bRoamSynchInProgress; /* a roam offload synch*/
+    tCsrRoamOffloadAuthStatus authStatus;  /* authentication
+                                              status */
+} tCsrRoamOffloadSynchStruct;
+#endif
 
 typedef struct tagCsrRoamSession
 {
@@ -980,6 +975,16 @@ typedef struct tagCsrRoamSession
 #ifdef FEATURE_WLAN_SCAN_PNO
     tANI_BOOLEAN pnoStarted;
 #endif
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tCsrRoamOffloadSynchStruct roamOffloadSynchParams;
+    tANI_U8 psk_pmk[SIR_ROAM_SCAN_PSK_SIZE];
+#endif
+
+    /* SME FT Context */
+#if defined WLAN_FEATURE_VOWIFI_11R
+    tftSMEContext ftSmeContext;
+#endif
 } tCsrRoamSession;
 
 typedef struct tagCsrRoamStruct
@@ -1013,16 +1018,13 @@ typedef struct tagCsrRoamStruct
     eCsrRoamLinkQualityInd vccLinkQuality;
     tCsrLinkQualityIndInfo linkQualityIndInfo;
     v_CONTEXT_t gVosContext; //used for interaction with TL
-    //To specify whether an association or a IBSS is WMM enabled
-    //This parameter is only valid during a join or start BSS command is being executed
-    //tANI_BOOLEAN fWMMConnection;      /* Moving it to be part of roamsession */
     v_U8_t ucACWeights[WLANTL_MAX_AC];
     /* TODO : Upto here */
     tCsrTimerInfo WaitForKeyTimerInfo;
     tCsrRoamSession   *roamSession;
     tANI_U32 transactionId;        // Current transaction ID for internal use.
 #ifdef WLAN_FEATURE_NEIGHBOR_ROAMING
-    tCsrNeighborRoamControlInfo neighborRoamInfo;
+    tCsrNeighborRoamControlInfo neighborRoamInfo[CSR_ROAM_SESSION_MAX];
 #endif
 #ifdef FEATURE_WLAN_LFR
     tANI_U8   isFastRoamIniFeatureEnabled;
@@ -1035,6 +1037,10 @@ typedef struct tagCsrRoamStruct
     tANI_BOOLEAN   isWESModeEnabled;
 #endif
     tANI_U32 deauthRspStatus;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_U8 *pReassocResp;  /* reassociation response from new AP */
+    tANI_U16 reassocRespLen;  /* length of reassociation response */
+#endif
 }tCsrRoamStruct;
 
 
@@ -1320,9 +1326,6 @@ eHalStatus csrGetTsmStats(tpAniSirGlobal pMac,
                           tANI_U8 tid);
 #endif  /* FEATURE_WLAN_ESE && FEATURE_WLAN_ESE_UPLOAD */
 
-eHalStatus csrRoamRegisterCallback(tpAniSirGlobal pMac,
-                                   csrRoamCompleteCallback callback,
-                                   void *pContext);
 /* ---------------------------------------------------------------------------
     \fn csrGetConfigParam
     \brief HDD calls this function to get the global settings currently maintained by CSR.
@@ -1390,15 +1393,9 @@ eHalStatus csrStop(tpAniSirGlobal pMac, tHalStopType stopType);
 eHalStatus csrReady(tpAniSirGlobal pMac);
 
 #ifdef FEATURE_WLAN_WAPI
-eHalStatus csrRoamGetBKIDCache(tpAniSirGlobal pMac, tANI_U32 sessionId, tANI_U32 *pNum,
-                                tBkidCacheInfo *pBkidCache);
-
 
 eHalStatus csrScanGetBKIDCandidateList(tpAniSirGlobal pMac, tANI_U32 sessionId,
                                        tBkidCandidateInfo *pBkidList, tANI_U32 *pNumItems );
-tANI_U32 csrRoamGetNumBKIDCache(tpAniSirGlobal pMac, tANI_U32 sessionId);
-eHalStatus csrRoamSetBKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId, tBkidCacheInfo *pBKIDCache,
-                                 tANI_U32 numItems );
 /* ---------------------------------------------------------------------------
     \fn csrRoamGetWapiReqIE
     \brief return the WAPI IE CSR passes to PE to JOIN request or START_BSS request
@@ -1448,14 +1445,14 @@ eHalStatus csrScanSavePreferredNetworkFound(tpAniSirGlobal pMac,
 
 #ifdef WLAN_FEATURE_VOWIFI_11R
 //Returns whether the current association is a 11r assoc or not
-tANI_BOOLEAN csrRoamIs11rAssoc(tpAniSirGlobal pMac);
+tANI_BOOLEAN csrRoamIs11rAssoc(tpAniSirGlobal pMac, tANI_U8 sessionId);
 #endif
 
 #ifdef FEATURE_WLAN_ESE
 //Returns whether the current association is a ESE assoc or not
-tANI_BOOLEAN csrRoamIsESEAssoc(tpAniSirGlobal pMac);
+tANI_BOOLEAN csrRoamIsESEAssoc(tpAniSirGlobal pMac, tANI_U8 sessionId);
 tANI_BOOLEAN csrRoamIsEseIniFeatureEnabled(tpAniSirGlobal pMac);
-tANI_BOOLEAN csrNeighborRoamIsESEAssoc(tpAniSirGlobal pMac);
+tANI_BOOLEAN csrNeighborRoamIsESEAssoc(tpAniSirGlobal pMac, tANI_U8 sessionId);
 #endif
 
 //Remove this code once SLM_Sessionization is supported
@@ -1473,8 +1470,10 @@ VOS_STATUS csrAddToChannelListFront( tANI_U8 *pChannelList, int  numChannels, tA
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
 eHalStatus csrScanRequestLfrResult(tpAniSirGlobal pMac, tANI_U32 sessionId,
                                    csrScanCompleteCallback callback, void *pContext);
-eHalStatus csrRoamOffloadScanRspHdlr(tpAniSirGlobal pMac, tANI_U8 reason);
-eHalStatus csrHandoffRequest(tpAniSirGlobal pMac, tCsrHandoffRequest *pHandoffInfo);
+eHalStatus csrRoamOffloadScanRspHdlr(tpAniSirGlobal pMac,
+                                     tpSirRoamOffloadScanRsp scanOffloadRsp);
+eHalStatus csrHandoffRequest(tpAniSirGlobal pMac, tANI_U8 sessionId,
+                             tCsrHandoffRequest *pHandoffInfo);
 #endif
 tANI_BOOLEAN csrRoamIsStaMode(tpAniSirGlobal pMac, tANI_U32 sessionId);
 #endif
@@ -1493,22 +1492,36 @@ csrRoamSendChanSwIERequest(tpAniSirGlobal pMac, tCsrBssid bssid,
                      tANI_U8 targetChannel, tANI_U8 csaIeReqd);
 
 /*----------------------------------------------------------------------------
+ \fn csrRoamModifyAddIEs
+ \brief  This function sends msg to modify the additional IE buffers in PE
+ \param  pMac - pMac global structure
+ \param  pModifyIE - pointer to tSirModifyIE structure
+ \param  updateType - Type of buffer
+ \- return Success or failure
+-----------------------------------------------------------------------------*/
+eHalStatus
+csrRoamModifyAddIEs(tpAniSirGlobal pMac,
+                             tSirModifyIE *pModifyIE,
+                             eUpdateIEsType updateType);
+
+
+/*----------------------------------------------------------------------------
  \fn csrRoamUpdateAddIEs
  \brief  This function sends msg to updates the additional IE buffers in PE
  \param  pMac - pMac global structure
- \param  sessionId - SME session id
- \param  bssid - BSSID
- \param  additionIEBuffer - buffer containing addition IE from hostapd
- \param  length - length of buffer
- \param  append - append or replace completely
+ \param  pUpdateIE - pointer to tSirUpdateIE structure
+ \param  updateType, - type of buffer
  \- return Success or failure
 -----------------------------------------------------------------------------*/
 eHalStatus
 csrRoamUpdateAddIEs(tpAniSirGlobal pMac,
-                  tANI_U8 sessionId,
-                  tSirMacAddr bssid,
-                  tANI_U8 *additionIEBuffer,
-                  tANI_U16 length,
-                  boolean append);
+                  tSirUpdateIE *pUpdateIE,
+                  eUpdateIEsType updateType);
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+void csrProcessRoamOffloadSynchInd(tpAniSirGlobal pMac, void *pMsgBuf);
+eHalStatus csrScanSaveRoamOffloadApToScanCache(tpAniSirGlobal pMac,
+            tSirSmeRoamOffloadSynchInd *pRoamOffloadSynchInd);
 #endif
+#endif
+

@@ -41,6 +41,10 @@
   ------------------------------------------------------------------------*/
 #include "aniGlobal.h"
 #include "limDebug.h"
+#ifdef WLAN_FEATURE_VOWIFI_11R
+#include "limFTDefs.h"
+#include "limFT.h"
+#endif
 #include "limSession.h"
 #include "limUtils.h"
 #if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
@@ -252,6 +256,12 @@ tpPESession peCreateSession(tpAniSirGlobal pMac,
                      return NULL;
                  }
             }
+
+#if defined WLAN_FEATURE_VOWIFI_11R
+            if (eSIR_INFRASTRUCTURE_MODE == bssType) {
+               limFTOpen(pMac, &pMac->lim.gpSession[i]);
+            }
+#endif
             return(&pMac->lim.gpSession[i]);
         }
     }
@@ -424,6 +434,11 @@ void peDeleteSession(tpAniSirGlobal pMac, tpPESession psessionEntry)
         }
     }
 
+#if defined (WLAN_FEATURE_VOWIFI_11R)
+    /* Delete FT related information */
+    limFTCleanup(pMac, psessionEntry);
+#endif
+
     if (psessionEntry->pLimStartBssReq != NULL)
     {
         vos_mem_free( psessionEntry->pLimStartBssReq );
@@ -559,6 +574,26 @@ void peDeleteSession(tpAniSirGlobal pMac, tpPESession psessionEntry)
     {
         vos_mem_free(psessionEntry->pSchBeaconFrameEnd);
         psessionEntry->pSchBeaconFrameEnd = NULL;
+    }
+
+    /* Must free the buffer before peSession invalid */
+    if (NULL != psessionEntry->addIeParams.probeRespData_buff)
+    {
+        vos_mem_free(psessionEntry->addIeParams.probeRespData_buff);
+        psessionEntry->addIeParams.probeRespData_buff = NULL;
+        psessionEntry->addIeParams.probeRespDataLen = 0;
+    }
+    if (NULL != psessionEntry->addIeParams.assocRespData_buff)
+    {
+        vos_mem_free(psessionEntry->addIeParams.assocRespData_buff);
+        psessionEntry->addIeParams.assocRespData_buff = NULL;
+        psessionEntry->addIeParams.assocRespDataLen = 0;
+    }
+    if (NULL != psessionEntry->addIeParams.probeRespBCNData_buff)
+    {
+        vos_mem_free(psessionEntry->addIeParams.probeRespBCNData_buff);
+        psessionEntry->addIeParams.probeRespBCNData_buff = NULL;
+        psessionEntry->addIeParams.probeRespBCNDataLen = 0;
     }
 
     psessionEntry->valid = FALSE;

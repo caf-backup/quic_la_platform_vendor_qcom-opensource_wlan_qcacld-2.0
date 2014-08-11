@@ -306,8 +306,6 @@ extern eHalStatus pmcStop (tHalHandle hHal);
 
 extern eHalStatus pmcClose (tHalHandle hHal );
 
-extern eHalStatus pmcSignalPowerEvent (tHalHandle hHal, tPmcPowerEvent event);
-
 extern eHalStatus pmcSetConfigPowerSave (tHalHandle hHal, tPmcPowerSavingMode psMode, void *pConfigParams);
 
 extern eHalStatus pmcGetConfigPowerSave (tHalHandle hHal, tPmcPowerSavingMode psMode, void *pConfigParams);
@@ -637,7 +635,8 @@ tANI_BOOLEAN pmcOffloadIsPowerSaveEnabled (tHalHandle hHal, tANI_U32 sessionId,
                                            tPmcPowerSavingMode psMode);
 
 eHalStatus PmcOffloadEnableDeferredStaModePowerSave(tHalHandle hHal,
-                                            tANI_U32 sessionId);
+                                            tANI_U32 sessionId,
+                                            tANI_BOOLEAN isReassoc);
 
 eHalStatus PmcOffloadDisableDeferredStaModePowerSave(tHalHandle hHal,
                                              tANI_U32 sessionId);

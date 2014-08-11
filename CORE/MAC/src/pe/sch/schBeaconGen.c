@@ -101,29 +101,18 @@ tSirRetStatus schAppendAddnIE(tpAniSirGlobal pMac, tpPESession psessionEntry,
     tANI_U32 present, len;
     tANI_U8 addIE[WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA_LEN];
 
-     if((status = wlan_cfgGetInt(pMac, WNI_CFG_PROBE_RSP_BCN_ADDNIE_FLAG,
-                                 &present)) != eSIR_SUCCESS)
-    {
-        schLog(pMac, LOGP, FL("Unable to get WNI_CFG_PROBE_RSP_BCN_ADDNIE_FLAG"));
-        return status;
-    }
-
+    present = (psessionEntry->addIeParams.probeRespBCNDataLen != 0);
     if(present)
     {
-        if((status = wlan_cfgGetStrLen(pMac, WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA,
-                                       &len)) != eSIR_SUCCESS)
-        {
-            schLog(pMac, LOGP,
-                FL("Unable to get WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA length"));
-            return status;
-        }
+        len = psessionEntry->addIeParams.probeRespBCNDataLen;
 
         if(len <= WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA_LEN && len &&
           ((len + *nBytes) <= maxBeaconSize))
         {
-            if((status = wlan_cfgGetStr(pMac,
-                          WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA, &addIE[0], &len))
-                          == eSIR_SUCCESS)
+
+            vos_mem_copy(&addIE[0],
+                psessionEntry->addIeParams.probeRespBCNData_buff, len);
+
             {
                 tANI_U8* pP2pIe = limGetP2pIEPtr(pMac, &addIE[0], len);
                 if ((pP2pIe != NULL) && !pMac->beacon_offload)
@@ -148,8 +137,16 @@ tSirRetStatus schAppendAddnIE(tpAniSirGlobal pMac, tpPESession psessionEntry,
                         }
                     }
                 }
-                vos_mem_copy(pFrame, &addIE[0], len);
-                *nBytes = *nBytes + len;
+                if(len <= WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA_LEN)
+                {
+                    vos_mem_copy(pFrame, &addIE[0], len);
+                    *nBytes = *nBytes + len;
+                }
+                else
+                {
+                    schLog(pMac, LOGW, FL("Not able to insert because of"
+                        " length constraint %d"), len);
+                }
             }
         }
     }
@@ -232,10 +229,6 @@ tSirRetStatus schSetFixedBeaconFields(tpAniSirGlobal pMac,tpPESession psessionEn
 
     for (i=0; i<6; i++)
         mac->da[i] = 0xff;
-
-    /* Knocking out Global pMac update */
-    /* limGetMyMacAddr(pMac, mac->sa); */
-    /* limGetBssid(pMac, mac->bssId); */
 
     vos_mem_copy(mac->sa, psessionEntry->selfMacAddr, sizeof(psessionEntry->selfMacAddr));
     vos_mem_copy(mac->bssId, psessionEntry->bssId, sizeof (psessionEntry->bssId));
@@ -619,13 +612,7 @@ void limUpdateProbeRspTemplateIeBitmapBeacon2(tpAniSirGlobal pMac,
         vos_mem_copy((void *)&prb_rsp->RSNOpaque, (void *)&beacon2->RSNOpaque,
                      sizeof(beacon2->RSNOpaque));
     }
-/*
-    // BSS load
-    if(beacon2->QBSSLoad.present)
-    {
-        SetProbeRspIeBitmap(DefProbeRspIeBitmap,SIR_MAC_QBSS_LOAD_EID);
-    }
-*/
+
     /* EDCA Parameter set */
     if(beacon2->EDCAParamSet.present)
     {

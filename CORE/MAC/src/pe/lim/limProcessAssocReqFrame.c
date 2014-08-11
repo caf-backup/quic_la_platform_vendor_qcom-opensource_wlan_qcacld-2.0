@@ -183,7 +183,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
     tAniAuthType            authType;
     tSirMacCapabilityInfo   localCapabilities;
     tpDphHashNode           pStaDs = NULL;
-    tpSirAssocReq           pAssocReq;
+    tpSirAssocReq           pAssocReq, pTempAssocReq;
     tLimMlmStates           mlmPrevState;
     tDot11fIERSN            Dot11fIERSN;
     tDot11fIEWPA            Dot11fIEWPA;
@@ -516,7 +516,6 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
         goto error;
     }
 
-    //if (pMac->dph.gDphPhyMode == WNI_CFG_PHY_MODE_11G)
     if (phyMode == WNI_CFG_PHY_MODE_11G)
     {
 
@@ -620,19 +619,6 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
                 //11.15.2 Support of DSSS/CCK in 40 MHz
                 //the AP shall refuse association requests from an HT STA that has the DSSS/CCK
                 //Mode in 40 MHz subfield set to 1;
-
-            //FIXME_BTAMP_AP : Need to be enabled
-            /*
-            if ( !pMac->lim.gHTDsssCckRate40MHzSupport && pAssocReq->HTCaps.dsssCckMode40MHz )
-            {
-                statusCode = eSIR_MAC_DSSS_CCK_RATE_NOT_SUPPORT_STATUS;
-                limLog( pMac, LOGW, FL( "AP DSSS/CCK is disabled; "
-                                        "STA rejected." ) );
-                // Reject association
-                limSendAssocRspMgmtFrame( pMac, statusCode, 1, pHdr->sa, subType, 0,psessionEntry);
-                goto error;
-            }
-            */
         }
     } // End if on HT caps turned on in lim.
 
@@ -890,6 +876,12 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
             // start SA Query procedure, respond to Association Request
             // with try again later
             case DPH_SA_QUERY_NOT_IN_PROGRESS:
+                /*
+                 * We should reset the retry counter before we start
+                 * the SA query procedure, otherwise in next set of SA query
+                 * procedure we will end up using the stale value.
+                 */
+                pStaDs->pmfSaQueryRetryCount = 0;
                 limSendAssocRspMgmtFrame(pMac, eSIR_MAC_TRY_AGAIN_LATER, 1,
                                          pHdr->sa, subType, pStaDs, psessionEntry);
                 limSendSaQueryRequestFrame(
@@ -897,7 +889,6 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
                     pHdr->sa, psessionEntry);
                 pStaDs->pmfSaQueryStartTransId = pStaDs->pmfSaQueryCurrentTransId;
                 pStaDs->pmfSaQueryCurrentTransId++;
-                pStaDs->pmfSaQueryRetryCount = 0;
 
                 // start timer for SA Query retry
                 if (tx_timer_activate(&pStaDs->pmfSaQueryTimer) != TX_SUCCESS)
@@ -968,7 +959,6 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
 
 
     // check if sta is allowed per QoS AC rules
-    //if (pMac->dph.gDphQosEnabled || pMac->dph.gDphWmeEnabled)
     limGetWmeMode(psessionEntry, &wmeMode);
     if ((qosMode == eHAL_SET) || (wmeMode == eHAL_SET))
     {
@@ -1067,8 +1057,29 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
 
 
 sendIndToSme:
+    /*
+     * check here if the parsedAssocReq already
+     * pointing to the AssocReq and free it before
+     * assigning this new pAssocReq
+     */
+    if (psessionEntry->parsedAssocReq != NULL)
+    {
+        pTempAssocReq = psessionEntry->parsedAssocReq[pStaDs->assocId];
+        if (pTempAssocReq != NULL)
+        {
+            if (pTempAssocReq->assocReqFrame)
+            {
+                vos_mem_free(pTempAssocReq->assocReqFrame);
+                pTempAssocReq->assocReqFrame = NULL;
+                pTempAssocReq->assocReqFrameLength = 0;
+            }
+            vos_mem_free(pTempAssocReq);
+            pTempAssocReq = NULL;
+        }
 
-    psessionEntry->parsedAssocReq[pStaDs->assocId] = pAssocReq;
+        psessionEntry->parsedAssocReq[pStaDs->assocId] = pAssocReq;
+    }
+
 
     pStaDs->mlmStaContext.htCapability = pAssocReq->HTCaps.present;
 #ifdef WLAN_FEATURE_11AC
@@ -1236,7 +1247,6 @@ if (limPopulateMatchingRateSet(pMac,
     pStaDs->wmeEnabled = eANI_BOOLEAN_FALSE;
     pStaDs->wsmEnabled = eANI_BOOLEAN_FALSE;
     limGetWmeMode(psessionEntry, &wmeMode);
-    //if ((! pStaDs->lleEnabled) && assoc.wmeInfoPresent && pMac->dph.gDphWmeEnabled)
     if ((! pStaDs->lleEnabled) && pAssocReq->wmeInfoPresent && (wmeMode == eHAL_SET))
     {
         pStaDs->wmeEnabled = eANI_BOOLEAN_TRUE;
@@ -1286,7 +1296,6 @@ if (limPopulateMatchingRateSet(pMac,
                 pStaDs->qos.capability.qosInfo.maxSpLen = pAssocReq->WMMInfoStation.max_sp_length;
             }
         }
-        //if (assoc.wsmCapablePresent && pMac->dph.gDphWsmEnabled)
         if (pAssocReq->wsmCapablePresent && (wsmMode == eHAL_SET))
             pStaDs->wsmEnabled = eANI_BOOLEAN_TRUE;
 
@@ -1480,7 +1489,6 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
     tANI_U8                 subType;
     tANI_U8                 *wpsIe = NULL;
     tANI_U32                tmp;
-//    tANI_U16                statusCode;
     tANI_U16                i, j=0;
 
     // Get a copy of the already parsed Assoc Request
@@ -1581,6 +1589,26 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
                           pAssocReq->addIE.length);
 
             pMlmAssocInd->addIE.length = pAssocReq->addIE.length;
+       }
+
+       /* Add HT Capabilities into addIE for OBSS processing in hostapd */
+       if (pAssocReq->HTCaps.present)
+       {
+           if (pMlmAssocInd->addIE.length + DOT11F_IE_HTCAPS_MIN_LEN + 2 <
+                SIR_MAC_MAX_IE_LENGTH)
+           {
+               pMlmAssocInd->addIE.addIEdata[pMlmAssocInd->addIE.length] =
+                                              SIR_MAC_HT_CAPABILITIES_EID;
+               pMlmAssocInd->addIE.addIEdata[pMlmAssocInd->addIE.length + 1] =
+                                              DOT11F_IE_HTCAPS_MIN_LEN;
+               vos_mem_copy(
+                 &pMlmAssocInd->addIE.addIEdata[pMlmAssocInd->addIE.length + 2],
+                 ((tANI_U8*)&pAssocReq->HTCaps)+1,
+                 DOT11F_IE_HTCAPS_MIN_LEN);
+               pMlmAssocInd->addIE.length += 2 + DOT11F_IE_HTCAPS_MIN_LEN;
+           }
+           else
+               limLog(pMac, LOGP, FL("Cannot add HT capabilities IE to addIE"));
        }
 
         if(pAssocReq->wmeInfoPresent)

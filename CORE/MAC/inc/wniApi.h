@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2012-2013 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -123,8 +122,6 @@ enum eWniMsgTypes
     eWNI_SME_SETCONTEXT_RSP,
     eWNI_SME_REASSOC_REQ,
     eWNI_SME_REASSOC_RSP,
-    eWNI_SME_AUTH_REQ,
-    eWNI_SME_AUTH_RSP,
     eWNI_SME_DISASSOC_REQ,
     eWNI_SME_DISASSOC_RSP,
     eWNI_SME_DISASSOC_IND,
@@ -151,8 +148,6 @@ enum eWniMsgTypes
     eWNI_SME_DEFINE_QOS_RSP,
     eWNI_SME_DELETE_QOS_REQ,
     eWNI_SME_DELETE_QOS_RSP,
-    eWNI_SME_PROMISCUOUS_MODE_REQ,
-    eWNI_SME_PROMISCUOUS_MODE_RSP,
     eWNI_SME_LINK_TEST_START_REQ,
     eWNI_SME_LINK_TEST_START_RSP,
     eWNI_SME_LINK_TEST_STOP_REQ,
@@ -347,20 +342,6 @@ enum eWniMsgTypes
     //SIR_LIM_MSG_TYPES_BEGIN+0xB0 = 12B0 (which means max of 176 messages and
     //eWNI_SME_TDLS_DEL_STA_RSP = 175.
     //Should fix above issue to enable TDLS_INTERNAL
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-#error ERROR_TDLS_INTERNAL
-    eWNI_SME_TDLS_DISCOVERY_START_REQ,
-    eWNI_SME_TDLS_DISCOVERY_START_RSP,
-    eWNI_SME_TDLS_DISCOVERY_START_IND,
-    eWNI_SME_TDLS_LINK_START_REQ,
-    eWNI_SME_TDLS_LINK_START_RSP,
-    eWNI_SME_TDLS_LINK_START_IND,
-    eWNI_SME_TDLS_TEARDOWN_REQ,
-    eWNI_SME_TDLS_TEARDOWN_RSP,
-    eWNI_SME_TDLS_TEARDOWN_IND,
-    eWNI_SME_ADD_TDLS_PEER_IND,
-    eWNI_SME_DELETE_TDLS_PEER_IND,
-#endif
     eWNI_SME_SET_BCN_FILTER_REQ,
     eWNI_SME_RESET_AP_CAPS_CHANGED,
 #ifdef WLAN_FEATURE_11W
@@ -396,12 +377,35 @@ enum eWniMsgTypes
     eWNI_SME_LINK_SPEED_IND,//Indicate linkspeed response from WMA
     eWNI_SME_CSA_OFFLOAD_EVENT,
     eWNI_SME_UPDATE_ADDITIONAL_IES,  // indicates Additional IE from hdd to PE
+    eWNI_SME_MODIFY_ADDITIONAL_IES, /* To indicate IE modify from hdd to PE */
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+    eWNI_SME_AUTO_SHUTDOWN_IND,
+#endif
 #ifdef QCA_HT_2040_COEX
     eWNI_SME_SET_HT_2040_MODE,
 #endif
-
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    eWNI_SME_ROAM_OFFLOAD_SYNCH_IND, /* Roam Synch Indication from WMA to SME*/
+    eWNI_SME_FT_ROAM_OFFLOAD_SYNCH_IND,/* Hand over the Roam Synch Indication
+                                          from SME to PE*/
+    eWNI_SME_FT_ROAM_OFFLOAD_SYNCH_RSP,/* Roam Synch Indication Rsp
+                                         from PE toSME */
+#endif
+#ifdef WLAN_FEATURE_NAN
+    eWNI_SME_NAN_EVENT,
+#endif
     eWNI_SME_MSG_TYPES_END
 };
+
+typedef enum {
+  eWNI_TDLS_TEARDOWN_REASON_TX,
+  eWNI_TDLS_TEARDOWN_REASON_RSSI,
+  eWNI_TDLS_TEARDOWN_REASON_SCAN,
+  eWNI_TDLS_DISCONNECTED_REASON_PEER_DELETE,
+  eWNI_TDLS_TEARDOWN_REASON_PTR_TIMEOUT,
+  eWNI_TDLS_TEARDOWN_REASON_BAD_PTR,
+  eWNI_TDLS_TEARDOWN_REASON_NO_RESPONSE,
+} eWniTdlsTeardownReason;
 
 #define WNI_CFG_MSG_TYPES_BEGIN        0x1200
 
@@ -601,11 +605,6 @@ enum eWniMsgTypes
 /*---------------------------------------------------------------------*/
 /* CFG definitions                                                     */
 /*---------------------------------------------------------------------*/
-#define WNI_CFG_TYPE_STR            0x0000000
-#define WNI_CFG_TYPE_INT            0x0000001
-#define WNI_CFG_HOST_RE             0x0000002
-#define WNI_CFG_HOST_WE             0x0000004
-
 
 // Shall be removed after integration of stats.
 // Get statistic response

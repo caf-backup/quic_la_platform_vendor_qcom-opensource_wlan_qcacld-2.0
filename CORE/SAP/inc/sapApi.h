@@ -93,7 +93,7 @@ when           who                what, where, why
   ------------------------------------------------------------------------*/
 
 #define       MAX_SSID_LEN                 32
-#define       MAX_ACL_MAC_ADDRESS          16
+#define       MAX_ACL_MAC_ADDRESS          32
 #define       AUTO_CHANNEL_SELECT          0
 #define       MAX_ASSOC_IND_IE_LEN         255
 
@@ -112,6 +112,7 @@ when           who                what, where, why
 #define       VOS_MAX_NO_OF_SAP_MODE       1 // max # of SAP
 #endif
 #define       SAP_MAX_NUM_SESSION          5
+#define       SAP_MAX_OBSS_STA_CNT         1 // max # of OBSS STA
 
 /*--------------------------------------------------------------------------
   reasonCode take form 802.11 standard Table 7-22 to be passed to WLANSAP_DisassocSta api.
@@ -481,7 +482,9 @@ typedef struct sap_Config {
     v_BOOL_t        enOverLapCh;
     char            acsAllowedChnls[MAX_CHANNEL_LIST_LEN];
     v_U16_t         acsBandSwitchThreshold;
-
+    v_BOOL_t        apAutoChannelSelection;
+    v_U8_t          apStartChannelNum;
+    v_U8_t          apEndChannelNum;
 #ifdef WLAN_FEATURE_11W
     v_BOOL_t        mfpRequired;
     v_BOOL_t        mfpCapable;
@@ -489,8 +492,16 @@ typedef struct sap_Config {
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
     v_U8_t          cc_switch_mode;
 #endif
-    v_U16_t    addnIEsBufferLen;
-    v_PVOID_t  addnIEsBuffer; /* buffer for addn ies comes from hostapd*/
+
+    v_U16_t    probeRespIEsBufferLen;
+    v_PVOID_t  pProbeRespIEsBuffer; /* buffer for addn ies comes from hostapd*/
+
+    v_U16_t    assocRespIEsLen;
+    v_PVOID_t  pAssocRespIEsBuffer; /* buffer for addn ies comes from hostapd*/
+
+    v_U16_t    probeRespBcnIEsLen;
+    v_PVOID_t  pProbeRespBcnIEsBuffer; /* buffer for addn ies comes from hostapd*/
+
 } tsap_Config_t;
 
 typedef enum {
@@ -526,7 +537,7 @@ typedef struct sSapDfsNolInfo
 {
     v_U8_t              dfs_channel_number;
     eSapDfsChanStatus_t radar_status_flag;
-    unsigned long       radar_found_timestamp;
+    v_U64_t             radar_found_timestamp;
 } tSapDfsNolInfo;
 
 typedef struct sSapDfsInfo
@@ -1476,6 +1487,68 @@ WLANSAP_ClearACL
 );
 
 /*==========================================================================
+  FUNCTION    WLANSAP_GetACLAcceptList
+
+  DESCRIPTION
+    This api function to get ACL accept list.
+
+  DEPENDENCIES
+    NA.
+
+  PARAMETERS
+
+    IN
+        pvosGCtx: Pointer to vos global context structure
+        pAcceptList: ACL Accept list entries
+        nAcceptList: Number of entries in ACL Accept list
+
+  RETURN VALUE
+    The VOS_STATUS code associated with performing the operation
+
+    VOS_STATUS_SUCCESS:  Success
+
+  SIDE EFFECTS
+============================================================================*/
+VOS_STATUS
+WLANSAP_GetACLAcceptList
+(
+    v_PVOID_t pvosGCtx,
+    v_MACADDR_t *pAcceptList,
+    v_U8_t *nAcceptList
+);
+
+/*==========================================================================
+  FUNCTION    WLANSAP_GetACLDenyList
+
+  DESCRIPTION
+    This api function to get ACL Deny list.
+
+  DEPENDENCIES
+    NA.
+
+  PARAMETERS
+
+    IN
+        pvosGCtx: Pointer to vos global context structure
+        pAcceptList: ACL Deny list entries
+        nAcceptList: Number of entries in ACL Deny list
+
+  RETURN VALUE
+    The VOS_STATUS code associated with performing the operation
+
+    VOS_STATUS_SUCCESS:  Success
+
+  SIDE EFFECTS
+============================================================================*/
+VOS_STATUS
+WLANSAP_GetACLDenyList
+(
+   v_PVOID_t pCtx,
+   v_MACADDR_t *pDenyList,
+   v_U8_t *nDenyList
+);
+
+/*==========================================================================
   FUNCTION    WLANSAP_SetMode
 
   DESCRIPTION
@@ -1501,6 +1574,35 @@ WLANSAP_SetMode
 (
     v_PVOID_t pvosGCtx,
     v_U32_t mode
+);
+
+/*==========================================================================
+  FUNCTION    WLANSAP_GetACLMode
+
+  DESCRIPTION
+    This api is used to get mode for ACL
+
+  DEPENDENCIES
+    NA.
+
+  PARAMETERS
+
+    IN
+        pvosGCtx: Pointer to vos global context structure
+        mode: Current Mode of the ACL
+
+  RETURN VALUE
+    The VOS_STATUS code associated with performing the operation
+
+    VOS_STATUS_SUCCESS:  Success
+
+  SIDE EFFECTS
+============================================================================*/
+VOS_STATUS
+WLANSAP_GetACLMode
+(
+    v_PVOID_t pvosGCtx,
+    eSapMacAddrACL *mode
 );
 
 /*==========================================================================
@@ -1953,6 +2055,10 @@ WLANSAP_Set_Dfs_Target_Chnl(tHalHandle hHal,
   IN
   additionIELength - length of buffer
 
+  PARAMETERS
+  IN
+  updateType - Type of buffer
+
   RETURN VALUE
   The VOS_STATUS code associated with performing the operation
 
@@ -1962,8 +2068,9 @@ WLANSAP_Set_Dfs_Target_Chnl(tHalHandle hHal,
 ============================================================================*/
 
 VOS_STATUS WLANSAP_UpdateSapConfigAddIE(tsap_Config_t *pConfig,
-                         const tANI_U8 *additionIEBuffer,
-                         tANI_U16 additionIELength);
+                         const tANI_U8 *pAdditionIEBuffer,
+                         tANI_U16 additionIELength,
+                         eUpdateIEsType updateType);
 
 /*==========================================================================
   FUNCTION    WLANSAP_ResetSapConfigAddIE
@@ -1977,7 +2084,9 @@ VOS_STATUS WLANSAP_UpdateSapConfigAddIE(tsap_Config_t *pConfig,
   PARAMETERS
   IN OUT
   pConfig:  Pointer to sap config
-
+  PARAMETERS
+  IN
+  updateType:  type buffer
   RETURN VALUE
   The VOS_STATUS code associated with performing the operation
 
@@ -1986,7 +2095,10 @@ VOS_STATUS WLANSAP_UpdateSapConfigAddIE(tsap_Config_t *pConfig,
   SIDE EFFECTS
 ============================================================================*/
 
-VOS_STATUS WLANSAP_ResetSapConfigAddIE(tsap_Config_t *pConfig );
+VOS_STATUS
+WLANSAP_ResetSapConfigAddIE(tsap_Config_t *pConfig,
+                            eUpdateIEsType updateType);
+
 
 
 /*==========================================================================

@@ -68,25 +68,7 @@
 #include <ol_tx_desc.h>            /* ol_tx_desc_frame_free */
 #include <ol_tx_queue.h>
 #include <ol_tx_sched.h>           /* ol_tx_sched_attach, etc. */
-
-/*=== local definitions ===*/
-#ifndef OL_TX_AVG_FRM_BYTES
-#define OL_TX_AVG_FRM_BYTES 1000
-#endif
-
-#ifndef OL_TX_DESC_POOL_SIZE_MIN_HL
-#define OL_TX_DESC_POOL_SIZE_MIN_HL 500
-#endif
-
-#ifndef OL_TX_DESC_POOL_SIZE_MAX_HL
-#define OL_TX_DESC_POOL_SIZE_MAX_HL 5000
-#endif
-
-/* Here it's a temporal solution, to avoid FW overflow. */
-#undef OL_TX_DESC_POOL_SIZE_MIN_HL
-#define OL_TX_DESC_POOL_SIZE_MIN_HL 640
-#undef OL_TX_DESC_POOL_SIZE_MAX_HL
-#define OL_TX_DESC_POOL_SIZE_MAX_HL 640
+#include <ol_txrx.h>
 
 
 /*=== function definitions ===*/
@@ -273,6 +255,7 @@ ol_txrx_pdev_attach(
 
     /* init LL/HL cfg here */
     pdev->cfg.is_high_latency = ol_cfg_is_high_latency(ctrl_pdev);
+    pdev->cfg.default_tx_comp_req = !ol_cfg_tx_free_at_download(ctrl_pdev);
 
     /* store provided params */
     pdev->ctrl_pdev = ctrl_pdev;
@@ -329,6 +312,15 @@ ol_txrx_pdev_attach(
     if (!pdev->htt_pdev) {
         goto fail2;
     }
+
+#ifdef IPA_UC_OFFLOAD
+    /* Attach micro controller data path offload resource */
+    if (ol_cfg_ipa_uc_offload_enabled(ctrl_pdev)) {
+       if (htt_ipa_uc_attach(pdev->htt_pdev)) {
+           goto fail3;
+       }
+    }
+#endif /* IPA_UC_OFFLOAD */
 
     pdev->tx_desc.array = adf_os_mem_alloc(
         osdev, desc_pool_size * sizeof(union ol_tx_desc_list_elem_t));
@@ -472,37 +464,42 @@ ol_txrx_pdev_attach(
      * configuration, since the PN check needs to be done prior to
      * the rx->tx forwarding.
      */
-    if (ol_cfg_rx_pn_check(pdev->ctrl_pdev)) {
-        if (ol_cfg_rx_fwd_disabled(pdev->ctrl_pdev)) {
-            /*
-             * PN check done on host, rx->tx forwarding not done at all.
-             */
-            pdev->rx_opt_proc = ol_rx_pn_check_only;
-        } else if (ol_cfg_rx_fwd_check(pdev->ctrl_pdev)) {
-            /*
-             * Both PN check and rx->tx forwarding done on host.
-             */
-            pdev->rx_opt_proc = ol_rx_pn_check;
-        } else {
-            adf_os_print(
-                "%s: invalid config: if rx PN check is on the host,"
-                "rx->tx forwarding check needs to also be on the host.\n",
-                __func__);
-            goto fail5;
-        }
+    if (ol_cfg_is_full_reorder_offload(pdev->ctrl_pdev)) {
+        /* PN check, rx-tx forwarding and rx reorder is done by the target */
+        pdev->rx_opt_proc = ol_rx_in_order_deliver;
     } else {
-        /* PN check done on target */
-        if ((!ol_cfg_rx_fwd_disabled(pdev->ctrl_pdev)) &&
-            ol_cfg_rx_fwd_check(pdev->ctrl_pdev))
-        {
-            /*
-             * rx->tx forwarding done on host (possibly as
-             * back-up for target-side primary rx->tx forwarding)
-             */
-            pdev->rx_opt_proc = ol_rx_fwd_check;
+        if (ol_cfg_rx_pn_check(pdev->ctrl_pdev)) {
+            if (ol_cfg_rx_fwd_disabled(pdev->ctrl_pdev)) {
+                /*
+                 * PN check done on host, rx->tx forwarding not done at all.
+                 */
+                pdev->rx_opt_proc = ol_rx_pn_check_only;
+            } else if (ol_cfg_rx_fwd_check(pdev->ctrl_pdev)) {
+                /*
+                 * Both PN check and rx->tx forwarding done on host.
+                 */
+                pdev->rx_opt_proc = ol_rx_pn_check;
+            } else {
+                adf_os_print(
+                    "%s: invalid config: if rx PN check is on the host,"
+                    "rx->tx forwarding check needs to also be on the host.\n",
+                    __func__);
+                goto fail5;
+            }
         } else {
-            /* rx->tx forwarding either done in target, or not done at all */
-            pdev->rx_opt_proc = ol_rx_deliver;
+            /* PN check done on target */
+            if ((!ol_cfg_rx_fwd_disabled(pdev->ctrl_pdev)) &&
+                ol_cfg_rx_fwd_check(pdev->ctrl_pdev))
+            {
+                /*
+                 * rx->tx forwarding done on host (possibly as
+                 * back-up for target-side primary rx->tx forwarding)
+                 */
+                pdev->rx_opt_proc = ol_rx_fwd_check;
+            } else {
+                /* rx->tx forwarding either done in target, or not done at all */
+                pdev->rx_opt_proc = ol_rx_deliver;
+            }
         }
     }
 
@@ -664,6 +661,11 @@ fail5:
 
 fail4:
     adf_os_mem_free(pdev->tx_desc.array);
+#ifdef IPA_UC_OFFLOAD
+    if (ol_cfg_ipa_uc_offload_enabled(pdev->ctrl_pdev)) {
+       htt_ipa_uc_detach(pdev->htt_pdev);
+    }
+#endif /* IPA_UC_OFFLOAD */
 
 fail3:
     htt_detach(pdev->htt_pdev);
@@ -749,6 +751,13 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
 
     adf_os_mem_free(pdev->tx_desc.array);
 
+#ifdef IPA_UC_OFFLOAD
+    /* Detach micro controller data path offload resource */
+    if (ol_cfg_ipa_uc_offload_enabled(pdev->ctrl_pdev)) {
+       htt_ipa_uc_detach(pdev->htt_pdev);
+    }
+#endif /* IPA_UC_OFFLOAD */
+
     htt_detach(pdev->htt_pdev);
 
     ol_txrx_peer_find_detach(pdev);
@@ -811,6 +820,9 @@ ol_txrx_vdev_attach(
     vdev->safemode = 0;
     vdev->drop_unenc = 1;
     vdev->num_filters = 0;
+#if defined(CONFIG_PER_VDEV_TX_DESC_POOL)
+    adf_os_atomic_init(&vdev->tx_desc_count);
+#endif
 
     adf_os_mem_copy(
         &vdev->mac_addr.raw[0], vdev_mac_addr, OL_TXRX_MAC_ADDR_LEN);
@@ -893,10 +905,10 @@ void ol_txrx_osif_vdev_register(ol_txrx_vdev_handle vdev,
 	} else {
 		txrx_ops->tx.std = vdev->tx = OL_TX_LL;
 		txrx_ops->tx.non_std = ol_tx_non_std_ll;
-#ifdef QCA_LL_TX_FLOW_CT
-		vdev->osif_flow_control_cb = txrx_ops->tx.flow_control_cb;
-#endif /* QCA_LL_TX_FLOW_CT */
 	}
+	#ifdef QCA_LL_TX_FLOW_CT
+	vdev->osif_flow_control_cb = txrx_ops->tx.flow_control_cb;
+	#endif /* QCA_LL_TX_FLOW_CT */
 }
 
 void
@@ -2027,3 +2039,77 @@ ol_txrx_ll_set_tx_pause_q_depth(
     return;
 }
 #endif /* QCA_LL_TX_FLOW_CT */
+
+#ifdef IPA_UC_OFFLOAD
+void
+ol_txrx_ipa_uc_get_resource(
+   ol_txrx_pdev_handle pdev,
+   u_int32_t *ce_sr_base_paddr,
+   u_int32_t *ce_sr_ring_size,
+   u_int32_t *ce_reg_paddr,
+   u_int32_t *tx_comp_ring_base_paddr,
+   u_int32_t *tx_comp_ring_size,
+   u_int32_t *tx_num_alloc_buffer,
+   u_int32_t *rx_rdy_ring_base_paddr,
+   u_int32_t *rx_rdy_ring_size,
+   u_int32_t *rx_proc_done_idx_paddr
+)
+{
+    htt_ipa_uc_get_resource(pdev->htt_pdev,
+                           ce_sr_base_paddr,
+                           ce_sr_ring_size,
+                           ce_reg_paddr,
+                           tx_comp_ring_base_paddr,
+                           tx_comp_ring_size,
+                           tx_num_alloc_buffer,
+                           rx_rdy_ring_base_paddr,
+                           rx_rdy_ring_size,
+                           rx_proc_done_idx_paddr);
+}
+
+void
+ol_txrx_ipa_uc_set_doorbell_paddr(
+   ol_txrx_pdev_handle pdev,
+   u_int32_t ipa_tx_uc_doorbell_paddr,
+   u_int32_t ipa_rx_uc_doorbell_paddr
+)
+{
+    htt_ipa_uc_set_doorbell_paddr(pdev->htt_pdev,
+                           ipa_tx_uc_doorbell_paddr,
+                           ipa_rx_uc_doorbell_paddr);
+}
+
+void
+ol_txrx_ipa_uc_set_active(
+   ol_txrx_pdev_handle pdev,
+   a_bool_t uc_active,
+   a_bool_t is_tx
+)
+{
+    htt_h2t_ipa_uc_set_active(pdev->htt_pdev,
+                          uc_active,
+                          is_tx);
+}
+
+void
+ol_txrx_ipa_uc_op_response(
+   ol_txrx_pdev_handle pdev,
+   u_int8_t op_code
+)
+{
+   if (pdev->ipa_uc_op_cb) {
+      pdev->ipa_uc_op_cb(op_code, pdev->osif_dev);
+   }
+}
+
+void ol_txrx_ipa_uc_register_op_cb(
+   ol_txrx_pdev_handle pdev,
+   ipa_uc_op_cb_type op_cb,
+   void *osif_dev)
+{
+   pdev->ipa_uc_op_cb = op_cb;
+   pdev->osif_dev = osif_dev;
+}
+
+#endif /* IPA_UC_OFFLOAD */
+

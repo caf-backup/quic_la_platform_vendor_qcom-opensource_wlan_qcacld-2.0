@@ -342,4 +342,6 @@ unsigned char *gCfgParamName[] = {
     (unsigned char *)"DEBUG_P2P_REMAIN_ON_CHANNEL",
     (unsigned char *)"TDLS_OFF_CHANNEL_ENABLED",
     (unsigned char *)"IBSS_ATIM_WIN_SIZE",
+    (unsigned char *)"DFS_MASTER_ENABLED",
+    (unsigned char *)"VHT_ENABLE_TXBF_20MHZ",
 };

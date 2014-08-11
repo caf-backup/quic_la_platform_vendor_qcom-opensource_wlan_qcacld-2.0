@@ -95,9 +95,11 @@ static void HTT_RX_FRAG_SET_LAST_MSDU(
     adf_nbuf_t msdu;
     struct htt_host_rx_desc_base *rx_desc;
     int start_idx;
+    u_int8_t *p_fw_msdu_rx_desc = 0;
 
     msg_word = (u_int32_t *) adf_nbuf_data(msg);
-    num_msdu_bytes = HTT_RX_IND_FW_RX_DESC_BYTES_GET(*(msg_word + 2));
+    num_msdu_bytes = HTT_RX_FRAG_IND_FW_RX_DESC_BYTES_GET(*(msg_word +
+               HTT_RX_FRAG_IND_HDR_PREFIX_SIZE32));
     /*
      * 1 word for the message header,
      * 1 word to specify the number of MSDU bytes,
@@ -106,6 +108,9 @@ static void HTT_RX_FRAG_SET_LAST_MSDU(
      */
     pdev->rx_mpdu_range_offset_words = 3 + ((num_msdu_bytes + 3) >> 2);
     pdev->rx_ind_msdu_byte_idx = 0;
+
+    p_fw_msdu_rx_desc = ((u_int8_t *)(msg_word) +
+               HTT_ENDIAN_BYTE_IDX_SWAP(HTT_RX_FRAG_IND_FW_DESC_BYTE_OFFSET));
 
     /*
      * Fix for EV126710, in which BSOD occurs due to last_msdu bit
@@ -122,6 +127,7 @@ static void HTT_RX_FRAG_SET_LAST_MSDU(
     adf_nbuf_set_pktlen(msdu, HTT_RX_BUF_SIZE);
     adf_nbuf_unmap(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
     rx_desc = htt_rx_desc(msdu);
+    *((u_int8_t *) &rx_desc->fw_desc.u.val) = *p_fw_msdu_rx_desc;
     rx_desc->msdu_end.last_msdu = 1;
     adf_nbuf_map(pdev->osdev, msdu, ADF_OS_DMA_FROM_DEVICE);
 }
@@ -328,28 +334,14 @@ htt_t2h_lp_msg_handler(void *context, adf_nbuf_t htt_t2h_msg )
 #endif
     case HTT_T2H_MSG_TYPE_TX_CREDIT_UPDATE_IND:
     {
-        A_INT16  htt_credit_delta_abs = HTT_TX_CREDIT_DELTA_ABS_GET(*msg_word);
-        struct ol_txrx_pdev_t* ptxrx_pdev = pdev->txrx_pdev;
-        if ( HTT_TX_CREDIT_SIGN_BIT_GET(*msg_word) ) {
-            /* negative delta */
-#if DEBUG_CREDIT
-            adf_os_print(" <HTT> Decrease Credit %d - %d = %d(Msg).\n",
-                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit),
-                    htt_credit_delta_abs,
-                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit) - htt_credit_delta_abs);
-#endif
-            adf_os_atomic_add((A_INT32)(-htt_credit_delta_abs), &ptxrx_pdev->target_tx_credit);
-        } else {
-            /* positive delta */
-#if DEBUG_CREDIT
-            adf_os_print(" <HTT> Increase Credit %d + %d = %d(Msg).\n",
-                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit),
-                    htt_credit_delta_abs,
-                    adf_os_atomic_read(&ptxrx_pdev->target_tx_credit) + htt_credit_delta_abs);
-#endif
-            adf_os_atomic_add((A_INT32)htt_credit_delta_abs, &ptxrx_pdev->target_tx_credit);
-        }
+        u_int32_t htt_credit_delta_abs;
+        int32_t htt_credit_delta;
+        int sign;
 
+        htt_credit_delta_abs = HTT_TX_CREDIT_DELTA_ABS_GET(*msg_word);
+        sign = HTT_TX_CREDIT_SIGN_BIT_GET(*msg_word) ? -1 : 1;
+        htt_credit_delta = sign * htt_credit_delta_abs;
+        ol_tx_credit_completion_handler(pdev->txrx_pdev, htt_credit_delta);
         break;
     }
 
@@ -403,6 +395,11 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
             u_int16_t peer_id;
             u_int8_t tid;
 
+            if (adf_os_unlikely(pdev->cfg.is_full_reorder_offload)) {
+                adf_os_print("HTT_T2H_MSG_TYPE_RX_IND not supported with full "
+                             "reorder offload\n");
+                break;
+            }
             peer_id = HTT_RX_IND_PEER_ID_GET(*msg_word);
             tid = HTT_RX_IND_EXT_TID_GET(*msg_word);
 
@@ -521,6 +518,44 @@ if (adf_os_unlikely(pdev->rx_ring.rx_reset)) {
             HTT_TX_SCHED(pdev);
             break;
         }
+    case HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND:
+        {
+            u_int16_t peer_id;
+            u_int8_t tid;
+            u_int8_t offload_ind;
+
+            if (adf_os_unlikely(!pdev->cfg.is_full_reorder_offload)) {
+                adf_os_print("HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND not supported"
+                             " when full reorder offload is disabled\n");
+                break;
+            }
+
+            if (adf_os_unlikely(pdev->cfg.is_high_latency)) {
+                adf_os_print("HTT_T2H_MSG_TYPE_RX_IN_ORD_PADDR_IND not supported"
+                             " on high latency\n");
+                break;
+            }
+
+            peer_id = HTT_RX_IN_ORD_PADDR_IND_PEER_ID_GET(*msg_word);
+            tid = HTT_RX_IN_ORD_PADDR_IND_EXT_TID_GET(*msg_word);
+            offload_ind = HTT_RX_IN_ORD_PADDR_IND_OFFLOAD_GET(*msg_word);
+
+            ol_rx_in_order_indication_handler(pdev->txrx_pdev, htt_t2h_msg,
+                                               peer_id, tid, offload_ind);
+            break;
+     }
+
+#ifdef IPA_UC_OFFLOAD
+    case HTT_T2H_MSG_TYPE_WDI_IPA_OP_RESPONSE:
+        {
+            u_int8_t op_code;
+
+            op_code = HTT_WDI_IPA_OP_RESPONSE_OP_CODE_GET(*msg_word);
+            ol_txrx_ipa_uc_op_response(pdev->txrx_pdev, op_code);
+            break;
+        }
+#endif /* IPA_UC_OFFLOAD */
+
     default:
         htt_t2h_lp_msg_handler(context, htt_t2h_msg);
         return ;

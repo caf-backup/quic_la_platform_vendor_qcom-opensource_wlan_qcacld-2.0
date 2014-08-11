@@ -41,6 +41,9 @@
 #include <stdarg.h>
 #include "sirMacPropExts.h"
 #include "dot11f.h"
+#ifdef WLAN_FEATURE_VOWIFI_11R
+#include "limFTDefs.h"
+#endif
 #include "limSession.h"
 
 #define COUNTRY_STRING_LENGTH    (  3 )
@@ -143,6 +146,7 @@ typedef struct sSirProbeRespBeacon
     tANI_U8                   Vendor1IEPresent;
     tANI_U8                   Vendor2IEPresent;
     tANI_U8                   Vendor3IEPresent;
+    tDot11fIEIBSSParams       IBSSParams;
 
 } tSirProbeRespBeacon, *tpSirProbeRespBeacon;
 
@@ -268,6 +272,7 @@ typedef struct sSirAssocRsp
     tDot11fIEVHTOperation     VHTOperation;
 #endif
     tDot11fIEExtCap           ExtCap;
+    tSirQosMapSet             QosMapSet;
 } tSirAssocRsp, *tpSirAssocRsp;
 
 #if defined(FEATURE_WLAN_ESE_UPLOAD)

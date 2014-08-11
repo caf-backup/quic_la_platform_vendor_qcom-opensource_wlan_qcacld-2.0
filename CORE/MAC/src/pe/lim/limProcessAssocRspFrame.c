@@ -82,7 +82,6 @@ void limUpdateAssocStaDatas(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpSirAsso
     tANI_U32        prop;
     tANI_U32        phyMode;
     tANI_U32        val;
-    //tpSirBoardCapabilities pBoardCaps;
     tANI_BOOLEAN    qosMode;
     tANI_U16        rxHighestRate = 0;
 
@@ -103,7 +102,6 @@ void limUpdateAssocStaDatas(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpSirAsso
        }
     }
 
-       //pMac->lim.gLimMlmState         = eLIM_MLM_LINK_ESTABLISHED_STATE;
        pStaDs->mlmStaContext.authType = psessionEntry->limCurrentAuthType;
 
        // Add capabilities information, rates and AID
@@ -186,7 +184,6 @@ void limUpdateAssocStaDatas(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpSirAsso
        pStaDs->lleEnabled = 0;
 
        // update TSID to UP mapping
-       //if (pMac->lim.gLimQosEnabled)
        if (qosMode) {
            if (pAssocRsp->edcaPresent) {
                tSirRetStatus status;
@@ -315,17 +312,27 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
     tANI_U16              caps;
     tANI_U32              frameLen;
     tSirMacAddr           currentBssId;
-    tpSirMacMgmtHdr       pHdr;
+    tpSirMacMgmtHdr       pHdr = NULL;
     tSirMacCapabilityInfo localCapabilities;
     tpDphHashNode         pStaDs;
     tpSirAssocRsp         pAssocRsp;
     tLimMlmAssocCnf       mlmAssocCnf;
-
-    tSchBeaconStruct *pBeaconStruct;
+    tSchBeaconStruct      *pBeaconStruct;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_U8               smeSessionId = 0;
+#endif
 
     //Initialize status code to success.
-
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    if (psessionEntry->bRoamSynchInProgress)
+        pHdr = (tpSirMacMgmtHdr)pMac->roam.pReassocResp;
+    else
+#endif
     pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    smeSessionId = psessionEntry->smeSessionId;
+#endif
 
     mlmAssocCnf.resultCode = eSIR_SME_SUCCESS;
     /* Update PE session Id*/
@@ -358,10 +365,20 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
         return;
     }
 
-
-    pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
-    frameLen = WDA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
-
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    if (psessionEntry->bRoamSynchInProgress)
+    {
+        pHdr = (tpSirMacMgmtHdr)pMac->roam.pReassocResp;
+        frameLen = pMac->roam.reassocRespLen - SIR_MAC_HDR_LEN_3A;
+    }
+    else
+    {
+#endif
+        pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
+        frameLen = WDA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    }
+#endif
     if (((subType == LIM_ASSOC) &&
          (psessionEntry->limMlmState != eLIM_MLM_WT_ASSOC_RSP_STATE)) ||
         ((subType == LIM_REASSOC) &&
@@ -438,6 +455,11 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
     }
 
     // Get pointer to Re/Association Response frame body
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    if (psessionEntry->bRoamSynchInProgress)
+        pBody = pMac->roam.pReassocResp + SIR_MAC_HDR_LEN_3A;
+    else
+#endif
     pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
 
     // parse Re/Association Response frame.
@@ -508,6 +530,23 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
         "as NULL"));
         psessionEntry->RICDataLen = 0;
         psessionEntry->ricData = NULL;
+    }
+#endif
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    if (pAssocRsp->FTInfo.R0KH_ID.present)
+    {
+        pMac->roam.roamSession[smeSessionId].ftSmeContext.r0kh_id_len =
+                                    pAssocRsp->FTInfo.R0KH_ID.num_PMK_R0_ID;
+        vos_mem_copy(pMac->roam.roamSession[smeSessionId].ftSmeContext.r0kh_id,
+                pAssocRsp->FTInfo.R0KH_ID.PMK_R0_ID,
+                pMac->roam.roamSession[smeSessionId].ftSmeContext.r0kh_id_len);
+    }
+    else
+    {
+       pMac->roam.roamSession[smeSessionId].ftSmeContext.r0kh_id_len = 0;
+       vos_mem_zero(pMac->roam.roamSession[smeSessionId].ftSmeContext.r0kh_id,
+                    SIR_ROAM_R0KH_ID_MAX_LEN);
     }
 #endif
 
@@ -730,14 +769,23 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
             limSetActiveEdcaParams(pMac, psessionEntry->gLimEdcaParams, psessionEntry);
 
             // Send the active EDCA parameters to HAL
-            if (pStaDs->aniPeer == eANI_BOOLEAN_TRUE)
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+            if (!psessionEntry->bRoamSynchInProgress)
             {
-                limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive, pStaDs->bssId, eANI_BOOLEAN_TRUE);
+#endif
+               if (pStaDs->aniPeer == eANI_BOOLEAN_TRUE)
+               {
+                  limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive,
+                                    pStaDs->bssId, eANI_BOOLEAN_TRUE);
+               }
+               else
+               {
+                  limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive,
+                                    pStaDs->bssId, eANI_BOOLEAN_FALSE);
+               }
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
             }
-            else
-            {
-                limSendEdcaParams(pMac, psessionEntry->gLimEdcaParamsActive, pStaDs->bssId, eANI_BOOLEAN_FALSE);
-            }
+#endif
             limAddFTStaSelf(pMac, (pAssocRsp->aid & 0x3FFF), psessionEntry);
             vos_mem_free(pBeaconStruct);
 
@@ -846,6 +894,16 @@ limProcessAssocRspFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tANI_U8 sub
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM //FEATURE_WLAN_DIAG_SUPPORT
     limDiagEventReport(pMac, WLAN_PE_DIAG_CONNECTED, psessionEntry, 0, 0);
 #endif
+    if( pAssocRsp->QosMapSet.present )
+    {
+        vos_mem_copy(&psessionEntry->QosMapSet,
+                     &pAssocRsp->QosMapSet,
+                     sizeof(tSirQosMapSet));
+    }
+    else
+    {
+       vos_mem_zero(&psessionEntry->QosMapSet, sizeof(tSirQosMapSet));
+    }
 
     if (pAssocRsp->ExtCap.present)
     {

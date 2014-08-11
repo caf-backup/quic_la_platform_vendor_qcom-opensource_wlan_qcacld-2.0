@@ -20,12 +20,10 @@
  */
 
 /*
- * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
-
 
 #if !defined( WLAN_HDD_MAIN_H )
 #define WLAN_HDD_MAIN_H
@@ -104,14 +102,12 @@
 #define WLAN_WAIT_TIME_STATS       800
 #define WLAN_WAIT_TIME_POWER       800
 #define WLAN_WAIT_TIME_COUNTRY     1000
-#define WLAN_WAIT_TIME_CHANNEL_UPDATE   600
 /* Amount of time to wait for sme close session callback.
    This value should be larger than the timeout used by WDI to wait for
    a response from WCNSS */
 #define WLAN_WAIT_TIME_SESSIONOPENCLOSE  15000
 #define WLAN_WAIT_TIME_ABORTSCAN  2000
 
-#ifdef QCA_WIFI_2_0
 
 /** Maximum time(ms) to wait for mc thread suspend **/
 #define WLAN_WAIT_TIME_MCTHREAD_SUSPEND  1200
@@ -119,7 +115,6 @@
 /** Maximum time(ms) to wait for target to be ready for suspend **/
 #define WLAN_WAIT_TIME_READY_TO_SUSPEND  2000
 
-#endif
 
 /** Maximum time(ms) to wait for tdls add sta to complete **/
 #define WAIT_TIME_TDLS_ADD_STA      1500
@@ -207,14 +202,10 @@
 #define HDD_MOD_EXIT_SSR_MAX_RETRIES 30
 
 /* Maximum number of interfaces allowed(STA, P2P Device, P2P Interfaces) */
-#ifndef QCA_WIFI_2_0
-#define WLAN_MAX_INTERFACES 3
-#else
 #ifndef WLAN_OPEN_P2P_INTERFACE
 #define WLAN_MAX_INTERFACES 3
 #else
 #define WLAN_MAX_INTERFACES 4
-#endif
 #endif
 
 #ifdef WLAN_FEATURE_GTK_OFFLOAD
@@ -235,6 +226,10 @@
 
 #define HDD_MIN_TX_POWER (-100) // minimum tx power
 #define HDD_MAX_TX_POWER (+100)  // maximum tx power
+
+#ifdef WLAN_FEATURE_LPSS
+#define HDD_RSSI_THRESHOLD  10 /* RSSI threshold set to 10 for temp */
+#endif
 
 typedef v_U8_t tWlanHddMacAddr[HDD_MAC_ADDR_LEN];
 
@@ -303,9 +298,6 @@ extern spinlock_t hdd_context_lock;
 #define HDD_GET_BATCH_SCAN_RSP_TIME_OUT (15000) /*Batch scan req timeout in ms*/
 #define HDD_BATCH_SCAN_AP_META_INFO_SIZE (150) /*AP meta info size in string*/
 
-#ifndef QCA_WIFI_2_0
-#define MIN(a, b) (a > b ? b : a)
-#endif
 #endif
 
 #ifdef QCA_LL_TX_FLOW_CT
@@ -316,8 +308,9 @@ extern spinlock_t hdd_context_lock;
 #define WLAN_HDD_TX_FLOW_CONTROL_MAX_24BAND_CH   14
 #endif /* QCA_LL_TX_FLOW_CT */
 
-/* Max PMKSAIDS available in cache */
-#define MAX_PMKSAIDS_IN_CACHE 8
+#define HDD_VHT_RX_HIGHEST_SUPPORTED_DATA_RATE_1_1       390
+#define HDD_VHT_TX_HIGHEST_SUPPORTED_DATA_RATE_1_1       390
+
 
 typedef struct hdd_tx_rx_stats_s
 {
@@ -359,16 +352,6 @@ typedef struct hdd_tx_rx_stats_s
 
 } hdd_tx_rx_stats_t;
 
-typedef struct hdd_chip_reset_stats_s
-{
-   __u32    totalLogpResets;
-   __u32    totalCMD53Failures;
-   __u32    totalMutexReadFailures;
-   __u32    totalMIFErrorFailures;
-   __u32    totalFWHearbeatFailures;
-   __u32    totalUnknownExceptions;
-} hdd_chip_reset_stats_t;
-
 #ifdef WLAN_FEATURE_11W
 typedef struct hdd_pmf_stats_s
 {
@@ -386,7 +369,6 @@ typedef struct hdd_stats_s
    tCsrGlobalClassDStatsInfo  ClassD_stat;
    tCsrPerStaStatsInfo        perStaStats;
    hdd_tx_rx_stats_t          hddTxRxStats;
-   hdd_chip_reset_stats_t     hddChipResetStats;
 #ifdef WLAN_FEATURE_11W
    hdd_pmf_stats_t            hddPmfStats;
 #endif
@@ -696,7 +678,7 @@ struct hdd_station_ctx
    v_BOOL_t hdd_ReassocScenario;
 
    /* PMKID Cache */
-   tPmkidCacheInfo PMKIDCache[MAX_PMKSAIDS_IN_CACHE];
+   tPmkidCacheInfo PMKIDCache[CSR_MAX_PMKID_ALLOWED];
    tANI_U32 PMKIDCacheIndex;
 
    /* STA ctx debug variables */
@@ -1031,6 +1013,9 @@ struct hdd_adapter_s
 #endif
 
    v_S7_t rssi;
+#ifdef WLAN_FEATURE_LPSS
+   v_S7_t last_rssi_send;
+#endif
 
    tANI_U8 snr;
 
@@ -1115,6 +1100,13 @@ struct hdd_adapter_s
     unsigned int tx_flow_high_watermark_offset;
 #endif /* QCA_LL_TX_FLOW_CT */
     v_BOOL_t offloads_configured;
+
+    /* DSCP to UP QoS Mapping */
+    sme_QosWmmUpType hddWmmDscpToUpMap[WLAN_HDD_MAX_DSCP+1];
+
+#ifdef WLAN_FEATURE_LINK_LAYER_STATS
+   v_BOOL_t isLinkLayerStatsSet;
+#endif
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(pAdapter) (&(pAdapter)->sessionCtx.station)
@@ -1221,6 +1213,18 @@ typedef struct
 }hdd_green_ap_ctx_t;
 #endif /* FEATURE_GREEN_AP */
 
+#define  MAX_MOD_LOGLEVEL 10
+typedef struct
+{
+    v_U8_t enable;
+    v_U8_t dl_type;
+    v_U8_t dl_report;
+    v_U8_t dl_loglevel;
+    v_U8_t index;
+    v_U32_t dl_mod_loglevel[MAX_MOD_LOGLEVEL];
+
+}fw_log_info;
+
 /** Adapter stucture definition */
 
 struct hdd_context_s
@@ -1278,11 +1282,6 @@ struct hdd_context_s
    struct completion driver_crda_req;
 #endif
 
-   /* Completion variable to indicate updation of channel */
-   struct completion wiphy_channel_update_event;
-
-   v_BOOL_t nEnableStrictRegulatoryForFCC;
-
    v_BOOL_t isWlanSuspended;
 
    v_BOOL_t isTxThreadSuspended;
@@ -1300,6 +1299,8 @@ struct hdd_context_s
    v_BOOL_t isLoadInProgress;
 
    v_BOOL_t isUnloadInProgress;
+
+   v_BOOL_t isCleanUpDone;
 
    /**Track whether driver has been suspended.*/
    hdd_ps_state_t hdd_ps_state;
@@ -1328,13 +1329,11 @@ struct hdd_context_s
 #endif /* WLAN_KD_READY_NOTIFIER */
 
 #ifdef FEATURE_OEM_DATA_SUPPORT
-#ifdef QCA_WIFI_2_0
    /* OEM App registered or not */
    v_BOOL_t oem_app_registered;
 
    /* OEM App Process ID */
    v_SINT_t oem_pid;
-#endif
 #endif
 
    v_U8_t change_iface;
@@ -1345,7 +1344,6 @@ struct hdd_context_s
    v_U8_t no_of_open_sessions[VOS_MAX_NO_OF_MODE];
    v_U8_t no_of_active_sessions[VOS_MAX_NO_OF_MODE];
 
-   hdd_chip_reset_stats_t hddChipResetStats;
    /* Number of times riva restarted */
    v_U32_t  hddRivaResetStats;
 
@@ -1396,6 +1394,26 @@ struct hdd_context_s
 
 #ifdef IPA_OFFLOAD
     void *hdd_ipa;
+#ifdef IPA_UC_OFFLOAD
+    /* CE resources */
+    v_U32_t ce_sr_base_paddr;
+    v_U32_t ce_sr_ring_size;
+    v_U32_t ce_reg_paddr;
+
+    /* WLAN TX:IPA->WLAN */
+    v_U32_t tx_comp_ring_base_paddr;
+    v_U32_t tx_comp_ring_size;
+    v_U32_t tx_num_alloc_buffer;
+
+    /* WLAN RX:WLAN->IPA */
+    v_U32_t rx_rdy_ring_base_paddr;
+    v_U32_t rx_rdy_ring_size;
+    v_U32_t rx_proc_done_idx_paddr;
+
+    /* IPA UC doorbell registers paddr */
+    v_U32_t tx_comp_doorbell_paddr;
+    v_U32_t rx_ready_doorbell_paddr;
+#endif /* IPA_UC_OFFLOAD */
 #endif
     /* MC/BC Filter state variable
      * This always contains the value that is currently
@@ -1439,7 +1457,6 @@ struct hdd_context_s
     v_BOOL_t isVHT80Allowed;
 
     struct completion ready_to_suspend;
-#ifdef QCA_WIFI_2_0
     /* defining the solution type */
     v_U32_t target_type;
 
@@ -1453,7 +1470,6 @@ struct hdd_context_s
     v_U32_t target_hw_revision;
     /* chip/rom name */
     const char *target_hw_name;
-#endif
     struct regulatory reg;
 #ifdef FEATURE_WLAN_CH_AVOID
     v_U16_t unsafe_channel_count;
@@ -1468,21 +1484,18 @@ struct hdd_context_s
 
     tSirScanType ioctl_scan_mode;
 
-#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
-    vos_timer_t hdd_wlan_shutdown_timer;
-#endif
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
     adf_os_work_t  sta_ap_intf_check_work;
 #endif
+
+    v_U8_t dev_dfs_cac_status;
 
     v_BOOL_t btCoexModeSet;
 #ifdef FEATURE_GREEN_AP
     hdd_green_ap_ctx_t *green_ap_ctx;
 #endif
-
+    fw_log_info fw_log_settings;
 };
-
-
 
 /*---------------------------------------------------------------------------
   Function declarations and documenation
@@ -1558,16 +1571,14 @@ void wlan_hdd_decr_active_session(hdd_context_t *pHddCtx,
 void wlan_hdd_reset_prob_rspies(hdd_adapter_t* pHostapdAdapter);
 void hdd_prevent_suspend(void);
 void hdd_allow_suspend(void);
-void hdd_allow_suspend_timeout(v_U32_t timeout);
+void hdd_prevent_suspend_timeout(v_U32_t timeout);
 bool hdd_is_ssr_required(void);
 void hdd_set_ssr_required(e_hdd_ssr_required value);
 
 VOS_STATUS hdd_enable_bmps_imps(hdd_context_t *pHddCtx);
 VOS_STATUS hdd_disable_bmps_imps(hdd_context_t *pHddCtx, tANI_U8 session_type);
 
-#ifdef QCA_WIFI_2_0
 void wlan_hdd_cfg80211_update_wiphy_caps(struct wiphy *wiphy);
-#endif
 VOS_STATUS hdd_setIbssPowerSaveParams(hdd_adapter_t *pAdapter);
 void wlan_hdd_cfg80211_update_reg_info(struct wiphy *wiphy);
 VOS_STATUS wlan_hdd_restart_driver(hdd_context_t *pHddCtx);
@@ -1665,10 +1676,15 @@ void wlan_hdd_send_status_pkg(hdd_adapter_t *pAdapter,
 void wlan_hdd_send_version_pkg(v_U32_t fw_version,
                                v_U32_t chip_id,
                                const char *chip_name);
+void wlan_hdd_send_all_scan_intf_info(hdd_context_t *pHddCtx);
 #endif
 void wlan_hdd_send_svc_nlink_msg(int type, void *data, int len);
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
 void wlan_hdd_auto_shutdown_enable(hdd_context_t *hdd_ctx, v_U8_t enable);
+#endif
+
+#ifdef WLAN_FEATURE_MBSSID
+hdd_adapter_t *hdd_get_con_sap_adapter(hdd_adapter_t *this_sap_adapter);
 #endif
 
 boolean hdd_is_5g_supported(hdd_context_t * pHddCtx);
@@ -1685,5 +1701,13 @@ void hdd_wlan_green_ap_mc(hdd_context_t *pHddCtx,
 void wlan_hdd_cfg80211_stats_ext_init(hdd_context_t *pHddCtx);
 #endif
 
+#ifdef WLAN_FEATURE_LINK_LAYER_STATS
+void wlan_hdd_cfg80211_link_layer_stats_init(hdd_context_t *pHddCtx);
+#endif
+
 void hdd_update_macaddr(hdd_config_t *cfg_ini, v_MACADDR_t hw_macaddr);
+#if defined(FEATURE_WLAN_LFR) && defined(WLAN_FEATURE_ROAM_SCAN_OFFLOAD)
+void wlan_hdd_disable_roaming(hdd_adapter_t *pAdapter);
+void wlan_hdd_enable_roaming(hdd_adapter_t *pAdapter);
+#endif
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

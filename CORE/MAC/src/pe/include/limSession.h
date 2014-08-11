@@ -28,7 +28,6 @@
 #if !defined( __LIM_SESSION_H )
 #define __LIM_SESSION_H
 
-
 /**=========================================================================
 
   \file  limSession.h
@@ -155,22 +154,19 @@ typedef struct sPESession           // Added to Support BT-AMP
     // Assoc or ReAssoc Response Data/Frame
     void                   *limAssocResponseData;
 
-
-
     /** BSS Table parameters **/
 
-
     /*
-    * staId:  Start BSS: this is the  Sta Id for the BSS.
-                 Join: this is the selfStaId
-      In both cases above, the peer STA ID wll be stored in dph hash table.
-    */
+     * staId:  Start BSS: this is the  Sta Id for the BSS.
+     * Join: this is the selfStaId
+     * In both cases above, the peer STA ID wll be stored in dph hash table.
+     */
     tANI_U16                staId;
-    tANI_U16                statypeForBss;          //to know session is for PEER or SELF
+    tANI_U16                statypeForBss; //to know session is for PEER or SELF
     tANI_U8                 shortSlotTimeSupported;
     tANI_U8                 dtimPeriod;
-    tSirMacRateSet       rateSet;
-    tSirMacRateSet       extRateSet;
+    tSirMacRateSet          rateSet;
+    tSirMacRateSet          extRateSet;
     tSirMacHTOperatingMode  htOperMode;
     tANI_U8                 currentOperChannel;
     tANI_U8                 currentReqChannel;
@@ -339,7 +335,6 @@ typedef struct sPESession           // Added to Support BT-AMP
     tANI_U8    htSmpsvalue;
     tANI_U8            spectrumMgtEnabled;
     /* *********************11H related*****************************/
-    //tANI_U32           gLim11hEnable;
     tLimSpecMgmtInfo   gLimSpecMgmt;
     // CB Primary/Secondary Channel Switch Info
     tLimChannelSwitchInfo  gLimChannelSwitch;
@@ -444,11 +439,19 @@ typedef struct sPESession           // Added to Support BT-AMP
     // Size of the trailing portion
     tANI_U16 schBeaconOffsetEnd;
     tANI_BOOLEAN isOSENConnection;
+    /*  DSCP to UP mapping for HS 2.0 */
+    tSirQosMapSet QosMapSet;
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+    tANI_BOOLEAN bRoamSynchInProgress;
+#endif
+
+#if defined WLAN_FEATURE_VOWIFI_11R
+    /* Fast Transition (FT) */
+    tftPEContext  ftPEContext;
+#endif
 
 }tPESession, *tpPESession;
-
-#define LIM_MAX_ACTIVE_SESSIONS 4
-
 
 /*-------------------------------------------------------------------------
   Function declarations and documenation

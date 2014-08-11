@@ -440,7 +440,112 @@ tlshim_mgmt_find_iface(void *vos_ctx, u_int8_t *mac_addr, u_int32_t *vdev_id)
 	}
 	return iface;
 }
+
+/*
+ * @brief - This routine will extract 6 byte PN from the CCMP header
+ * @param - ccmp_ptr - pointer to ccmp header
+ */
+static u_int64_t
+tl_shim_extract_ccmp_pn(u_int8_t *ccmp_ptr)
+{
+	u_int8_t rsvd, key, pn[6];
+	u_int64_t new_pn;
+
+	/*
+	 *   +-----+-----+------+----------+-----+-----+-----+-----+
+	 *   | PN0 | PN1 | rsvd | rsvd/key | PN2 | PN3 | PN4 | PN5 |
+	 *   +-----+-----+------+----------+-----+-----+-----+-----+
+	 *                   CCMP Header Format
+	 */
+
+	/* Extract individual bytes */
+	pn[0]  = (u_int8_t)*ccmp_ptr;
+	pn[1]  = (u_int8_t)*(ccmp_ptr+1);
+	rsvd   = (u_int8_t)*(ccmp_ptr+2);
+	key    = (u_int8_t)*(ccmp_ptr+3);
+	pn[2]  = (u_int8_t)*(ccmp_ptr+4);
+	pn[3]  = (u_int8_t)*(ccmp_ptr+5);
+	pn[4]  = (u_int8_t)*(ccmp_ptr+6);
+	pn[5]  = (u_int8_t)*(ccmp_ptr+7);
+
+	/* Form 6 byte PN with 6 individual bytes of PN */
+	new_pn = ((uint64_t)pn[0] << 40) |
+			((uint64_t)pn[1] << 32) |
+			((uint64_t)pn[2] << 24) |
+			((uint64_t)pn[3] << 16) |
+			((uint64_t)pn[4] << 8)  |
+			((uint64_t)pn[5] << 0);
+
+	TLSHIM_LOGD("PN of received packet is %llu", new_pn);
+	return new_pn;
+}
+
+/*
+ * @brief - This routine is used to detect replay attacking using PN in CCMP
+ * @param - vos_ctx - vos context
+ * @param - wh - frame header
+ * @param - ccmp_ptr - pointer to ccmp header
+ */
+static bool
+is_ccmp_pn_replay_attack(void *vos_ctx, struct ieee80211_frame *wh,
+		u_int8_t *ccmp_ptr)
+{
+	ol_txrx_pdev_handle pdev;
+	ol_txrx_vdev_handle vdev;
+	ol_txrx_peer_handle peer;
+	u_int8_t peer_id;
+	u_int8_t *last_pn_valid;
+	u_int64_t *last_pn, new_pn;
+	u_int32_t *rmf_pn_replays;
+
+	pdev = vos_get_context(VOS_MODULE_ID_TXRX, vos_ctx);
+	if (!pdev) {
+		TLSHIM_LOGE("%s: Failed to find pdev", __func__);
+		TLSHIM_LOGE("%s: Not able to validate PN", __func__);
+		return true;
+	}
+
+	vdev = tl_shim_get_vdev_by_addr(vos_ctx, wh->i_addr2);
+	if (!vdev) {
+		TLSHIM_LOGE("%s: Failed to find vdev", __func__);
+		TLSHIM_LOGE("%s: Not able to validate PN", __func__);
+		return true;
+	}
+
+	/* Retrieve the peer based on vdev and addr */
+	peer = ol_txrx_find_peer_by_addr_and_vdev(pdev, vdev, wh->i_addr2,
+							&peer_id);
+
+	if (NULL == peer) {
+		TLSHIM_LOGE(
+		"%s: Failed to find peer, Not able to validate PN", __func__);
+		return true;
+	}
+
+	new_pn = tl_shim_extract_ccmp_pn(ccmp_ptr);
+	last_pn_valid = &peer->last_rmf_pn_valid;
+	last_pn = &peer->last_rmf_pn;
+	rmf_pn_replays = &peer->rmf_pn_replays;
+
+	if (*last_pn_valid) {
+		if (new_pn > *last_pn) {
+			*last_pn = new_pn;
+			TLSHIM_LOGD("%s: PN validation successful", __func__);
+		} else {
+			TLSHIM_LOGE("%s: PN Replay attack detected", __func__);
+			/* per 11W amendment, keeping track of replay attacks */
+			*rmf_pn_replays += 1;
+			return true;
+		}
+	} else {
+		*last_pn_valid = 1;
+		*last_pn = new_pn;
+	}
+
+	return false;
+}
 #endif
+
 static int tlshim_mgmt_rx_process(void *context, u_int8_t *data,
 				       u_int32_t data_len, bool saved_beacon, u_int32_t vdev_id)
 {
@@ -453,6 +558,7 @@ static int tlshim_mgmt_rx_process(void *context, u_int8_t *data,
 	struct wma_txrx_node *iface = NULL;
 	u_int8_t *efrm, *orig_hdr;
 	u_int16_t key_id;
+	u_int8_t *ccmp;
 #endif /* WLAN_FEATURE_11W */
 
 	vos_pkt_t *rx_pkt;
@@ -516,6 +622,7 @@ static int tlshim_mgmt_rx_process(void *context, u_int8_t *data,
      * was found.
      */
 	rx_pkt->pkt_meta.roamCandidateInd = saved_beacon ? 1 : 0;
+	rx_pkt->pkt_meta.sessionId = vdev_id;
 	/* Why not just use rx_event->hdr.buf_len? */
 	wbuf = adf_nbuf_alloc(NULL,
 			      roundup(hdr->buf_len, 4),
@@ -570,6 +677,9 @@ static int tlshim_mgmt_rx_process(void *context, u_int8_t *data,
 	mgt_type    = (wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 	mgt_subtype = (wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
 
+#ifdef FEATURE_WLAN_D0WOW
+	TLSHIM_LOGD("%s: Frame subtype is 0x%x", __func__, mgt_subtype);
+#endif
 	if (!saved_beacon && mgt_type == IEEE80211_FC0_TYPE_MGT &&
 		(mgt_subtype == IEEE80211_FC0_SUBTYPE_BEACON || mgt_subtype == IEEE80211_FC0_SUBTYPE_PROBE_RESP))
 	{
@@ -621,7 +731,23 @@ static int tlshim_mgmt_rx_process(void *context, u_int8_t *data,
 		{
 			if ((wh)->i_fc[1] & IEEE80211_FC1_WEP)
 			{
+				if (IEEE80211_IS_BROADCAST(wh->i_addr1) ||
+					 IEEE80211_IS_MULTICAST(wh->i_addr1)) {
+					TLSHIM_LOGE("Encrypted BC/MC frame"
+					" dropping the frame");
+					vos_pkt_return_packet(rx_pkt);
+					return 0;
+				}
+
 				orig_hdr = (u_int8_t*) adf_nbuf_data(wbuf);
+				/* Pointer to head of CCMP header */
+				ccmp = orig_hdr + sizeof(*wh);
+				if (is_ccmp_pn_replay_attack(vos_ctx, wh,
+									ccmp)) {
+					TLSHIM_LOGE("Dropping the frame");
+					vos_pkt_return_packet(rx_pkt);
+					return 0;
+				}
 
 				/* Strip privacy headers (and trailer)
 				   for a received frame */
@@ -817,7 +943,10 @@ static void tlshim_data_rx_handler(void *context, u_int16_t staid,
 				   adf_nbuf_t rx_buf_list)
 {
 	struct txrx_tl_shim_ctx *tl_shim;
-#if defined(IPA_OFFLOAD) || \
+	/* Firmware data path active response will use shim RX thread
+	 * T2H MSG running on SIRQ context,
+	 * IPA kernel module API should not be called on SIRQ CTXT */
+#if (defined(IPA_OFFLOAD) && !defined(IPA_UC_OFFLOAD))|| \
     (defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD))
 	void *vos_ctx = vos_get_global_context(VOS_MODULE_ID_TL, context);
 #endif
@@ -870,7 +999,7 @@ static void tlshim_data_rx_handler(void *context, u_int16_t staid,
 		 * there is no cached frames have any significant impact on
 		 * performance.
 		 */
-#ifdef IPA_OFFLOAD
+#if defined (IPA_OFFLOAD) && !defined(IPA_UC_OFFLOAD)
 		VOS_STATUS ret;
 		adf_os_spin_lock_bh(&tl_shim->bufq_lock);
 		sta_info->suspend_flush = 1;
@@ -934,7 +1063,7 @@ static void tlshim_data_rx_handler(void *context, u_int16_t staid,
 #else /* QCA_CONFIG_SMP */
 			tlshim_data_rx_cb(tl_shim, rx_buf_list, staid);
 #endif /* QCA_CONFIG_SMP */
-#ifdef IPA_OFFLOAD
+#if defined(IPA_OFFLOAD) && !defined(IPA_UC_OFFLOAD)
 	}
 #endif
 	}
@@ -1118,6 +1247,10 @@ adf_nbuf_t WLANTL_SendIPA_DataFrame(void *vos_ctx, void *vdev,
 	adf_nbuf_t ret;
 
 	ENTER();
+	if (NULL == tl_shim) {
+		TLSHIM_LOGW("INVALID TL SHIM CONTEXT");
+		return skb;
+	}
 
 	if (!adf_os_atomic_read(&tl_shim->vdev_active[interface_id])) {
 		TLSHIM_LOGW("INACTIVE VDEV");
@@ -1541,7 +1674,8 @@ VOS_STATUS WLANTL_STAPtkInstalled(void *vos_ctx, u_int8_t sta_id)
  * Txrx will do frame filtering.
  */
 VOS_STATUS WLANTL_ChangeSTAState(void *vos_ctx, u_int8_t sta_id,
-				 WLANTL_STAStateType sta_state)
+				 WLANTL_STAStateType sta_state,
+				 v_BOOL_t roam_synch_in_progress)
 {
 	struct ol_txrx_peer_t *peer;
 	enum ol_txrx_peer_state txrx_state = ol_txrx_peer_state_invalid;
@@ -1574,6 +1708,11 @@ VOS_STATUS WLANTL_ChangeSTAState(void *vos_ctx, u_int8_t sta_id,
 	ol_txrx_peer_state_update(peer->vdev->pdev,
 				  (u_int8_t *) peer->mac_addr.raw,
 				  txrx_state);
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	if (roam_synch_in_progress)
+		return VOS_STATUS_SUCCESS;
+#endif
+
 
 	if (txrx_state == ol_txrx_peer_state_auth) {
 #ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
@@ -1758,16 +1897,20 @@ VOS_STATUS WLANTL_Close(void *vos_ctx)
 	for (i = 0;
 		i < wdi_out_cfg_max_vdevs(((pVosContextType)vos_ctx)->cfg_ctx);
 		i++) {
-#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
-		vos_event_destroy(&tl_shim->peer_authorized_events[i]);
-#endif
 		adf_os_spinlock_destroy(&tl_shim->session_flow_control[i].fc_lock);
 	}
-#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
-	adf_os_mem_free(tl_shim->peer_authorized_events);
-#endif
 	adf_os_mem_free(tl_shim->session_flow_control);
 #endif /* QCA_LL_TX_FLOW_CT */
+
+#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+	for (i = 0;
+	     i < wdi_out_cfg_max_vdevs(((pVosContextType)vos_ctx)->cfg_ctx);
+	     i++) {
+		vos_event_destroy(&tl_shim->peer_authorized_events[i]);
+	}
+	adf_os_mem_free(tl_shim->peer_authorized_events);
+#endif
+
 	adf_os_mem_free(tl_shim->vdev_active);
 #ifdef FEATURE_WLAN_ESE
 	vos_flush_work(&tl_shim->iapp_work.deferred_work);
@@ -1823,10 +1966,20 @@ VOS_STATUS WLANTL_Open(void *vos_ctx, WLANTL_ConfigInfoType *tl_cfg)
 		INIT_LIST_HEAD(&tl_shim->sta_info[i].cached_bufq);
 	}
 
+#ifdef CONFIG_CNSS
+	cnss_init_work(&tl_shim->cache_flush_work, tl_shim_cache_flush_work);
+#else
 	INIT_WORK(&tl_shim->cache_flush_work, tl_shim_cache_flush_work);
+#endif
+
 #if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
-    INIT_WORK(&(tl_shim->iapp_work.deferred_work),
-        tlshim_mgmt_over_data_rx_handler);
+#ifdef CONFIG_CNSS
+	cnss_init_work(&(tl_shim->iapp_work.deferred_work),
+		tlshim_mgmt_over_data_rx_handler);
+#else
+	INIT_WORK(&(tl_shim->iapp_work.deferred_work),
+		tlshim_mgmt_over_data_rx_handler);
+#endif
 #endif
 	/*
 	 * TODO: Allocate memory for tx callback for maximum supported
@@ -1849,35 +2002,40 @@ VOS_STATUS WLANTL_Open(void *vos_ctx, WLANTL_ConfigInfoType *tl_cfg)
 		return VOS_STATUS_E_NOMEM;
 	}
 
-#ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
-	tl_shim->peer_authorized_events = adf_os_mem_alloc(NULL,
-					  max_vdev * sizeof(vos_event_t));
-	if (!tl_shim->peer_authorized_events) {
-		TLSHIM_LOGE("Failed to allocate memory for events");
-		adf_os_mem_free(tl_shim->session_flow_control);
-		vos_free_context(vos_ctx, VOS_MODULE_ID_TL, tl_shim);
-		return VOS_STATUS_E_NOMEM;
-	}
-#endif
 	for (i = 0; i < max_vdev; i++) {
 		tl_shim->session_flow_control[i].flowControl = NULL;
 		tl_shim->session_flow_control[i].sessionId = 0xFF;
 		tl_shim->session_flow_control[i].adpaterCtxt = NULL;
 		tl_shim->session_flow_control[i].vdev = NULL;
+		adf_os_spinlock_init(&tl_shim->session_flow_control[i].fc_lock);
+	}
+#endif /* QCA_LL_TX_FLOW_CT */
+
 #ifdef QCA_SUPPORT_TXRX_VDEV_PAUSE_LL
+	tl_shim->peer_authorized_events = adf_os_mem_alloc(NULL,
+					max_vdev * sizeof(vos_event_t));
+	if (!tl_shim->peer_authorized_events) {
+		TLSHIM_LOGE("Failed to allocate memory for events");
+#ifdef QCA_LL_TX_FLOW_CT
+		adf_os_mem_free(tl_shim->session_flow_control);
+#endif
+		vos_free_context(vos_ctx, VOS_MODULE_ID_TL, tl_shim);
+		return VOS_STATUS_E_NOMEM;
+	}
+	for (i = 0; i < max_vdev; i++) {
 		status = vos_event_init(&tl_shim->peer_authorized_events[i]);
 		if (!VOS_IS_STATUS_SUCCESS(status)) {
 			TLSHIM_LOGE("%s: Failed to initialized a event.",
 				    __func__);
 			adf_os_mem_free(tl_shim->peer_authorized_events);
+#ifdef QCA_LL_TX_FLOW_CT
 			adf_os_mem_free(tl_shim->session_flow_control);
+#endif
 			vos_free_context(vos_ctx, VOS_MODULE_ID_TL, tl_shim);
 			return status;
 		}
-#endif
-		adf_os_spinlock_init(&tl_shim->session_flow_control[i].fc_lock);
 	}
-#endif /* QCA_LL_TX_FLOW_CT */
+#endif
 
 	tl_shim->ip_checksum_offload = tl_cfg->ip_checksum_offload;
 	tl_shim->delay_interval = tl_cfg->uDelayedTriggerFrmInt;
@@ -2247,3 +2405,253 @@ void tl_shim_set_peer_authorized_event(void *vos_ctx, v_U8_t session_id)
 	vos_event_set(&tl_shim->peer_authorized_events[session_id]);
 }
 #endif
+
+#ifdef IPA_UC_OFFLOAD
+/*=============================================================================
+  FUNCTION    WLANTL_GetIpaUcResource
+
+  DESCRIPTION
+    This function will be called by TL client.
+    Data path resource will be used by FW should be allocated within lower layer.
+    Shared resource information should be propagated to IPA.
+    To propagate resource information, client will use this API
+
+  PARAMETERS
+    IN
+    vos_ctx : Global OS context context
+    ce_sr_base_paddr  : Copy Engine Source Ring base address
+    ce_sr_ring_size : Copy Engine Source Ring size
+    ce_reg_paddr : Copy engine register address
+    tx_comp_ring_base_paddr : TX COMP ring base address
+    tx_comp_ring_size : TX COMP ring size
+    tx_num_alloc_buffer : Number of TX allocated buffer
+    rx_rdy_ring_base_paddr : RX ready ring base address
+    rx_rdy_ring_size : RX ready ring size
+    rx_proc_done_idx_paddr : RX process done index physical address
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_GetIpaUcResource(void *vos_ctx,
+	v_U32_t *ce_sr_base_paddr,
+	v_U32_t *ce_sr_ring_size,
+	v_U32_t *ce_reg_paddr,
+	v_U32_t *tx_comp_ring_base_paddr,
+	v_U32_t *tx_comp_ring_size,
+	v_U32_t *tx_num_alloc_buffer,
+	v_U32_t *rx_rdy_ring_base_paddr,
+	v_U32_t *rx_rdy_ring_size,
+	v_U32_t *rx_proc_done_idx_paddr)
+{
+	if (!vos_ctx || !((pVosContextType)vos_ctx)->pdev_txrx_ctx) {
+		TLSHIM_LOGE("%s: Invalid context", __func__);
+		return;
+	}
+
+	wdi_in_ipa_uc_get_resource(((pVosContextType)vos_ctx)->pdev_txrx_ctx,
+		ce_sr_base_paddr,
+		ce_sr_ring_size,
+		ce_reg_paddr,
+		tx_comp_ring_base_paddr,
+		tx_comp_ring_size,
+		tx_num_alloc_buffer,
+		rx_rdy_ring_base_paddr,
+		rx_rdy_ring_size,
+		rx_proc_done_idx_paddr);
+}
+
+/*=============================================================================
+  FUNCTION    WLANTL_SetUcDoorbellPaddr
+
+  DESCRIPTION
+    This function will be called by TL client.
+    UC controller should provide doorbell register address to firmware
+    TL client will call this API to pass doorbell register address to firmware
+
+  PARAMETERS
+    IN
+    vos_ctx : Global OS context context
+    ipa_tx_uc_doorbell_paddr  : Micro Controller WLAN TX COMP doorbell regiser
+    ipa_rx_uc_doorbell_paddr  : Micro Controller WLAN RX REDY doorbell regiser
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_SetUcDoorbellPaddr(void *vos_ctx,
+	v_U32_t ipa_tx_uc_doorbell_paddr,
+	v_U32_t ipa_rx_uc_doorbell_paddr)
+{
+	if (!vos_ctx || !((pVosContextType)vos_ctx)->pdev_txrx_ctx) {
+		TLSHIM_LOGE("%s: Invalid context", __func__);
+		return;
+	}
+
+	wdi_in_ipa_uc_set_doorbell_paddr(((pVosContextType)vos_ctx)->pdev_txrx_ctx,
+		ipa_tx_uc_doorbell_paddr,
+		ipa_rx_uc_doorbell_paddr);
+}
+
+/*=============================================================================
+  FUNCTION    WLANTL_SetUcActive
+
+  DESCRIPTION
+    This function will be called by TL client.
+    Send Micro controller data path active or inactive notification to firmware
+
+  PARAMETERS
+    IN
+    vos_ctx : Global OS context context
+    uc_active  : Micro Controller data path is active or not
+    is_tx  : Micro Controller WLAN TX data path is active or not
+    is_rx  : Micro Controller WLAN RX data path is active or not
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_SetUcActive(void *vos_ctx,
+	v_BOOL_t uc_active,
+	v_BOOL_t is_tx
+)
+{
+	if (!vos_ctx || !((pVosContextType)vos_ctx)->pdev_txrx_ctx) {
+		TLSHIM_LOGE("%s: Invalid context", __func__);
+		return;
+	}
+
+	TLSHIM_LOGD("%s, ACTIVE %d, TX %d",
+		__func__, uc_active, is_tx);
+	wdi_in_ipa_uc_set_active(((pVosContextType)vos_ctx)->pdev_txrx_ctx,
+			uc_active, is_tx);
+}
+
+/*=============================================================================
+  FUNCTION    WLANTL_IpaUcFwOpEventHandler
+
+  DESCRIPTION
+    This function will be called by TL client.
+    Firmware data path activation response handler.
+    Firmware response will be routed to upper layer
+
+  PARAMETERS
+    IN
+    context : pre-registered shim context
+    rxpkt : message pointer from firmware
+    staid : STA ID, not used
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_IpaUcFwOpEventHandler(void *context,
+	void *rxpkt,
+	u_int16_t staid)
+{
+	v_U8_t op_code;
+	struct txrx_tl_shim_ctx *tl_shim = (struct txrx_tl_shim_ctx *)context;
+
+	if (!tl_shim) {
+		TLSHIM_LOGE("%s: Invalid context", __func__);
+		return;
+	}
+
+	vos_mem_copy(&op_code, rxpkt, 1);
+	TLSHIM_LOGD("%s, opcode %d", __func__, op_code);
+	if (tl_shim->fw_op_cb) {
+		tl_shim->fw_op_cb(op_code);
+	}
+}
+
+/*=============================================================================
+  FUNCTION    WLANTL_IpaUcOpEventHandler
+
+  DESCRIPTION
+    This function will be called by TL client.
+    This API will be registered into OL layer and if firmware send any
+    Activity related notification, OL layer will call this function.
+    firmware indication will be serialized within TLSHIM RX Thread
+
+  PARAMETERS
+    IN
+    op_code : OP Code from firmware
+    shim_ctxt : shim context pointer
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_IpaUcOpEventHandler(v_U8_t op_code, void *shim_ctxt)
+{
+	pVosSchedContext sched_ctx = get_vos_sched_ctxt();
+	struct VosTlshimPkt *pkt;
+	v_U8_t *op_code_pkt;
+
+	if (unlikely(!sched_ctx))
+		return;
+
+	pkt = vos_alloc_tlshim_pkt(sched_ctx);
+	if (!pkt) {
+		TLSHIM_LOGW("No available Rx message buffer");
+		return;
+	}
+
+	op_code_pkt = (v_U8_t *)vos_mem_malloc(4);
+	vos_mem_copy(op_code_pkt, &op_code, 1);
+	pkt->callback = (vos_tlshim_cb)	WLANTL_IpaUcFwOpEventHandler;
+	pkt->context = shim_ctxt;
+	pkt->Rxpkt = (void *) op_code_pkt;
+	pkt->staId = 0;
+	vos_indicate_rxpkt(sched_ctx, pkt);
+}
+
+/*=============================================================================
+  FUNCTION    WLANTL_RegisterOPCbFnc
+
+  DESCRIPTION
+    This function will be called by TL client.
+
+  PARAMETERS
+    IN
+    vos_ctx : Global OS context context
+    func : callback function pointer
+
+  RETURN VALUE
+    NONE
+
+  SIDE EFFECTS
+
+==============================================================================*/
+void WLANTL_RegisterOPCbFnc(void *vos_ctx,
+	void (*func)(v_U8_t op_code))
+{
+	struct txrx_tl_shim_ctx *tl_shim;
+
+	if (!vos_ctx) {
+		TLSHIM_LOGE("%s: Invalid context", __func__);
+		return;
+	}
+
+	tl_shim = vos_get_context(VOS_MODULE_ID_TL, vos_ctx);
+	if (NULL == tl_shim) {
+		TLSHIM_LOGW("Invalid TL Shim context");
+		return;
+	}
+
+	tl_shim->fw_op_cb = func;
+	wdi_in_ipa_uc_register_op_cb(((pVosContextType)vos_ctx)->pdev_txrx_ctx,
+		WLANTL_IpaUcOpEventHandler, (void *)tl_shim);
+}
+#endif /* IPA_UC_OFFLOAD */
+

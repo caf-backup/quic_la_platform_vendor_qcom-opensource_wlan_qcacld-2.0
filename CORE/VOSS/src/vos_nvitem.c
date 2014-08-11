@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -740,7 +739,10 @@ const sRegulatoryChannel * regChannels = nvDefaults.tables.regDomains[0].channel
 /*----------------------------------------------------------------------------
    Function Definitions and Documentation
  * -------------------------------------------------------------------------*/
-VOS_STATUS wlan_write_to_efs (v_U8_t *pData, v_U16_t data_len);
+VOS_STATUS wlan_write_to_efs (v_U8_t *pData, v_U16_t data_len)
+{
+   return VOS_STATUS_SUCCESS;
+}
 /**------------------------------------------------------------------------
   \brief vos_nv_init() - initialize the NV module
   The \a vos_nv_init() initializes the NV module.  This read the binary
@@ -1090,6 +1092,8 @@ static int reg_init_from_eeprom(hdd_context_t *pHddCtx, struct regulatory *reg,
       adf_os_print(KERN_ERR "Error in getting country code\n");
       return ret_val;
    }
+
+   reg->cc_src = COUNTRY_CODE_SET_BY_DRIVER;
 
    /* update default country code */
    pnvEFSTable->halnv.tables.defaultCountryTable.countryCode[0] =
@@ -3493,6 +3497,13 @@ int wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
 
         pHddCtx->reg.alpha2[0] = request->alpha2[0];
         pHddCtx->reg.alpha2[1] = request->alpha2[1];
+
+        if (NL80211_REGDOM_SET_BY_CORE == request->initiator)
+            pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_CORE;
+        else if (NL80211_REGDOM_SET_BY_DRIVER == request->initiator)
+            pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_DRIVER;
+        else pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_USER;
+
         vos_update_reg_info(pHddCtx);
         vos_reg_apply_world_flags(wiphy, request->initiator, &pHddCtx->reg);
 
@@ -3549,10 +3560,8 @@ int wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
             init_by_reg_core = VOS_TRUE;
 
 
-#ifndef QCA_WIFI_ISOC
         /* send CTL info to firmware */
         regdmn_set_regval(&pHddCtx->reg);
-#endif
     default:
         break;
     }
@@ -3563,22 +3572,22 @@ int wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
         (request->initiator == NL80211_REGDOM_SET_BY_CORE) ||
         (request->initiator == NL80211_REGDOM_SET_BY_USER))
     {
-       if (wiphy->bands[IEEE80211_BAND_5GHZ])
-       {
-          for (j=0; j<wiphy->bands[IEEE80211_BAND_5GHZ]->n_channels; j++)
-          {
-              // UNII-1 band channels are passive when domain is FCC.
-             if ((wiphy->bands[IEEE80211_BAND_5GHZ ]->channels[j].center_freq == 5180 ||
-                  wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
-                  wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
-                  wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
-                  ((request->alpha2[0]== 'U'&& request->alpha2[1]=='S') &&
-                                pHddCtx->nEnableStrictRegulatoryForFCC))
-             {
-                 wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags |= IEEE80211_CHAN_PASSIVE_SCAN;
-             }
-          }
-       }
+        if (pHddCtx->cfg_ini->gEnableStrictRegulatoryForFCC &&
+            wiphy->bands[IEEE80211_BAND_5GHZ])
+        {
+            for (j=0; j<wiphy->bands[IEEE80211_BAND_5GHZ]->n_channels; j++)
+            {
+                // UNII-1 band channels are passive when domain is FCC.
+                if ((wiphy->bands[IEEE80211_BAND_5GHZ ]->channels[j].center_freq == 5180 ||
+                     wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
+                     wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
+                     wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
+                    (request->alpha2[0]== 'U' && request->alpha2[1]=='S'))
+                {
+                    wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags |= IEEE80211_CHAN_PASSIVE_SCAN;
+                }
+            }
+        }
     }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
@@ -3588,7 +3597,6 @@ int wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
 #endif
 }
 
-#ifndef QCA_WIFI_ISOC
 /* initialize wiphy from EEPROM */
 VOS_STATUS vos_init_wiphy_from_eeprom(void)
 {
@@ -3633,7 +3641,6 @@ VOS_STATUS vos_init_wiphy_from_eeprom(void)
 
    return VOS_STATUS_SUCCESS;
 }
-#endif
 
 /* initialize wiphy from NV.bin */
 VOS_STATUS vos_init_wiphy_from_nv_bin(void)
@@ -3666,6 +3673,7 @@ VOS_STATUS vos_init_wiphy_from_nv_bin(void)
        pnvEFSTable->halnv.tables.defaultCountryTable.countryCode[0];
     pHddCtx->reg.alpha2[1] =
        pnvEFSTable->halnv.tables.defaultCountryTable.countryCode[1];
+    pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_DRIVER;
 
     vos_update_reg_info(pHddCtx);
 
@@ -3801,7 +3809,7 @@ VOS_STATUS vos_nv_getRegDomainFromCountryCode( v_REGDOMAIN_t *pRegDomain,
    v_CONTEXT_t pVosContext = NULL;
    hdd_context_t *pHddCtx = NULL;
    struct wiphy *wiphy = NULL;
-   int status;
+   unsigned long rc;
 
    // sanity checks
    if (NULL == pRegDomain)
@@ -3870,11 +3878,10 @@ VOS_STATUS vos_nv_getRegDomainFromCountryCode( v_REGDOMAIN_t *pRegDomain,
 
            INIT_COMPLETION(pHddCtx->driver_crda_req);
            regulatory_hint(wiphy, countryCode);
-           status = wait_for_completion_interruptible_timeout(
+           rc = wait_for_completion_timeout(
                    &pHddCtx->driver_crda_req,
                    msecs_to_jiffies(CRDA_WAIT_TIME));
-           if (!status)
-           {
+           if (!rc) {
                VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
                        "%s: Timeout waiting for CRDA REQ", __func__);
            }
@@ -3978,6 +3985,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
     if (request->initiator == NL80211_REGDOM_SET_BY_USER)
     {
        int status;
+       unsigned long rc;
        wiphy_dbg(wiphy, "info: set by user\n");
        memset(ccode, 0, WNI_CFG_COUNTRY_CODE_LEN);
        memcpy(ccode, request->alpha2, 2);
@@ -4003,11 +4011,10 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                                    eSIR_FALSE);
        if (eHAL_STATUS_SUCCESS == status)
        {
-          status = wait_for_completion_interruptible_timeout(
-                                       &change_country_code,
-                                       msecs_to_jiffies(WLAN_WAIT_TIME_COUNTRY));
-          if(status <= 0)
-          {
+          rc = wait_for_completion_timeout(
+                           &change_country_code,
+                           msecs_to_jiffies(WLAN_WAIT_TIME_COUNTRY));
+          if (!rc) {
              wiphy_dbg(wiphy, "info: set country timed out\n");
           }
        }
@@ -4105,6 +4112,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                  k = m + j;
                  if (IEEE80211_BAND_2GHZ == i && eCSR_BAND_5G == nBandCapability) // 5G only
                  {
+#ifdef WLAN_ENABLE_SOCIAL_CHANNELS_5G_ONLY
                      // Enable social channels for P2P
                      if ((2412 == wiphy->bands[i]->channels[j].center_freq ||
                           2437 == wiphy->bands[i]->channels[j].center_freq ||
@@ -4114,6 +4122,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                          wiphy->bands[i]->channels[j].flags &= ~IEEE80211_CHAN_DISABLED;
                      }
                      else
+#endif
                      {
                          wiphy->bands[i]->channels[j].flags |= IEEE80211_CHAN_DISABLED;
                      }
@@ -4167,8 +4176,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                       wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
                       wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
                       wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
-                     ((domainIdCurrent == REGDOMAIN_FCC) &&
-                                       pHddCtx->nEnableStrictRegulatoryForFCC))
+                     (ccode[0]== 'U' && ccode[1]=='S'))
                  {
                      wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags |= IEEE80211_CHAN_PASSIVE_SCAN;
                  }
@@ -4176,8 +4184,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                            wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
                            wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
                            wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
-                          ((domainIdCurrent != REGDOMAIN_FCC) ||
-                                      !pHddCtx->nEnableStrictRegulatoryForFCC))
+                          (ccode[0]!= 'U' && ccode[1]!='S'))
                  {
                      wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags &= ~IEEE80211_CHAN_PASSIVE_SCAN;
                  }
@@ -4189,8 +4196,6 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
              request->processed = 1;
          }
     }
-
-    complete(&pHddCtx->wiphy_channel_update_event);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
     return;

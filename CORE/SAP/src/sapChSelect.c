@@ -588,8 +588,9 @@ v_U8_t sapSelectPreferredChannelFromChannelList(v_U8_t bestChNum,
   PARAMETERS
 
     IN
+    halHandle          : Pointer to tHalHandle
     *pSpectInfoParams  : Pointer to tSapChSelSpectInfo structure
-    sapContext: SAP Context
+     pSapCtx           : Pointer to SAP Context
 
   RETURN VALUE
     v_BOOL_t:  Success or FAIL
@@ -607,7 +608,7 @@ v_BOOL_t sapChanSelInit(tHalHandle halHandle,
     v_BOOL_t chSafe = VOS_TRUE;
 #ifdef FEATURE_WLAN_CH_AVOID
     v_U16_t i;
-#endif /* FEATURE_WLAN_CH_AVOID */
+#endif
 
     VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s", __func__);
 
@@ -617,7 +618,8 @@ v_BOOL_t sapChanSelInit(tHalHandle halHandle,
     pSpectCh = (tSapSpectChInfo *)vos_mem_malloc((pSpectInfoParams->numSpectChans) * sizeof(*pSpectCh));
 
     if(pSpectCh == NULL) {
-        VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR, "In %s, VOS_MALLOC_ERR", __func__);
+        VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR,
+                "In %s, VOS_MALLOC_ERR", __func__);
         return eSAP_FALSE;
     }
 
@@ -629,11 +631,14 @@ v_BOOL_t sapChanSelInit(tHalHandle halHandle,
     pChans = pMac->scan.base20MHzChannels.channelList;
 
     // Fill the channel number in the spectrum in the operating freq band
-    for (channelnum = 0; channelnum < pSpectInfoParams->numSpectChans; channelnum++, pChans++) {
+    for (channelnum = 0;
+            channelnum < pSpectInfoParams->numSpectChans;
+                channelnum++, pChans++) {
         chSafe = VOS_TRUE;
 
         /* check if the channel is in NOL blacklist */
-        if((sapDfsIsChannelInNolList(pSapCtx, *pChans)))
+        if(sapDfsIsChannelInNolList(pSapCtx, *pChans,
+                        PHY_SINGLE_CHANNEL_CENTERED))
         {
             VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
                 "In %s, Ch %d is in NOL list", __func__, *pChans);
@@ -641,12 +646,24 @@ v_BOOL_t sapChanSelInit(tHalHandle halHandle,
             continue;
         }
 
+#if defined(FEATURE_WLAN_STA_AP_MODE_DFS_DISABLE) || defined(WLAN_FEATURE_MBSSID)
+        if (pSapCtx->dfs_ch_disable == VOS_TRUE) {
+            if (VOS_IS_DFS_CH(*pChans)) {
+                chSafe = VOS_FALSE;
+                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                          "In %s, DFS Ch %d not considered for ACS", __func__,
+                          *pChans);
+                continue;
+            }
+        }
+#endif
 #ifdef FEATURE_WLAN_CH_AVOID
         for(i = 0; i < NUM_20MHZ_RF_CHANNELS; i++) {
             if((safeChannels[i].channelNumber == *pChans) &&
                 (VOS_FALSE == safeChannels[i].isSafe))
             {
-                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, Ch %d is not safe",
+                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                        "In %s, Ch %d is not safe",
                           __func__, *pChans);
                 chSafe = VOS_FALSE;
                 break;
@@ -2390,14 +2407,38 @@ v_U8_t sapSelectChannel(tHalHandle halHandle, ptSapContext pSapCtx,  tScanResult
 #endif
     VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH, "In %s, Running SAP Ch Select", __func__);
 
+#ifdef FEATURE_WLAN_CH_AVOID
+    sapUpdateUnsafeChannelList();
+#endif
+
     if (NULL == pScanResult)
     {
         VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
                   "%s: No external AP present\n", __func__);
+
+#ifndef SOFTAP_CHANNEL_RANGE
+        return bestChNum;
+#else
         //scan is successfull, but no AP is present
-        ccmCfgGetInt( halHandle, WNI_CFG_SAP_CHANNEL_SELECT_START_CHANNEL, &startChannelNum);
-        ccmCfgGetInt( halHandle, WNI_CFG_SAP_CHANNEL_SELECT_END_CHANNEL, &endChannelNum);
-        VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+        switch (pSapCtx->scanBandPreference)
+        {
+            case eCSR_BAND_24:
+                startChannelNum = 1;
+                endChannelNum = 11;
+                break;
+
+            case eCSR_BAND_5G:
+                startChannelNum = 36;
+                endChannelNum = 165;
+                break;
+
+            case eCSR_BAND_ALL:
+            default:
+                ccmCfgGetInt( halHandle, WNI_CFG_SAP_CHANNEL_SELECT_START_CHANNEL, &startChannelNum);
+                ccmCfgGetInt( halHandle, WNI_CFG_SAP_CHANNEL_SELECT_END_CHANNEL, &endChannelNum);
+        }
+
+         VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
                   "%s: start - end: %d - %d\n", __func__,
                   startChannelNum, endChannelNum);
 
@@ -2405,7 +2446,6 @@ v_U8_t sapSelectChannel(tHalHandle halHandle, ptSapContext pSapCtx,  tScanResult
         // pick the first channel in configured range
         return startChannelNum;
 #else /* FEATURE_WLAN_CH_AVOID defined */
-        sapUpdateUnsafeChannelList();
 
         // any safe channels in the configured range?
         for (i = 0; i < NUM_20MHZ_RF_CHANNELS; i++)
@@ -2435,10 +2475,11 @@ v_U8_t sapSelectChannel(tHalHandle halHandle, ptSapContext pSapCtx,  tScanResult
         else
             return startChannelNum;
 #endif /* !FEATURE_WLAN_CH_AVOID */
+#endif /* SOFTAP_CHANNEL_RANGE */
     }
 
     // Initialize the structure pointed by pSpectInfoParams
-    if(sapChanSelInit( halHandle, pSpectInfoParams, pSapCtx) != eSAP_TRUE ) {
+    if (sapChanSelInit( halHandle, pSpectInfoParams, pSapCtx ) != eSAP_TRUE ) {
         VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_ERROR, "In %s, Ch Select initialization failed", __func__);
         return SAP_CHANNEL_NOT_SELECTED;
     }

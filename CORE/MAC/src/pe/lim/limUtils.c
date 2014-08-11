@@ -53,6 +53,9 @@
 #endif //FEATURE_WLAN_DIAG_SUPPORT
 #include "limIbssPeerMgmt.h"
 #include "limSessionUtils.h"
+#ifdef WLAN_FEATURE_VOWIFI_11R
+#include "limFTDefs.h"
+#endif
 #include "limSession.h"
 #include "vos_nvitem.h"
 
@@ -67,8 +70,6 @@
  * this information. */
 static tAniBool glimTriggerBackgroundScanDuringQuietBss_Status = eSIR_TRUE;
 
-//#define LIM_MAX_ACTIVE_SESSIONS 3  //defined temporarily for BT-AMP SUPPORT
-#define SUCCESS 1                   //defined temporarily for BT-AMP
 
 #define MAX_BA_WINDOW_SIZE_FOR_CISCO 25
 
@@ -475,10 +476,6 @@ char *limMsgStr(tANI_U32 msgType)
             return "eWNI_SME_REASSOC_REQ";
         case eWNI_SME_REASSOC_RSP:
             return "eWNI_SME_REASSOC_RSP";
-        case eWNI_SME_AUTH_REQ:
-            return "eWNI_SME_AUTH_REQ";
-        case eWNI_SME_AUTH_RSP:
-            return "eWNI_SME_AUTH_RSP";
         case eWNI_SME_DISASSOC_REQ:
             return "eWNI_SME_DISASSOC_REQ";
         case eWNI_SME_DISASSOC_RSP:
@@ -521,10 +518,6 @@ char *limMsgStr(tANI_U32 msgType)
             return "eWNI_SME_STOP_BSS_REQ";
         case eWNI_SME_STOP_BSS_RSP:
             return "eWNI_SME_STOP_BSS_RSP";
-        case eWNI_SME_PROMISCUOUS_MODE_REQ:
-            return "eWNI_SME_PROMISCUOUS_MODE_REQ";
-        case eWNI_SME_PROMISCUOUS_MODE_RSP:
-            return "eWNI_SME_PROMISCUOUS_MODE_RSP";
         case eWNI_SME_NEIGHBOR_BSS_IND:
             return "eWNI_SME_NEIGHBOR_BSS_IND";
         case eWNI_SME_MEASUREMENT_REQ:
@@ -958,6 +951,11 @@ limCleanupMlm(tpAniSirGlobal pMac)
 {
     tANI_U32   n;
     tLimPreAuthNode *pAuthNode;
+#ifdef WLAN_FEATURE_11W
+    tANI_U32  bss_entry, sta_entry;
+    tpDphHashNode pStaDs = NULL;
+    tpPESession psessionEntry = NULL;
+#endif
 
     if (pMac->lim.gLimTimersCreated == 1)
     {
@@ -1043,8 +1041,6 @@ limCleanupMlm(tpAniSirGlobal pMac)
             tx_timer_delete(&pAuthNode->timer);
         }
 
-
-
         // Deactivate and delete Hash Miss throttle timer
         tx_timer_deactivate(&pMac->lim.limTimers.gLimSendDisassocFrameThresholdTimer);
         tx_timer_delete(&pMac->lim.limTimers.gLimSendDisassocFrameThresholdTimer);
@@ -1054,17 +1050,6 @@ limCleanupMlm(tpAniSirGlobal pMac)
         tx_timer_deactivate(&pMac->lim.limTimers.gLimPreAuthClnupTimer);
         tx_timer_delete(&pMac->lim.limTimers.gLimPreAuthClnupTimer);
 
-#if 0 // The WPS PBC clean up timer is disabled
-        if (pMac->lim.gLimSystemRole == eLIM_AP_ROLE)
-        {
-            if(pMac->lim.limTimers.gLimWPSOverlapTimerObj.isTimerCreated == eANI_BOOLEAN_TRUE)
-            {
-                tx_timer_deactivate(&pMac->lim.limTimers.gLimWPSOverlapTimerObj.gLimWPSOverlapTimer);
-                tx_timer_delete(&pMac->lim.limTimers.gLimWPSOverlapTimerObj.gLimWPSOverlapTimer);
-                pMac->lim.limTimers.gLimWPSOverlapTimerObj.isTimerCreated = eANI_BOOLEAN_FALSE;
-            }
-        }
-#endif
 #ifdef WLAN_FEATURE_VOWIFI_11R
         // Deactivate and delete FT Preauth response timer
         tx_timer_deactivate(&pMac->lim.limTimers.gLimFTPreAuthRspTimer);
@@ -1095,6 +1080,41 @@ limCleanupMlm(tpAniSirGlobal pMac)
 
         pMac->lim.gLimTimersCreated = 0;
     }
+
+#ifdef WLAN_FEATURE_11W
+    /*
+     * When SSR is triggered, we need to loop through
+     * each STA associated per BSSId and deactivate/delete
+     * the pmfSaQueryTimer for it
+     */
+    if (vos_is_logp_in_progress(VOS_MODULE_ID_PE, NULL))
+    {
+        VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
+                  FL("SSR is detected, proceed to clean up pmfSaQueryTimer"));
+        for (bss_entry = 0; bss_entry < pMac->lim.maxBssId; bss_entry++)
+        {
+             if (pMac->lim.gpSession[bss_entry].valid)
+             {
+                 for (sta_entry = 1; sta_entry < pMac->lim.gLimAssocStaLimit;
+                      sta_entry++)
+                 {
+                      psessionEntry = &pMac->lim.gpSession[bss_entry];
+                      pStaDs = dphGetHashEntry(pMac, sta_entry,
+                                              &psessionEntry->dph.dphHashTable);
+                      if (NULL == pStaDs)
+                      {
+                          continue;
+                      }
+                      VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
+                                FL("Deleting pmfSaQueryTimer for staid[%d]"),
+                                pStaDs->staIndex) ;
+                      tx_timer_deactivate(&pStaDs->pmfSaQueryTimer);
+                      tx_timer_delete(&pStaDs->pmfSaQueryTimer);
+                }
+            }
+        }
+    }
+#endif
 
     /// Cleanup cached scan list
     limReInitScanResults(pMac);
@@ -2861,8 +2881,6 @@ void limCancelDot11hQuiet(tpAniSirGlobal pMac, tpPESession psessionEntry)
  */
 void limProcessQuietTimeout(tpAniSirGlobal pMac)
 {
-    //fetch the sessionEntry based on the sessionId
-    //priority - MEDIUM
     tpPESession psessionEntry;
 
     if((psessionEntry = peFindSessionBySessionId(pMac, pMac->lim.limTimers.gLimQuietTimer.sessionId))== NULL)
@@ -3052,46 +3070,6 @@ void limProcessQuietBssTimeout( tpAniSirGlobal pMac )
     }
   }
 }
-/**
- * limProcessWPSOverlapTimeout
- *
- * FUNCTION: This function call limWPSPBCTimeout() to clean WPS PBC probe request entries
- *
- * LOGIC:
- *
- * ASSUMPTIONS:
- *
- * NOTE:
- *
- * @param pMac - Pointer to Global MAC structure
- *
- * @return None
- */
-#if 0
-void limProcessWPSOverlapTimeout(tpAniSirGlobal pMac)
-{
-
-    tpPESession psessionEntry;
-    tANI_U32 sessionId;
-
-    if (tx_timer_activate(&pMac->lim.limTimers.gLimWPSOverlapTimerObj.gLimWPSOverlapTimer) != TX_SUCCESS)
-    {
-            limLog(pMac, LOGP, FL("tx_timer_activate failed"));
-    }
-
-    sessionId = pMac->lim.limTimers.gLimWPSOverlapTimerObj.sessionId;
-
-    PELOGE(limLog(pMac, LOGE, FL("WPS overlap timeout, sessionId=%d"), sessionId);)
-
-    if((psessionEntry = peFindSessionBySessionId(pMac, sessionId)) == NULL)
-    {
-        PELOGE(limLog(pMac, LOGP,FL("Session Does not exist for given sessionID"));)
-        return;
-    }
-
-    limWPSPBCTimeout(pMac, psessionEntry);
-}
-#endif
 
 /**----------------------------------------------
 \fn        limStartQuietTimer
@@ -3247,7 +3225,6 @@ void limSwitchChannelCback(tpAniSirGlobal pMac, eHalStatus status,
    pSirSmeSwitchChInd->length = sizeof(tSirSmeSwitchChannelInd);
    pSirSmeSwitchChInd->newChannelId = psessionEntry->gLimChannelSwitch.primaryChannel;
    pSirSmeSwitchChInd->sessionId = psessionEntry->smeSessionId;
-   //BSS ID
    vos_mem_copy( pSirSmeSwitchChInd->bssId, psessionEntry->bssId, sizeof(tSirMacAddr));
    mmhMsg.bodyptr = pSirSmeSwitchChInd;
    mmhMsg.bodyval = 0;
@@ -5145,6 +5122,12 @@ void limUpdateStaRunTimeHTSwitchChnlParams( tpAniSirGlobal   pMac,
     }
 #endif
 
+    if (psessionEntry->ftPEContext.ftPreAuthSession) {
+         limLog( pMac, LOGE, FL( "FT PREAUTH channel change is in progress"));
+         return;
+    }
+
+
     if ( psessionEntry->htSecondaryChannelOffset != ( tANI_U8 ) pHTInfo->secondaryChannelOffset ||
          psessionEntry->htRecommendedTxWidthSet  != ( tANI_U8 ) pHTInfo->recommendedTxWidthSet )
     {
@@ -6235,11 +6218,6 @@ tSirMsgQ msgQ;
 
   // Post WDA_ADDBA_REQ to HAL.
   msgQ.type = WDA_ADDBA_REQ;
-  //
-  // FIXME_AMPDU
-  // A global counter (dialog token) is required to keep track of
-  // all PE <-> HAL communication(s)
-  //
   msgQ.reserved = 0;
   msgQ.bodyptr = pAddBAParams;
   msgQ.bodyval = 0;
@@ -6328,11 +6306,6 @@ tSirMsgQ msgQ;
 
   // Post WDA_DELBA_IND to HAL.
   msgQ.type = WDA_DELBA_IND;
-  //
-  // FIXME:
-  // A global counter (dialog token) is required to keep track of
-  // all PE <-> HAL communication(s)
-  //
   msgQ.reserved = 0;
   msgQ.bodyptr = pDelBAParams;
   msgQ.bodyval = 0;
@@ -7186,9 +7159,7 @@ tANI_U8 limGetCurrentOperatingChannel(tpAniSirGlobal pMac)
 
 void limProcessAddStaRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
 {
-
     tpPESession         psessionEntry;
-//    tANI_U8             sessionId;
     tpAddStaParams      pAddStaParams;
 
     pAddStaParams = (tpAddStaParams)limMsgQ->bodyptr;
@@ -8010,3 +7981,32 @@ limSetProtectedBit(tpAniSirGlobal  pMac,
 } /*** end limSetProtectedBit() ***/
 #endif
 
+tANI_U8* lim_get_ie_ptr(tANI_U8 *pIes, int length, tANI_U8 eid)
+{
+    int left = length;
+    tANI_U8 *ptr = pIes;
+    tANI_U8 elem_id, elem_len;
+
+    while(left >= 2)
+    {
+        elem_id  =  ptr[0];
+        elem_len =  ptr[1];
+        left -= 2;
+        if(elem_len > left)
+        {
+            VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
+                FL("****Invalid IEs eid = %d elem_len=%d left=%d*****"),
+                eid,elem_len, left);
+
+            return NULL;
+        }
+        if (elem_id == eid)
+        {
+            return ptr;
+        }
+
+        left -= elem_len;
+        ptr += (elem_len + 2);
+    }
+    return NULL;
+}

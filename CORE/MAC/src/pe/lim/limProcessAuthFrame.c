@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -144,7 +144,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                             encrAuthFrame[LIM_ENCR_AUTH_BODY_LEN],
                             plainBody[256];
     tANI_U16                frameLen;
-    //tANI_U32                authRspTimeout, maxNumPreAuth, val;
     tANI_U32                maxNumPreAuth, val;
     tSirMacAuthFrameBody    *pRxAuthFrameBody, rxAuthFrame, authFrame;
     tpSirMacMgmtHdr         pHdr;
@@ -157,10 +156,8 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
     tANI_U8                 challengeTextArray[SIR_MAC_AUTH_CHALLENGE_LENGTH];
     tpDphHashNode           pStaDs = NULL;
     tANI_U16                assocId = 0;
-    /* Added For BT -AMP support */
+
     // Get pointer to Authentication frame header and body
-
-
     pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
     frameLen = WDA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
 
@@ -194,8 +191,6 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
               (uint)abs((tANI_S8)WDA_GET_RX_RSSI_DB(pRxPacketInfo)));
 
     pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
-
-    //PELOG3(sirDumpBuf(pMac, SIR_LIM_MODULE_ID, LOG3, (tANI_U8*)pBd, ((tpHalBufDesc) pBd)->mpduDataOffset + frameLen);)
 
     //Restore default failure timeout
     if (VOS_P2P_CLIENT_MODE == psessionEntry->pePersona && psessionEntry->defaultAuthFailureTimeout)
@@ -1000,21 +995,22 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
                      (psessionEntry->limSystemRole == eLIM_BT_AMP_STA_ROLE)) &&
                     (psessionEntry->limSmeState == eLIM_SME_WT_REASSOC_STATE) &&
                     (pRxAuthFrameBody->authStatusCode == eSIR_MAC_SUCCESS_STATUS) &&
-                    (pMac->ft.ftPEContext.pFTPreAuthReq != NULL) &&
-                    (vos_mem_compare(pMac->ft.ftPEContext.pFTPreAuthReq->preAuthbssId,
-                                     pHdr->sa, sizeof(tSirMacAddr))))
+                    (psessionEntry->ftPEContext.pFTPreAuthReq != NULL) &&
+                    (vos_mem_compare(
+                        psessionEntry->ftPEContext.pFTPreAuthReq->preAuthbssId,
+                        pHdr->sa, sizeof(tSirMacAddr))))
                 {
                     // Update the FTIEs in the saved auth response
                     PELOGW(limLog(pMac, LOGW, FL("received another PreAuth frame2"
                            " from peer " MAC_ADDRESS_STR" in Smestate %d"),
                            MAC_ADDR_ARRAY(pHdr->sa), psessionEntry->limSmeState);)
 
-                    pMac->ft.ftPEContext.saved_auth_rsp_length = 0;
+                    psessionEntry->ftPEContext.saved_auth_rsp_length = 0;
                     if ((pBody != NULL) && (frameLen < MAX_FTIE_SIZE))
                     {
-                        vos_mem_copy(pMac->ft.ftPEContext.saved_auth_rsp,
+                        vos_mem_copy(psessionEntry->ftPEContext.saved_auth_rsp,
                                      pBody, frameLen);
-                        pMac->ft.ftPEContext.saved_auth_rsp_length = frameLen;
+                        psessionEntry->ftPEContext.saved_auth_rsp_length = frameLen;
                     }
                 }
                 else
@@ -1714,6 +1710,7 @@ tSirRetStatus limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, vo
     tSirMacAuthFrameBody rxAuthFrame;
     tSirMacAuthFrameBody *pRxAuthFrameBody = NULL;
     tSirRetStatus ret_status = eSIR_FAILURE;
+    int i;
 
     pHdr = WDA_GET_RX_MAC_HEADER(pBd);
     pBody = WDA_GET_RX_MPDU_DATA(pBd);
@@ -1724,15 +1721,27 @@ tSirRetStatus limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, vo
            MAC_ADDR_ARRAY(pHdr->bssId),
            (uint)abs((tANI_S8)WDA_GET_RX_RSSI_DB(pBd)));
 
-    // Check for the operating channel and see what needs to be done next.
-    psessionEntry = pMac->ft.ftPEContext.psavedsessionEntry;
+    /* Auth frame has come on a new BSS, however, we need to find the session
+     * from where the auth-req was sent to the new AP
+     */
+    for (i = 0; i < pMac->lim.maxBssId; i++) {
+        /* Find first free room in session table */
+        if (pMac->lim.gpSession[i].valid == TRUE &&
+           pMac->lim.gpSession[i].ftPEContext.ftPreAuthSession == VOS_TRUE) {
+            /* Found the session */
+            psessionEntry = &pMac->lim.gpSession[i];
+            pMac->lim.gpSession[i].ftPEContext.ftPreAuthSession = VOS_FALSE;
+        }
+    }
+
     if (psessionEntry == NULL)
     {
-        limLog(pMac, LOGE, FL("Error: Unable to find session id while in pre-auth phase for FT"));
+        limLog(pMac, LOGE,
+        FL("Error: Unable to find session id while in pre-auth phase for FT"));
         return eSIR_FAILURE;
     }
 
-    if (pMac->ft.ftPEContext.pFTPreAuthReq == NULL)
+    if (psessionEntry->ftPEContext.pFTPreAuthReq == NULL)
     {
         limLog(pMac, LOGE, FL("Error: No FT"));
         // No FT in progress.
@@ -1746,7 +1755,8 @@ tSirRetStatus limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, vo
     }
 #ifdef WLAN_FEATURE_VOWIFI_11R_DEBUG
     limPrintMacAddr(pMac, pHdr->bssId, LOG2);
-    limPrintMacAddr(pMac, pMac->ft.ftPEContext.pFTPreAuthReq->preAuthbssId, LOG2);
+    limPrintMacAddr(pMac,
+                psessionEntry->ftPEContext.pFTPreAuthReq->preAuthbssId, LOG2);
     limLog(pMac,LOG2,FL("seqControl 0x%X"),
             ((pHdr->seqControl.seqNumHi << 8) |
             (pHdr->seqControl.seqNumLo << 4) |
@@ -1754,7 +1764,7 @@ tSirRetStatus limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, vo
 #endif
 
     // Check that its the same bssId we have for preAuth
-    if (!vos_mem_compare(pMac->ft.ftPEContext.pFTPreAuthReq->preAuthbssId,
+    if (!vos_mem_compare(psessionEntry->ftPEContext.pFTPreAuthReq->preAuthbssId,
                          pHdr->bssId, sizeof( tSirMacAddr )))
     {
         limLog(pMac, LOGE, FL("Error: Same bssid as preauth BSSID"));
@@ -1764,7 +1774,7 @@ tSirRetStatus limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, vo
     }
 
     if (eANI_BOOLEAN_TRUE ==
-        pMac->ft.ftPEContext.pFTPreAuthReq->bPreAuthRspProcessed)
+        psessionEntry->ftPEContext.pFTPreAuthReq->bPreAuthRspProcessed)
     {
         /*
          * This is likely a duplicate for the same pre-auth request.
@@ -1785,15 +1795,15 @@ tSirRetStatus limProcessAuthFrameNoSession(tpAniSirGlobal pMac, tANI_U8 *pBd, vo
          */
         PELOGE(limLog(pMac,LOG1,"Auth rsp already posted to SME"
                " (session %p, FT session %p)", psessionEntry,
-               pMac->ft.ftPEContext.pftSessionEntry););
+               psessionEntry););
         return eSIR_SUCCESS;
     }
     else
     {
         PELOGE(limLog(pMac,LOGW,"Auth rsp not yet posted to SME"
                " (session %p, FT session %p)", psessionEntry,
-               pMac->ft.ftPEContext.pftSessionEntry););
-        pMac->ft.ftPEContext.pFTPreAuthReq->bPreAuthRspProcessed =
+               psessionEntry););
+        psessionEntry->ftPEContext.pFTPreAuthReq->bPreAuthRspProcessed =
             eANI_BOOLEAN_TRUE;
     }
 

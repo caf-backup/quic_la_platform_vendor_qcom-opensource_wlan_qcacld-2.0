@@ -114,6 +114,7 @@ typedef enum eAniNlModuleTypes {
    WLAN_NL_MSG_OEM,
    WLAN_NL_MSG_SVC,
    WLAN_NL_MSG_CNSS_DIAG = ANI_NL_MSG_BASE + 0x0B,//Value needs to be 27
+   ANI_NL_MSG_LOG,
    ANI_NL_MSG_MAX
 } tAniNlModTypes, tWlanNlModTypes;
 
@@ -131,6 +132,7 @@ struct wlan_status_data {
    uint8_t is_on;
    uint8_t vdev_id;
    uint8_t is_connected;
+   int8_t rssi;
    uint8_t ssid_len;
    uint8_t country_code[WLAN_SVC_COUNTRY_CODE_LEN];
    uint32_t vdev_mode;
@@ -147,6 +149,11 @@ struct wlan_version_data {
    char chip_from[WLAN_SVC_MAX_STR_LEN];
    char host_version[WLAN_SVC_MAX_STR_LEN];
    char fw_version[WLAN_SVC_MAX_STR_LEN];
+};
+
+struct wlan_dfs_info {
+   uint16_t channel;
+   uint8_t country_code[WLAN_SVC_COUNTRY_CODE_LEN];
 };
 
 #endif //WLAN_NLINK_COMMON_H__

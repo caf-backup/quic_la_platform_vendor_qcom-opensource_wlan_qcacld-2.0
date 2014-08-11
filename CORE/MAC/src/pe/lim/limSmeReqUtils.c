@@ -301,9 +301,6 @@ limSetRSNieWPAiefromSmeStartBSSReqMessage(tpAniSirGlobal pMac,
 
         // Check validity of RSN IE
         if ((pRSNie->rsnIEdata[0] == SIR_MAC_RSN_EID) &&
-#if 0 // Comparison always false
-            (pRSNie->rsnIEdata[1] > SIR_MAC_RSN_IE_MAX_LENGTH) ||
-#endif
              (pRSNie->rsnIEdata[1] < SIR_MAC_RSN_IE_MIN_LENGTH))
         {
             limLog(pMac, LOGE, FL("RSN IE len %d not [%d,%d]"),
@@ -354,9 +351,6 @@ limSetRSNieWPAiefromSmeStartBSSReqMessage(tpAniSirGlobal pMac,
             val = sirReadU32((tANI_U8 *) &pRSNie->rsnIEdata[wpaIndex + 2]);
 
             if ((pRSNie->rsnIEdata[wpaIndex] == SIR_MAC_WPA_EID) &&
-#if 0 // Comparison always false
-                (pRSNie->rsnIEdata[wpaIndex + 1] > SIR_MAC_WPA_IE_MAX_LENGTH) ||
-#endif
                 ((pRSNie->rsnIEdata[wpaIndex + 1] < SIR_MAC_WPA_IE_MIN_LENGTH) ||
                 (SIR_MAC_WPA_OUI != val)))
             {
@@ -853,6 +847,13 @@ limIsSmeScanReqValid(tpAniSirGlobal pMac, tpSirSmeScanReq pScanReq)
     tANI_U8 valid = true;
     tANI_U8 i = 0;
 
+    if (pScanReq->numSsid > SIR_SCAN_MAX_NUM_SSID)
+    {
+        valid = false;
+        limLog(pMac, LOGE, FL("Number of SSIDs > SIR_SCAN_MAX_NUM_SSID"));
+        goto end;
+    }
+
     for (i = 0; i < pScanReq->numSsid; i++)
     {
         if (pScanReq->ssId[i].length > SIR_MAC_MAX_SSID_LENGTH)
@@ -863,31 +864,11 @@ limIsSmeScanReqValid(tpAniSirGlobal pMac, tpSirSmeScanReq pScanReq)
             goto end;
         }
     }
-    if (pScanReq->bssType > eSIR_AUTO_MODE)
+    if ((pScanReq->bssType < 0) || (pScanReq->bssType > eSIR_AUTO_MODE))
     {
        limLog(pMac, LOGE, FL("Invalid BSS Type"));
        valid = false;
     }
-
-    if (limIsGroupAddr(pScanReq->bssId) && !limIsAddrBC(pScanReq->bssId))
-    {
-        limLog(pMac, LOGE, FL("Invalid BSS Type"));
-
-        valid = false;
-        limLog(pMac, LOGE, FL("BSSID is group addr and is not Broadcast Addr"));
-    }
-    if (!(pScanReq->scanType == eSIR_PASSIVE_SCAN || pScanReq->scanType == eSIR_ACTIVE_SCAN))
-    {
-        valid = false;
-        limLog(pMac, LOGE, FL("Invalid Scan Type"));
-    }
-
-    if (pScanReq->channelList.numChannels > SIR_MAX_NUM_CHANNELS)
-    {
-       valid = false;
-       limLog(pMac, LOGE, FL("Number of Channels > SIR_MAX_NUM_CHANNELS"));
-    }
-
     if (limIsGroupAddr(pScanReq->bssId) && !limIsAddrBC(pScanReq->bssId))
     {
         valid = false;
@@ -903,8 +884,6 @@ limIsSmeScanReqValid(tpAniSirGlobal pMac, tpSirSmeScanReq pScanReq)
         valid = false;
         limLog(pMac, LOGE, FL("Number of Channels > SIR_MAX_NUM_CHANNELS"));
     }
-
-
 
     /*
     ** check min/max channelTime range
@@ -923,45 +902,6 @@ limIsSmeScanReqValid(tpAniSirGlobal pMac, tpSirSmeScanReq pScanReq)
 end:
     return valid;
 } /*** end limIsSmeScanReqValid() ***/
-
-
-
-/**
- * limIsSmeAuthReqValid()
- *
- *FUNCTION:
- * This function is called by limProcessSmeReqMessages() upon
- * receiving SME_AUTH_REQ message from application.
- *
- *LOGIC:
- * Message validity checks are performed in this function
- *
- *ASSUMPTIONS:
- *
- *NOTE:
- *
- * @param  pAuthReq Pointer to received SME_AUTH_REQ message
- * @return true  when received SME_AUTH_REQ is formatted correctly
- *         false otherwise
- */
-
-tANI_U8
-limIsSmeAuthReqValid(tpSirSmeAuthReq pAuthReq)
-{
-    tANI_U8 valid = true;
-
-    if (limIsGroupAddr(pAuthReq->peerMacAddr) ||
-        (pAuthReq->authType > eSIR_AUTO_SWITCH) ||
-        !pAuthReq->channelNumber)
-    {
-        valid = false;
-        goto end;
-    }
-
-end:
-    return valid;
-} /*** end limIsSmeAuthReqValid() ***/
-
 
 
 /**

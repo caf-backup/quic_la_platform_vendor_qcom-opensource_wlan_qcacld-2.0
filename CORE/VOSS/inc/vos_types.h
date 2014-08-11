@@ -105,6 +105,8 @@ typedef enum
    VOS_MODULE_ID_TL         = 1,
    VOS_MODULE_ID_WDI        = 2,
    // 3 & 4 are unused for historical purposes
+   VOS_MODULE_ID_RSV3       = 3,
+   VOS_MODULE_ID_RSV4       = 4,
    VOS_MODULE_ID_HDD        = 5,
    VOS_MODULE_ID_SME        = 6,
    VOS_MODULE_ID_PE         = 7,
@@ -117,13 +119,11 @@ typedef enum
    VOS_MODULE_ID_HDD_DATA   = 14,
    VOS_MODULE_ID_HDD_SAP_DATA  = 15,
 
-#ifdef QCA_WIFI_2_0
    VOS_MODULE_ID_HIF        = 16,
    VOS_MODULE_ID_HTC        = 17,
    VOS_MODULE_ID_TXRX       = 18,
    VOS_MODULE_ID_ADF        = 19,
    VOS_MODULE_ID_CFG        = 20,
-#endif
 
    // not a real module ID.  This is used to identify the maxiumum
    // number of VOS_MODULE_IDs and should always be at the END of

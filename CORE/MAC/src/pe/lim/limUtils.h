@@ -55,6 +55,8 @@ typedef enum
 #define LIM_AID_MASK                              0xC000
 #define LIM_SPECTRUM_MANAGEMENT_BIT_MASK          0x0100
 #define LIM_RRM_BIT_MASK                          0x1000
+#define LIM_SHORT_PREAMBLE_BIT_MASK               0x0020
+#define LIM_IMMEDIATE_BLOCK_ACK_MASK              0x8000
 #if  defined (WLAN_FEATURE_VOWIFI_11R) || defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR)
 #define LIM_MAX_REASSOC_RETRY_LIMIT            2
 #endif
@@ -100,6 +102,19 @@ typedef union uPmfSaQueryTimerId
 } tPmfSaQueryTimerId, *tpPmfSaQueryTimerId;
 #endif
 
+typedef enum offset {
+    BW20,
+    BW40PLUS,
+    BW40MINUS,
+    BWALL
+} offset_t;
+
+typedef struct op_class_map {
+    tANI_U8 op_class;
+    tANI_U8 ch_spacing;
+    offset_t    offset;
+    tANI_U8 channels[15];
+}op_class_map_t;
 // LIM utility functions
 void limGetBssidFromPkt(tpAniSirGlobal, tANI_U8 *, tANI_U8 *, tANI_U32 *);
 char * limMlmStateStr(tLimMlmStates state);
@@ -189,10 +204,6 @@ tSirRetStatus limStartChannelSwitch(tpAniSirGlobal pMac, tpPESession psessionEnt
 void limUpdateChannelSwitch(tpAniSirGlobal, tpSirProbeRespBeacon, tpPESession psessionEntry);
 void limProcessQuietTimeout(tpAniSirGlobal);
 void limProcessQuietBssTimeout(tpAniSirGlobal);
-
-#if 0
-void limProcessWPSOverlapTimeout(tpAniSirGlobal pMac);
-#endif
 
 void limStartQuietTimer(tpAniSirGlobal pMac, tANI_U8 sessionId);
 void limSwitchPrimaryChannel(tpAniSirGlobal, tANI_U8,tpPESession);
@@ -556,12 +567,6 @@ void peSetResumeChannel(tpAniSirGlobal pMac, tANI_U16 channel, ePhyChanBondState
   --------------------------------------------------------------------------*/
 void peGetResumeChannel(tpAniSirGlobal pMac, tANI_U8* resumeChannel, ePhyChanBondState* resumePhyCbState);
 
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-tANI_U8 limTdlsFindLinkPeer(tpAniSirGlobal pMac, tSirMacAddr peerMac, tLimTdlsLinkSetupPeer  **setupPeer);
-void limTdlsDelLinkPeer(tpAniSirGlobal pMac, tSirMacAddr peerMac);
-void limStartTdlsTimer(tpAniSirGlobal pMac, tANI_U8 sessionId, TX_TIMER *timer, tANI_U32 timerId,
-                                      tANI_U16 timerType, tANI_U32 timerMsg);
-#endif
 
 void limGetShortSlotFromPhyMode(tpAniSirGlobal pMac, tpPESession psessionEntry, tANI_U32 phyMode,
                                    tANI_U8 *pShortSlotEnable);
@@ -591,4 +596,10 @@ void limSetProtectedBit(tpAniSirGlobal  pMac,
                            tSirMacAddr     peer,
                            tpSirMacMgmtHdr pMacHdr);
 
+tANI_U8* lim_get_ie_ptr(tANI_U8 *pIes, int length, tANI_U8 eid);
+
+void limInitOperatingClasses(tHalHandle hHal);
+tANI_U8 limGetOPClassFromChannel(tANI_U8 *country,
+                                 tANI_U8 channel,
+                                 tANI_U8 offset);
 #endif /* __LIM_UTILS_H */

@@ -29,6 +29,8 @@
 #include "htc_internal.h"
 #include "vos_api.h"
 #include <adf_nbuf.h> /* adf_nbuf_t */
+#include <vos_getBin.h>
+#include "epping_main.h"
 
 #ifdef DEBUG
 void DebugDumpBytes(A_UCHAR *buffer, A_UINT16 length, char *pDescription)
@@ -451,6 +453,7 @@ A_STATUS HTCRxCompletionHandler(
 #ifdef RX_SG_SUPPORT
 _out:
 #endif
+
     if (netbuf != NULL) {
         adf_nbuf_free(netbuf);
     }
@@ -656,6 +659,16 @@ static A_STATUS HTCProcessTrailer(HTC_TARGET     *target,
                                     htc_rec_len / (sizeof(HTC_CREDIT_REPORT)),
                                     FromEndpoint);
                 break;
+
+#ifdef HIF_SDIO
+            case HTC_RECORD_LOOKAHEAD:
+                /* Process in HIF layer */
+                break;
+
+            case HTC_RECORD_LOOKAHEAD_BUNDLE:
+                /* Process in HIF layer */
+                break;
+#endif
             default:
                 AR_DEBUG_PRINTF(ATH_DEBUG_ERR, (" unhandled record: id:%d length:%d \n",
                         htc_rec_id, htc_rec_len));

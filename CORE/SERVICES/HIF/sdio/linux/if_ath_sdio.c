@@ -42,6 +42,14 @@
 #include <linux/mmc/sd.h>
 #include "bmi_msg.h" /* TARGET_TYPE_ */
 #include "if_ath_sdio.h"
+#include "vos_api.h"
+
+#ifndef REMOVE_PKT_LOG
+#include "ol_txrx_types.h"
+#include "pktlog_ac_api.h"
+#include "pktlog_ac.h"
+#endif
+#include "epping_main.h"
 
 #ifndef ATH_BUS_PM
 #ifdef CONFIG_PM
@@ -49,10 +57,15 @@
 #endif /* CONFIG_PM */
 #endif /* ATH_BUS_PM */
 
+#ifndef REMOVE_PKT_LOG
+struct ol_pl_os_dep_funcs *g_ol_pl_os_dep_funcs = NULL;
+#endif
+
 typedef void * hif_handle_t;
 typedef void * hif_softc_t;
 
 extern int hdd_wlan_startup(struct device *dev, void *hif_sc);
+extern void __hdd_wlan_exit(void);
 
 struct ath_hif_sdio_softc *sc = NULL;
 
@@ -151,6 +164,24 @@ ath_hif_sdio_probe(void *context, void *hif_handle)
         VOS_TRACE(VOS_MODULE_ID_HIF, VOS_TRACE_LEVEL_INFO," hdd_wlan_startup success!");
     }
 
+	/* epping is minimum ethernet driver and the
+	 * epping fw does not support pktlog, etc.
+	 * After hdd_wladriver is epping directly return. */
+	if (WLAN_IS_EPPING_ENABLED(vos_get_conparam()))
+		goto end;
+
+#ifndef REMOVE_PKT_LOG
+    if (vos_get_conparam() != VOS_FTM_MODE) {
+        /*
+         * pktlog initialization
+         */
+        ol_pl_sethandle(&ol_sc->pdev_txrx_handle->pl_dev, ol_sc);
+
+        if (pktlogmod_init(ol_sc))
+            printk(KERN_ERR "%s: pktlogmod_init failed\n", __func__);
+    }
+#endif
+end:
     return 0;
 
 err_attach2:
@@ -186,6 +217,17 @@ ath_hif_sdio_remove(void *context, void *hif_handle)
     ENTER();
 
     athdiag_procfs_remove();
+
+#ifndef REMOVE_PKT_LOG
+    if (vos_get_conparam() != VOS_FTM_MODE &&
+		!WLAN_IS_EPPING_ENABLED(vos_get_conparam())){
+        if (sc && sc->ol_sc)
+            pktlogmod_exit(sc->ol_sc);
+    }
+#endif
+
+    //cleaning up the upper layers
+    __hdd_wlan_exit();
 
     if (sc && sc->ol_sc){
        A_FREE(sc->ol_sc);

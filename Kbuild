@@ -6,6 +6,12 @@ else
 	KERNEL_BUILD := 0
 endif
 
+# This driver does not support integrated SOC
+CONFIG_QCA_WIFI_ISOC=0
+
+# This driver supports the QCACLD 2.0 software architecture
+CONFIG_QCA_WIFI_2_0=1
+
 ifeq ($(CONFIG_CLD_HL_SDIO_CORE), y)
 	CONFIG_QCA_WIFI_SDIO := 1
 endif
@@ -34,8 +40,8 @@ ifeq ($(KERNEL_BUILD), 0)
 	#Flag to enable BlueTooth AMP feature
 	CONFIG_PRIMA_WLAN_BTAMP := n
 
-	#Flag to enable Legacy Fast Roaming(LFR)
-	CONFIG_PRIMA_WLAN_LFR := y
+	#Flag to enable Legacy Fast Roaming3(LFR3)
+	CONFIG_QCACLD_WLAN_LFR3 := y
 
 	#JB kernel has PMKSA patches, hence enabling this flag
 	CONFIG_PRIMA_WLAN_OKC := y
@@ -76,6 +82,14 @@ ifeq ($(KERNEL_BUILD), 0)
         endif
         ifeq ($(CONFIG_ROME_IF),sdio)
                 CONFIG_WLAN_FEATURE_11W := y
+        endif
+
+	#Flag to enable NAN
+	CONFIG_FEATURE_NAN := y
+
+        #Flag to enable Linux QCMBR feature as default feature
+        ifeq ($(CONFIG_ROME_IF),usb)
+                CONFIG_LINUX_QCMBR :=y
         endif
 endif
 
@@ -118,6 +132,18 @@ endif
 ifeq ($(CONFIG_QCA_WIFI_SDIO), 1)
 CONFIG_ATH_11AC_TXCOMPACT := 0
 endif
+
+#Enable per vdev Tx desc pool
+ifeq ($(CONFIG_ROME_IF),pci)
+	CONFIG_PER_VDEV_TX_DESC_POOL := 0
+endif
+ifeq ($(CONFIG_ROME_IF),usb)
+	CONFIG_PER_VDEV_TX_DESC_POOL := 1
+endif
+ifeq ($(CONFIG_QCA_WIFI_SDIO), 1)
+	CONFIG_PER_VDEV_TX_DESC_POOL := 0
+endif
+
 
 #Enable OS specific IRQ abstraction
 CONFIG_ATH_SUPPORT_SHARED_IRQ := 1
@@ -188,7 +214,8 @@ endif
 
 #Enable IPA offload
 ifeq ($(CONFIG_IPA), y)
-CONFIG_IPA_OFFLOAD := 0
+CONFIG_IPA_OFFLOAD := 1
+CONFIG_IPA_UC_OFFLOAD := 1
 endif
 
 #Enable Signed firmware support for split binary format
@@ -377,6 +404,20 @@ ifeq ($(CONFIG_QCOM_TDLS),y)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_tdls.o
 endif
 
+############ EPPING ############
+EPPING_DIR :=	CORE/EPPING
+EPPING_INC_DIR :=	$(EPPING_DIR)/inc
+EPPING_SRC_DIR :=	$(EPPING_DIR)/src
+
+EPPING_INC := 	-I$(WLAN_ROOT)/$(EPPING_INC_DIR)
+
+EPPING_OBJS := $(EPPING_SRC_DIR)/epping_main.o \
+		$(EPPING_SRC_DIR)/epping_txrx.o \
+		$(EPPING_SRC_DIR)/epping_tx.o \
+		$(EPPING_SRC_DIR)/epping_rx.o \
+		$(EPPING_SRC_DIR)/epping_helper.o \
+
+
 ############ MAC ############
 MAC_DIR :=	CORE/MAC
 MAC_INC_DIR :=	$(MAC_DIR)/inc
@@ -414,7 +455,6 @@ MAC_LIM_OBJS := $(MAC_SRC_DIR)/pe/lim/limAIDmgmt.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessCfgUpdates.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessDeauthFrame.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessDisassocFrame.o \
-		$(MAC_SRC_DIR)/pe/lim/limProcessLmmMessages.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessMessageQueue.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessMlmReqMessages.o \
 		$(MAC_SRC_DIR)/pe/lim/limProcessMlmRspMessages.o \
@@ -546,6 +586,10 @@ SME_P2P_OBJS = $(SME_SRC_DIR)/p2p/p2p_Api.o
 
 SME_RRM_OBJS := $(SME_SRC_DIR)/rrm/sme_rrm.o
 
+ifeq ($(CONFIG_FEATURE_NAN),y)
+SME_NAN_OBJS = $(SME_SRC_DIR)/nan/nan_Api.o
+endif
+
 SME_OBJS :=	$(SME_BTC_OBJS) \
 		$(SME_CCM_OBJS) \
 		$(SME_CMN_OBJS) \
@@ -554,7 +598,8 @@ SME_OBJS :=	$(SME_BTC_OBJS) \
 		$(SME_P2P_OBJS) \
 		$(SME_PMC_OBJS) \
 		$(SME_QOS_OBJS) \
-		$(SME_RRM_OBJS)
+		$(SME_RRM_OBJS) \
+		$(SME_NAN_OBJS)
 
 ############ SVC ############
 SVC_DIR :=	CORE/SVC
@@ -573,9 +618,13 @@ NLINK_OBJS :=	$(NLINK_SRC_DIR)/wlan_nlink_srv.o
 PTT_SRC_DIR :=	$(SVC_SRC_DIR)/ptt
 PTT_OBJS :=	$(PTT_SRC_DIR)/wlan_ptt_sock_svc.o
 
+WLAN_LOGGING_SRC_DIR := $(SVC_SRC_DIR)/logging
+WLAN_LOGGING_OBJS := $(WLAN_LOGGING_SRC_DIR)/wlan_logging_sock_svc.o
+
 SVC_OBJS :=	$(BTC_OBJS) \
 		$(NLINK_OBJS) \
-		$(PTT_OBJS)
+		$(PTT_OBJS) \
+		$(WLAN_LOGGING_OBJS)
 
 ############ SYS ############
 SYS_DIR :=	CORE/SYS
@@ -590,7 +639,6 @@ SYS_COMMON_SRC_DIR := $(SYS_DIR)/common/src
 SYS_LEGACY_SRC_DIR := $(SYS_DIR)/legacy/src
 SYS_OBJS :=	$(SYS_COMMON_SRC_DIR)/wlan_qct_sys.o \
 		$(SYS_LEGACY_SRC_DIR)/pal/src/palApiComm.o \
-		$(SYS_LEGACY_SRC_DIR)/pal/src/palTimer.o \
 		$(SYS_LEGACY_SRC_DIR)/platform/src/VossWrapper.o \
 		$(SYS_LEGACY_SRC_DIR)/system/src/macInitApi.o \
 		$(SYS_LEGACY_SRC_DIR)/system/src/sysEntryFunc.o \
@@ -805,42 +853,15 @@ WDI_DIR :=	CORE/WDI
 
 WDI_CP_INC :=	-I$(WLAN_ROOT)/$(WDI_DIR)/CP/inc/
 
-WDI_CP_SRC_DIR := $(WDI_DIR)/CP/src
-WDI_CP_OBJS :=	$(WDI_CP_SRC_DIR)/wlan_qct_wdi.o \
-		$(WDI_CP_SRC_DIR)/wlan_qct_wdi_dp.o \
-		$(WDI_CP_SRC_DIR)/wlan_qct_wdi_sta.o
-
 WDI_DP_INC := -I$(WLAN_ROOT)/$(WDI_DIR)/DP/inc/
-
-WDI_DP_SRC_DIR := $(WDI_DIR)/DP/src
-WDI_DP_OBJS :=	$(WDI_DP_SRC_DIR)/wlan_qct_wdi_bd.o \
-		$(WDI_DP_SRC_DIR)/wlan_qct_wdi_ds.o
 
 WDI_TRP_INC :=	-I$(WLAN_ROOT)/$(WDI_DIR)/TRP/CTS/inc/ \
 		-I$(WLAN_ROOT)/$(WDI_DIR)/TRP/DTS/inc/
-
-WDI_TRP_CTS_SRC_DIR :=	$(WDI_DIR)/TRP/CTS/src
-WDI_TRP_CTS_OBJS :=	$(WDI_TRP_CTS_SRC_DIR)/wlan_qct_wdi_cts.o
-
-WDI_TRP_DTS_SRC_DIR :=	$(WDI_DIR)/TRP/DTS/src
-WDI_TRP_DTS_OBJS :=	$(WDI_TRP_DTS_SRC_DIR)/wlan_qct_wdi_dts.o
-
-WDI_TRP_OBJS :=	$(WDI_TRP_CTS_OBJS) \
-		$(WDI_TRP_DTS_OBJS)
 
 WDI_WPAL_INC := -I$(WLAN_ROOT)/$(WDI_DIR)/WPAL/inc
 
 WDI_WPAL_SRC_DIR := $(WDI_DIR)/WPAL/src
 WDI_WPAL_OBJS := $(WDI_WPAL_SRC_DIR)/wlan_qct_pal_trace.o
-
-ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
-WDI_WPAL_OBJS += $(WDI_WPAL_SRC_DIR)/wlan_qct_pal_api.o \
-		 $(WDI_WPAL_SRC_DIR)/wlan_qct_pal_device.o \
-		 $(WDI_WPAL_SRC_DIR)/wlan_qct_pal_msg.o \
-		 $(WDI_WPAL_SRC_DIR)/wlan_qct_pal_packet.o \
-		 $(WDI_WPAL_SRC_DIR)/wlan_qct_pal_sync.o \
-		 $(WDI_WPAL_SRC_DIR)/wlan_qct_pal_timer.o
-endif
 
 WDI_INC :=	$(WDI_CP_INC) \
 		$(WDI_DP_INC) \
@@ -849,13 +870,6 @@ WDI_INC :=	$(WDI_CP_INC) \
 
 WDI_OBJS :=	$(WDI_WPAL_OBJS)
 
-ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
-WDI_OBJS +=	$(WDI_CP_OBJS) \
-		$(WDI_DP_OBJS) \
-		$(WDI_TRP_OBJS)
-endif
-
-
 WCNSS_INC :=	-I$(WLAN_ROOT)/wcnss/inc
 
 LINUX_INC :=	-Iinclude/linux
@@ -863,6 +877,7 @@ LINUX_INC :=	-Iinclude/linux
 INCS :=		$(BAP_INC) \
 		$(DXE_INC) \
 		$(HDD_INC) \
+		$(EPPING_INC) \
 		$(LINUX_INC) \
 		$(MAC_INC) \
 		$(WCNSS_INC) \
@@ -907,6 +922,7 @@ endif
 
 OBJS :=		$(BAP_OBJS) \
 		$(HDD_OBJS) \
+		$(EPPING_OBJS) \
 		$(MAC_OBJS) \
 		$(SAP_OBJS) \
 		$(SME_OBJS) \
@@ -950,9 +966,7 @@ EXTRA_CFLAGS += $(INCS)
 CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DANI_LITTLE_BIT_ENDIAN \
 		-DQC_WLAN_CHIPSET_QCA_CLD \
-		-DINTEGRATION_READY \
 		-DDOT11F_LITTLE_ENDIAN_HOST \
-		-DGEN6_ONWARDS \
 		-DANI_COMPILER_TYPE_GCC \
 		-DANI_OS_TYPE_ANDROID=6 \
 		-DANI_LOGDUMP \
@@ -994,7 +1008,11 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DQCA_SUPPORT_TX_THROTTLE \
 		-DWMI_INTERFACE_EVENT_LOGGING \
 		-DATH_SUPPORT_WAPI \
-		-DFEATURE_WLAN_EXTSCAN
+		-DWLAN_FEATURE_LINK_LAYER_STATS \
+		-DWLAN_LOGGING_SOCK_SVC_ENABLE \
+		-DFEATURE_WLAN_EXTSCAN \
+		-DQCA_LL_TX_FLOW_CT \
+		-DFEATURE_WLAN_LFR
 
 ifeq ($(CONFIG_QCA_WIFI_SDIO), 1)
 CDEFINES +=     -DCONFIG_HL_SUPPORT \
@@ -1082,8 +1100,8 @@ ifeq ($(CONFIG_PRIMA_WLAN_BTAMP),y)
 CDEFINES += -DWLAN_BTAMP_FEATURE
 endif
 
-ifeq ($(CONFIG_PRIMA_WLAN_LFR),y)
-CDEFINES += -DFEATURE_WLAN_LFR
+ifeq ($(CONFIG_QCACLD_WLAN_LFR3),y)
+CDEFINES += -DWLAN_FEATURE_ROAM_OFFLOAD
 endif
 
 ifeq ($(CONFIG_PRIMA_WLAN_OKC),y)
@@ -1108,6 +1126,7 @@ CDEFINES += -DCONFIG_ATH_PROCFS_DIAG_SUPPORT
 CDEFINES += -DQCA_SUPPORT_OL_RX_REORDER_TIMEOUT
 CDEFINES += -DCONFIG_ATH_PCIE_MAX_PERF=0 -DCONFIG_ATH_PCIE_AWAKE_WHILE_DRIVER_LOAD=0 -DCONFIG_DISABLE_CDC_MAX_PERF_WAR=0
 CDEFINES += -DQCA_TX_HTT2_SUPPORT
+CDEFINES += -DUSB_FW_CRASH_RAM_DUMP
 endif
 
 # enable the MAC Address auto-generation feature
@@ -1147,6 +1166,10 @@ ifeq ($(CONFIG_FEATURE_STATS_EXT), 1)
 CDEFINES += -DWLAN_FEATURE_STATS_EXT
 endif
 
+ifeq ($(CONFIG_FEATURE_NAN),y)
+CDEFINES += -DWLAN_FEATURE_NAN
+endif
+
 ifeq ($(CONFIG_QCA_WIFI_2_0), 1)
 CDEFINES += -DQCA_WIFI_2_0
 endif
@@ -1179,6 +1202,11 @@ endif
 #Enable 11AC TX
 ifeq ($(CONFIG_ATH_11AC_TXCOMPACT), 1)
 CDEFINES += -DATH_11AC_TXCOMPACT
+endif
+
+#Enable per vdev Tx desc pool
+ifeq ($(CONFIG_PER_VDEV_TX_DESC_POOL), 1)
+CDEFINES += -DCONFIG_PER_VDEV_TX_DESC_POOL
 endif
 
 #Enable OS specific IRQ abstraction
@@ -1263,6 +1291,12 @@ ifeq ($(CONFIG_IPA_OFFLOAD), 1)
 CDEFINES += -DIPA_OFFLOAD -DHDD_IPA_USE_IPA_RM_TIMER
 endif
 
+ifneq ($(CONFIG_ARCH_MDM9630), y)
+ifeq ($(CONFIG_IPA_UC_OFFLOAD), 1)
+CDEFINES += -DIPA_UC_OFFLOAD
+endif
+endif
+
 #Enable GTK Offload
 ifeq ($(CONFIG_GTK_OFFLOAD), 1)
 CDEFINES += -DWLAN_FEATURE_GTK_OFFLOAD
@@ -1293,6 +1327,9 @@ CDEFINES += -DFEATURE_GREEN_AP
 #Enable 4address scheme for mdm9630
 CDEFINES += -DFEATURE_WLAN_STA_4ADDR_SCHEME
 
+#Disable STA-AP Mode DFS support
+CDEFINES += -DFEATURE_WLAN_STA_AP_MODE_DFS_DISABLE
+
 #Enable OBSS feature for mdm9630
 CDEFINES += -DQCA_HT_2040_COEX
 
@@ -1301,6 +1338,13 @@ else
 #Open P2P device interface only for non-MDM9630 platform
 CDEFINES += -DWLAN_OPEN_P2P_INTERFACE
 
+#Enable 2.4 GHz social channels in 5 GHz only mode for p2p usage
+CDEFINES += -DWLAN_ENABLE_SOCIAL_CHANNELS_5G_ONLY
+
+#Enable RX Full re-order OL feature only "LL and NON-MDM platform"
+ifeq ($(CONFIG_HIF_PCI), 1)
+CDEFINES += -DWLAN_FEATURE_RX_FULL_REORDER_OL
+endif
 endif
 
 #Enable Signed firmware support for split binary format
@@ -1322,6 +1366,11 @@ ifeq ($(CONFIG_ATH_PCIE_ACCESS_DEBUG), 1)
 CDEFINES += -DCONFIG_ATH_PCIE_ACCESS_DEBUG
 endif
 
+#Flag to enable/disable WLAN D0-WOW
+ifeq ($(CONFIG_PCI_MSM), y)
+CDEFINES += -DFEATURE_WLAN_D0WOW
+endif
+
 # Some kernel include files are being moved.  Check to see if
 # the old version of the files are present
 
@@ -1331,6 +1380,11 @@ endif
 
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/mach-msm/include/mach/msm_smsm.h),)
 CDEFINES += -DEXISTS_MSM_SMSM
+endif
+
+# Enable feature support fo Linux version QCMBR
+ifeq ($(CONFIG_LINUX_QCMBR),y)
+CDEFINES += -DLINUX_QCMBR
 endif
 
 KBUILD_CPPFLAGS += $(CDEFINES)

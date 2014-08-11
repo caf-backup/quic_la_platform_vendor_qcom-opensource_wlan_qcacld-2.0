@@ -48,7 +48,7 @@ typedef adf_nbuf_t wmi_buf_t;
  *  @return opaque handle.
  */
 void *
-wmi_unified_attach(void *scn_handle);
+wmi_unified_attach(void *scn_handle, void (*func) (void*));
 /**
  * detach for unified WMI
  *
@@ -139,6 +139,15 @@ wmi_get_pending_cmds(wmi_unified_t wmi_handle);
 void
 wmi_set_target_suspend(wmi_unified_t wmi_handle, A_BOOL val);
 
-
-
+/**
+ WMI API to set D0WOW flag
+*/
+#ifdef FEATURE_WLAN_D0WOW
+void
+wmi_set_d0wow_flag(wmi_unified_t wmi_handle, A_BOOL flag);
+#endif
+/**
+ WMA Callback to get the Tx complete for WOW_ENABLE
+*/
+typedef void (*wma_wow_tx_complete_cbk)(void *scn_handle);
 #endif /* _WMI_UNIFIED_API_H_ */

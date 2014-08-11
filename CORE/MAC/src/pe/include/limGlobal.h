@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -53,29 +53,12 @@
 /// Maximum number of scan hash table entries
 #define LIM_MAX_NUM_OF_SCAN_RESULTS 256
 
-// Link Test Report Status. This appears in the report frame
-#define LINK_TEST_STATUS_SUCCESS                0x1
-#define LINK_TEST_STATUS_UNSUPPORTED_RATE       0x2
-#define LINK_TEST_STATUS_INVALID_ADDR           0x3
-
-// Amount of time in nanosec to be sleep-waited before
-// enabling RHP (1 millisec)
-#define LIM_RHP_WORK_AROUND_DURATION 1000000
-
-// Maximum amount of Quiet duration in millisec
-#define LIM_MAX_QUIET_DURATION 32
-
-#define LIM_TX_WQ_EMPTY_SLEEP_NS                100000
-
 // Sending Disassociate frames threshold
 #define LIM_SEND_DISASSOC_FRAME_THRESHOLD       2
 #define LIM_HASH_MISS_TIMER_MS                  10000
 
 // Deferred Message Queue Length
-#define MAX_DEFERRED_QUEUE_LEN                  20
-
-// Maximum Buffer size
-#define LIM_MAX_BUF_SIZE                        8192
+#define MAX_DEFERRED_QUEUE_LEN                  80
 
 // Maximum number of PS - TIM's to be sent with out wakeup from STA
 #define LIM_TIM_WAIT_COUNT_FACTOR          5
@@ -414,22 +397,6 @@ typedef struct sLimDeferredMsgQParams
     tANI_U16         write;
 } tLimDeferredMsgQParams, *tpLimDeferredMsgQParams;
 
-typedef struct sLimTraceQ
-{
-    tANI_U32                type;
-    tLimSmeStates      smeState;
-    tLimMlmStates      mlmState;
-    tANI_U32                value;
-    tANI_U32                value2;
-} tLimTraceQ;
-
-typedef struct sLimTraceParams
-{
-    tLimTraceQ    traceQueue[1024];
-    tANI_U16           write;
-    tANI_U16           enabled;
-} tLimTraceParams;
-
 typedef struct sCfgProtection
 {
     tANI_U32 overlapFromlla:1;
@@ -562,6 +529,11 @@ struct tLimIbssPeerNode
     tANI_U8 vhtSupportedChannelWidthSet;
     tANI_U8 vhtBeamFormerCapable;
 #endif
+    /*
+     * Peer Atim Info
+     */
+    tANI_U8  atimIePresent;
+    tANI_U32 peerAtimWindowLength;
 };
 
 // Enums used for channel switching.
@@ -687,13 +659,6 @@ typedef struct sLimSpecMgmtInfo
     tANI_BOOLEAN       fRadarIntrConfigured; /* Whether radar interrupt has been configured */
 }tLimSpecMgmtInfo, *tpLimSpecMgmtInfo;
 
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-typedef struct sLimDisResultList
-{
-    struct sLimDisResultList *next ;
-    tSirTdlsPeerInfo tdlsDisPeerInfo ;
-}tLimDisResultList ;
-#endif
 
 #ifdef FEATURE_WLAN_TDLS
 /*

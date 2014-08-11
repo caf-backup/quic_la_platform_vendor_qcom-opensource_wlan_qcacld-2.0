@@ -20,10 +20,9 @@
  */
 
 /*
- * Copyright (c) 2012-2014 Qualcomm Atheros, Inc.
- * All Rights Reserved.
- * Qualcomm Atheros Confidential and Proprietary.
- *
+ * This file was originally distributed by Qualcomm Atheros, Inc.
+ * under proprietary terms before Copyright ownership was assigned
+ * to the Linux Foundation.
  */
 
 
@@ -49,7 +48,6 @@
 #define SIR_MAX_PACKET_SIZE     2048
 #define SIR_MAX_NUM_CHANNELS    64
 #define SIR_MAX_NUM_STA_IN_IBSS 16
-#define SIR_MAX_NUM_STA_IN_BSS  256
 #define SIR_ESE_MAX_MEAS_IE_REQS   8
 
 typedef enum
@@ -68,6 +66,8 @@ typedef enum
 #endif
     PHY_CHANNEL_BONDING_STATE_MAX   = 11
 }ePhyChanBondState;
+
+#define MAX_BONDED_CHANNELS 4
 
 #define SIR_MIN(a,b)   (((a) < (b)) ? (a) : (b))
 #define SIR_MAX(a,b)   (((a) > (b)) ? (a) : (b))
@@ -198,86 +198,6 @@ typedef struct sSirMbMsgP2p
     tANI_U32 data[1];
 } tSirMbMsgP2p, *tpSirMbMsgP2p;
 
-/// Message queue definitions
-//  msgtype(2bytes) reserved(2bytes) bodyptr(4bytes) bodyval(4bytes)
-//  NOTE tSirMsgQ should be always multiples of WORD(4Bytes)
-//  All Queue Message Size are multiples of word Size (4 bytes)
-#define SYS_MSG_SIZE            (sizeof(tSirMsgQ)/4)
-
-/// gHalMsgQ
-
-#define SYS_HAL_MSG_SIZE        SYS_MSG_SIZE
-
-/// gMMHhiPriorityMsgQ
-
-#define SYS_MMH_HI_PRI_MSG_SIZE SYS_MSG_SIZE
-
-/// gMMHprotocolMsgQ
-
-#define SYS_MMH_PROT_MSG_SIZE   SYS_MSG_SIZE
-
-/// gMMHdebugMsgQ
-
-#define SYS_MMH_DEBUG_MSG_SIZE  SYS_MSG_SIZE
-
-/// gMAINTmsgQ
-
-#define SYS_MNT_MSG_SIZE        SYS_MSG_SIZE
-
-/// LIM Message Queue
-
-#define SYS_LIM_MSG_SIZE        SYS_MSG_SIZE
-
-/// ARQ Message Queue
-
-#define SYS_ARQ_MSG_SIZE        SYS_MSG_SIZE
-
-/// Scheduler Message Queue
-
-#define SYS_SCH_MSG_SIZE        SYS_MSG_SIZE
-
-/// PMM Message Queue
-
-#define SYS_PMM_MSG_SIZE        SYS_MSG_SIZE
-
-/// TX Message Queue
-
-#define SYS_TX_MSG_SIZE         (sizeof(void *)/4)  // Message pointer size
-
-/// RX Message Queue
-
-#define SYS_RX_MSG_SIZE         (sizeof(void *)/4)  // Message pointer size
-
-/// PTT  Message Queue
-#define SYS_NIM_PTT_MSG_SIZE    SYS_MSG_SIZE  // Message pointer size
-
-
-
-/* *************************************** *
- *                                         *
- *        Block pool configuration         *
- *                                         *
- * *************************************** */
-
-// The following values specify the number of blocks to be created
-// for each block pool size.
-
-#define SIR_BUF_BLK_32_NUM           64
-#define SIR_BUF_BLK_64_NUM           128
-#define SIR_BUF_BLK_96_NUM           16
-#define SIR_BUF_BLK_128_NUM          128
-#define SIR_BUF_BLK_160_NUM          8
-#define SIR_BUF_BLK_192_NUM          0
-#define SIR_BUF_BLK_224_NUM          0
-#define SIR_BUF_BLK_256_NUM          128
-#define SIR_BUF_BLK_512_NUM          0
-#define SIR_BUF_BLK_768_NUM          0
-#define SIR_BUF_BLK_1024_NUM         2
-#define SIR_BUF_BLK_1280_NUM         0
-#define SIR_BUF_BLK_1536_NUM         2
-#define SIR_BUF_BLK_1792_NUM         0
-#define SIR_BUF_BLK_2048_NUM         2
-#define SIR_BUF_BLK_2304_NUM         0
 
 /* ******************************************* *
  *                                             *
@@ -700,6 +620,26 @@ typedef struct sSirMbMsgP2p
 #define SIR_HAL_CH_AVOID_UPDATE_REQ        (SIR_HAL_ITC_MSG_TYPES_BEGIN + 274)
 #endif
 
+#ifdef WLAN_FEATURE_LINK_LAYER_STATS
+#define SIR_HAL_LL_STATS_CLEAR_REQ         (SIR_HAL_ITC_MSG_TYPES_BEGIN + 275)
+#define SIR_HAL_LL_STATS_SET_REQ           (SIR_HAL_ITC_MSG_TYPES_BEGIN + 276)
+#define SIR_HAL_LL_STATS_GET_REQ           (SIR_HAL_ITC_MSG_TYPES_BEGIN + 277)
+#define SIR_HAL_LL_STATS_RESULTS_RSP       (SIR_HAL_ITC_MSG_TYPES_BEGIN + 278)
+#endif /* WLAN_FEATURE_LINK_LAYER_STATS */
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+#define SIR_HAL_ROAM_OFFLOAD_SYNCH_CNF     (SIR_HAL_ITC_MSG_TYPES_BEGIN + 279)
+#endif
+#ifdef WLAN_FEATURE_NAN
+#define SIR_HAL_NAN_REQUEST                (SIR_HAL_ITC_MSG_TYPES_BEGIN + 280)
+#endif /* WLAN_FEATURE_NAN */
+
+#ifdef FEATURE_WLAN_AUTO_SHUTDOWN
+#define SIR_HAL_SET_AUTO_SHUTDOWN_TIMER_REQ  (SIR_HAL_ITC_MSG_TYPES_BEGIN + 281)
+#endif
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+#define SIR_HAL_HO_FAIL_IND                (SIR_HAL_ITC_MSG_TYPES_BEGIN + 282)
+#endif
 #define SIR_HAL_MSG_TYPES_END              (SIR_HAL_MSG_TYPES_BEGIN + 0x1FF)
 
 // CFG message types
@@ -797,11 +737,6 @@ typedef struct sSirMbMsgP2p
 #define SIR_LIM_DEAUTH_ACK_TIMEOUT       (SIR_LIM_TIMEOUT_MSG_START + 0x27)
 #define SIR_LIM_PERIODIC_JOIN_PROBE_REQ_TIMEOUT (SIR_LIM_TIMEOUT_MSG_START + 0x28)
 
-#ifdef FEATURE_WLAN_TDLS_INTERNAL
-#define SIR_LIM_TDLS_DISCOVERY_RSP_WAIT     (SIR_LIM_TIMEOUT_MSG_START + 0x29)
-#define SIR_LIM_TDLS_LINK_SETUP_RSP_TIMEOUT (SIR_LIM_TIMEOUT_MSG_START + 0x2A)
-#define SIR_LIM_TDLS_LINK_SETUP_CNF_TIMEOUT (SIR_LIM_TIMEOUT_MSG_START + 0x2B)
-#endif
 #define SIR_LIM_CONVERT_ACTIVE_CHANNEL_TO_PASSIVE (SIR_LIM_TIMEOUT_MSG_START + 0x2C)
 
 #define SIR_LIM_MSG_TYPES_END            (SIR_LIM_MSG_TYPES_BEGIN+0xFF)
