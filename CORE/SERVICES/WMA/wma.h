@@ -146,6 +146,27 @@
 #define WMA_SCAN_IDLE_TIME_DEFAULT          (25)
 #define WMA_P2P_SCAN_MAX_BURST_DURATION     (120)
 #define WMA_CTS_DURATION_MS_MAX             (32)
+#define WMA_DWELL_TIME_PROBE_TIME_MAP_SIZE      (11)
+
+typedef struct probeTime_dwellTime {
+	u_int8_t dwell_time;
+	u_int8_t probe_time;
+} t_probeTime_dwellTime;
+
+static const t_probeTime_dwellTime
+	probeTime_dwellTime_map[WMA_DWELL_TIME_PROBE_TIME_MAP_SIZE] = {
+	{28, 0}, /* 0 SSID */
+	{28, 20}, /* 1 SSID */
+	{28, 20}, /* 2 SSID */
+	{28, 20}, /* 3 SSID */
+	{28, 20}, /* 4 SSID */
+	{28, 20}, /* 5 SSID */
+	{28, 20}, /* 6 SSID */
+	{28, 11}, /* 7 SSID */
+	{28, 11}, /* 8 SSID */
+	{28, 11}, /* 9 SSID */
+	{28, 8}   /* 10 SSID */
+};
 
 /* Roaming default values
  * All time and period values are in milliseconds.
