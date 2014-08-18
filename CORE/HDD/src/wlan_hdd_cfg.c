@@ -3188,6 +3188,13 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_ENABLE_FW_LOG_DISABLE,
                  CFG_ENABLE_FW_LOG_ENABLE),
 
+   REG_VARIABLE( CFG_ENABLE_FW_SELF_RECOVERY_NAME, WLAN_PARAM_Integer,
+                 hdd_config_t, enableFwSelfRecovery,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_ENABLE_FW_SELF_RECOVERY_DEFAULT,
+                 CFG_ENABLE_FW_SELF_RECOVERY_DISABLE,
+                 CFG_ENABLE_FW_SELF_RECOVERY_ENABLE),
+
 #ifdef IPA_OFFLOAD
    REG_VARIABLE( CFG_IPA_OFFLOAD_CONFIG_NAME, WLAN_PARAM_HexInteger,
                  hdd_config_t, IpaConfig,
@@ -4524,6 +4531,7 @@ VOS_STATUS hdd_update_mac_config(hdd_context_t *pHddCtx)
    char *line, *buffer = NULL;
    char *name, *value;
    tCfgIniEntry macTable[VOS_MAX_CONCURRENCY_PERSONA];
+   tSirMacAddr customMacAddr;
 
    VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
 
@@ -4592,6 +4600,11 @@ VOS_STATUS hdd_update_mac_config(hdd_context_t *pHddCtx)
    }
 
    update_mac_from_string(pHddCtx, &macTable[0], i);
+
+   vos_mem_copy(&customMacAddr,
+                     &pHddCtx->cfg_ini->intfMacAddr[0].bytes[0],
+                     sizeof(tSirMacAddr));
+   sme_SetCustomMacAddr(customMacAddr);
 
 config_exit:
    release_firmware(fw);

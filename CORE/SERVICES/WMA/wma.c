@@ -347,6 +347,8 @@ static void wma_set_stakey(tp_wma_handle wma_handle, tpSetStaKeyParams key_info)
 static void wma_beacon_miss_handler(tp_wma_handle wma, u_int32_t vdev_id);
 static void wma_set_suspend_dtim(tp_wma_handle wma);
 static void wma_set_resume_dtim(tp_wma_handle wma);
+static int wma_roam_event_callback(WMA_HANDLE handle, u_int8_t *event_buf,
+				u_int32_t len);
 
 static void *wma_find_vdev_by_addr(tp_wma_handle wma, u_int8_t *addr,
 				   u_int8_t *vdev_id)
@@ -1954,7 +1956,7 @@ static void wma_update_peer_stats(tp_wma_handle wma, wmi_peer_stats *peer_stats)
 
 		if (temp_mask & (1 << eCsrGlobalClassAStats)) {
 			classa_stats = (tCsrGlobalClassAStatsInfo *) stats_buf;
-			WMA_LOGE("peer tx rate:%d", peer_stats->peer_tx_rate);
+			WMA_LOGD("peer tx rate:%d", peer_stats->peer_tx_rate);
 			/*The linkspeed returned by fw is in kbps so convert
 			 *it in to units of 500kbps which is expected by UMAC*/
 			if (peer_stats->peer_tx_rate) {
@@ -1975,7 +1977,7 @@ static void wma_update_peer_stats(tp_wma_handle wma, wmi_peer_stats *peer_stats)
 				 * rate flags */
 				classa_stats->rx_frag_cnt = node->nss;
 				classa_stats->promiscuous_rx_frag_cnt = mcsRateFlags;
-				WMA_LOGE("Computed mcs_idx:%d mcs_rate_flags:%d",
+				WMA_LOGD("Computed mcs_idx:%d mcs_rate_flags:%d",
 						classa_stats->mcs_index,
 						mcsRateFlags);
 			}
@@ -1983,7 +1985,7 @@ static void wma_update_peer_stats(tp_wma_handle wma, wmi_peer_stats *peer_stats)
 			   Convert it back to intervals of 1 dBm */
 			classa_stats->max_pwr =
 				 roundup(classa_stats->max_pwr, 2) >> 1;
-			WMA_LOGE("peer tx rate flags:%d nss:%d max_txpwr:%d",
+			WMA_LOGD("peer tx rate flags:%d nss:%d max_txpwr:%d",
 					node->rate_flags, node->nss,
 					classa_stats->max_pwr);
 		}
@@ -10515,6 +10517,7 @@ static int32_t wma_set_priv_cfg(tp_wma_handle wma_handle,
 	case WMA_VDEV_DFS_CONTROL_CMDID:
 	{
 		struct ieee80211com *dfs_ic = wma_handle->dfs_ic;
+		struct ath_dfs *dfs;
 
 		if (!dfs_ic) {
 			ret = -ENOENT;
@@ -10527,8 +10530,11 @@ static int32_t wma_set_priv_cfg(tp_wma_handle wma_handle,
 
 				if (dfs_ic->ic_curchan->ic_flagext &
 						IEEE80211_CHAN_DFS) {
-					ret = wma_dfs_indicate_radar(dfs_ic,
-						dfs_ic->ic_curchan);
+					dfs = (struct ath_dfs *)dfs_ic->ic_dfs;
+					dfs->dfs_bangradar = 1;
+					dfs->ath_radar_tasksched = 1;
+					OS_SET_TIMER(&dfs->ath_dfs_task_timer,
+						0);
 				} else {
 					ret = -ENOENT;
 				}
@@ -16169,14 +16175,52 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 		break;
 	case WOW_REASON_PATTERN_MATCH_FOUND:
 		WMA_LOGD("Wake up for Rx packet, dump starting from ethernet hdr");
-		/* First 4-bytes of wow_packet_buffer is the length */
-		vos_mem_copy((u_int8_t *) &wow_buf_pkt_len,
-			     param_buf->wow_packet_buffer, 4);
-		vos_trace_hex_dump(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_DEBUG,
-				   param_buf->wow_packet_buffer + 4,
-				   wow_buf_pkt_len);
+		if (param_buf->wow_packet_buffer) {
+		    /* First 4-bytes of wow_packet_buffer is the length */
+		    vos_mem_copy((u_int8_t *) &wow_buf_pkt_len,
+			param_buf->wow_packet_buffer, 4);
+		    vos_trace_hex_dump(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_DEBUG,
+			param_buf->wow_packet_buffer + 4,
+			wow_buf_pkt_len);
+		} else {
+			WMA_LOGE("No wow packet buffer present");
+		}
 		break;
 
+	case WOW_REASON_LOW_RSSI:
+	    {
+		/* WOW_REASON_LOW_RSSI is used for all roaming events.
+		 * WMI_ROAM_REASON_BETTER_AP, WMI_ROAM_REASON_BMISS,
+		 * WMI_ROAM_REASON_SUITABLE_AP will be handled by
+		 * wma_roam_event_callback().
+		 */
+		WMI_ROAM_EVENTID_param_tlvs param;
+		if (param_buf->wow_packet_buffer) {
+		    /* Roam event is embedded in wow_packet_buffer */
+		    WMA_LOGD("Host woken up because of roam event");
+		    vos_mem_copy((u_int8_t *) &wow_buf_pkt_len,
+				param_buf->wow_packet_buffer, 4);
+		    WMA_LOGD("wow_packet_buffer dump");
+				vos_trace_hex_dump(VOS_MODULE_ID_WDA,
+				VOS_TRACE_LEVEL_DEBUG,
+				param_buf->wow_packet_buffer, wow_buf_pkt_len);
+		    if (wow_buf_pkt_len >= sizeof(param)) {
+			param.fixed_param = (wmi_roam_event_fixed_param *)
+					(param_buf->wow_packet_buffer +4);
+			wma_roam_event_callback(handle, (u_int8_t *)&param,
+							sizeof(param));
+		    } else {
+			WMA_LOGE("Wrong length for roam event = %d bytes",
+					wow_buf_pkt_len);
+		    }
+		} else {
+		    /* No wow_packet_buffer means a better AP beacon
+		     * will follow in a later event.
+		     */
+		    WMA_LOGD("Host woken up because of better AP beacon");
+		}
+		break;
+	    }
 	default:
 		break;
 	}
@@ -18241,6 +18285,40 @@ static int wma_process_receive_filter_clear_filter_req(tp_wma_handle wma_handle,
 	}
 	vos_mem_free(rcv_clear_param);
 	return 0; /* SUCCESS */
+}
+
+static int wma_set_base_macaddr_indicate(tp_wma_handle wma_handle,
+					tSirMacAddr *customAddr)
+{
+	wmi_pdev_set_base_macaddr_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	int err;
+
+	buf = wmi_buf_alloc(wma_handle->wmi_handle, sizeof(*cmd));
+	if (!buf) {
+		WMA_LOGE("Failed to allocate buffer to send set_base_macaddr cmd");
+		return -ENOMEM;
+	}
+
+	cmd = (wmi_pdev_set_base_macaddr_cmd_fixed_param *) wmi_buf_data(buf);
+	vos_mem_zero(cmd, sizeof(*cmd));
+
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_pdev_set_base_macaddr_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+			wmi_pdev_set_base_macaddr_cmd_fixed_param));
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(*customAddr, &cmd->base_macaddr);
+	err = wmi_unified_cmd_send(wma_handle->wmi_handle, buf,
+			sizeof(*cmd), WMI_PDEV_SET_BASE_MACADDR_CMDID);
+	if (err) {
+		WMA_LOGE("Failed to send set_base_macaddr cmd");
+		adf_os_mem_free(buf);
+		return -EIO;
+	}
+	WMA_LOGD("Base MAC Addr: "MAC_ADDRESS_STR,
+		MAC_ADDR_ARRAY((*customAddr)));
+
+	return 0;
 }
 
 static void wma_data_tx_ack_work_handler(struct work_struct *ack_work)
@@ -20731,6 +20809,7 @@ VOS_STATUS wma_get_buf_extscan_change_monitor_cmd(tp_wma_handle wma_handle,
 	cmd->num_entries_in_page = numap;
 	cmd->lost_ap_scan_count = psigchange->lostApSampleSize;
 	cmd->max_rssi_samples = psigchange->rssiSampleSize;
+	cmd->rssi_averaging_samples = psigchange->rssiSampleSize;
 	cmd->max_out_of_range_count = psigchange->minBreaching;
 
 	buf_ptr += sizeof(*cmd);
@@ -21007,6 +21086,58 @@ static VOS_STATUS wma_nan_req(void *wda_handle, tpNanRequest nan_req)
 	wmi_buf_free(buf);
 	}
 	return ret;
+}
+#endif
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+static void wma_process_unit_test_cmd(WMA_HANDLE handle,
+                                      t_wma_unit_test_cmd  *wma_utest)
+{
+	tp_wma_handle wma_handle = (tp_wma_handle) handle;
+	wmi_unit_test_cmd_fixed_param* cmd;
+	wmi_buf_t wmi_buf;
+	u_int8_t *buf_ptr;
+	int i;
+	u_int16_t len, args_tlv_len;
+	A_UINT32 *unit_test_cmd_args;
+
+	args_tlv_len = WMI_TLV_HDR_SIZE + wma_utest->num_args * sizeof(A_UINT32);
+	len = sizeof(wmi_unit_test_cmd_fixed_param) + args_tlv_len;
+	if (!wma_handle || !wma_handle->wmi_handle) {
+		WMA_LOGE("%s: WMA is closed, can not issue fw unit test cmd",
+				__func__);
+		return;
+	}
+	wmi_buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+	if (!wmi_buf) {
+		WMA_LOGE("%s: wmai_buf_alloc failed", __func__);
+		return;
+	}
+
+	cmd = (wmi_unit_test_cmd_fixed_param *)wmi_buf_data(wmi_buf);
+	buf_ptr = (u_int8_t *) cmd;
+	WMITLV_SET_HDR(&cmd->tlv_header,
+			WMITLV_TAG_STRUC_wmi_unit_test_cmd_fixed_param,
+			WMITLV_GET_STRUCT_TLVLEN(wmi_unit_test_cmd_fixed_param));
+	cmd->vdev_id = wma_utest->vdev_id;
+	cmd->module_id = wma_utest->module_id;
+	cmd->num_args = wma_utest->num_args;
+	buf_ptr += sizeof(wmi_unit_test_cmd_fixed_param);
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
+			(wma_utest->num_args * sizeof(u_int32_t)));
+	unit_test_cmd_args = (A_UINT32 *)(buf_ptr + WMI_TLV_HDR_SIZE);
+	WMA_LOGI("%s: %d num of args = ", __func__, wma_utest->num_args);
+	for (i = 0; (i < wma_utest->num_args && i < WMA_MAX_NUM_ARGS); i++) {
+		unit_test_cmd_args[i] = wma_utest->args[i];
+		WMA_LOGI("%d,", wma_utest->args[i]);
+	}
+	if (wmi_unified_cmd_send(wma_handle->wmi_handle, wmi_buf, len,
+				WMI_UNIT_TEST_CMDID)) {
+		WMA_LOGP("%s: failed to send unit test command", __func__);
+		adf_nbuf_free(wmi_buf);
+		return;
+	}
+	return;
 }
 #endif
 
@@ -21528,6 +21659,11 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
 					(tSirSmeRoamOffloadSynchCnf *)msg->bodyptr);
 			vos_mem_free(msg->bodyptr);
 			break;
+		case SIR_HAL_UNIT_TEST_CMD:
+			wma_process_unit_test_cmd(wma_handle,
+					(t_wma_unit_test_cmd *)msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
+			break;
 #endif
 #ifdef WLAN_FEATURE_NAN
 		case WDA_NAN_REQUEST:
@@ -21536,6 +21672,11 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
 			vos_mem_free(msg->bodyptr);
 			break;
 #endif
+		case SIR_HAL_SET_BASE_MACADDR_IND:
+			wma_set_base_macaddr_indicate(wma_handle,
+				       (tSirMacAddr *)msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
+			break;
 		default:
 			WMA_LOGD("unknow msg type %x", msg->type);
 			/* Do Nothing? MSG Body should be freed at here */

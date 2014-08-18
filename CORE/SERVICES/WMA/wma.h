@@ -1218,8 +1218,6 @@ void wma_get_modeselect(tp_wma_handle wma, u_int32_t *modeSelect);
 VOS_STATUS wma_cfg_download_isoc(v_VOID_t *vos_context,
 		tp_wma_handle wma_handle);
 
-VOS_STATUS wma_nv_download_start(v_VOID_t *handle);
-
 VOS_STATUS wma_cfg_nv_get_hal_message_buffer(tp_wma_handle wma_handle,
 		u_int16_t uReqType, u_int16_t usBufferLen,
 		u_int8_t **pMsgBuffer, u_int16_t *pusDataOffset,
@@ -1670,4 +1668,12 @@ A_UINT32 eCsrEncryptionType_to_rsn_cipherset (eCsrEncryptionType encr);
 
 #define WMA_TX_Q_RECHECK_TIMER_WAIT      2    // 2 ms
 #define WMA_TX_Q_RECHECK_TIMER_MAX_WAIT  20   // 20 ms
+#define WMA_MAX_NUM_ARGS 8
+typedef struct wma_unit_test_cmd
+{
+    v_UINT_t vdev_id;
+    WLAN_MODULE_ID module_id;
+    v_U32_t num_args;
+    v_U32_t args[WMA_MAX_NUM_ARGS];
+}t_wma_unit_test_cmd;
 #endif

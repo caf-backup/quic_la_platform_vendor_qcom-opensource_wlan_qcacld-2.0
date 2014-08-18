@@ -379,6 +379,8 @@ static const hdd_freq_chan_map_t freq_chan_map[] = { {2412, 1}, {2417, 2},
 #define WE_TDLS_CONFIG_PARAMS   5
 #endif
 
+#define WE_UNIT_TEST_CMD   7
+
 #define WE_MTRACE_DUMP_CMD    8
 #define WE_MTRACE_SELECTIVE_MODULE_LOG_ENABLE_CMD    9
 
@@ -7543,10 +7545,47 @@ static int __iw_set_var_ints_getnone(struct net_device *dev,
             }
         break;
 #endif
+        case WE_UNIT_TEST_CMD :
+            {
+                t_wma_unit_test_cmd *unitTestArgs;
+                vos_msg_t msg = {0};
+                int i, j;
+                if ((apps_args[0] < WLAN_MODULE_ID_MIN) ||
+                               (apps_args[0] >= WLAN_MODULE_ID_MAX)) {
+                    hddLog(LOGE, FL("Invalid MODULE ID %d"), apps_args[0]);
+                    return -EINVAL;
+                }
+                if (apps_args[1] > (WMA_MAX_NUM_ARGS)) {
+                    hddLog(LOGE, FL("Too Many args %d"), apps_args[1]);
+                    return -EINVAL;
+                }
+                unitTestArgs = vos_mem_malloc(sizeof(*unitTestArgs));
+                if (NULL == unitTestArgs) {
+                    hddLog(LOGE,
+                      FL("vos_mem_alloc failed for unitTestArgs"));
+                    return -ENOMEM;
+                }
+                unitTestArgs->vdev_id            = (int)pAdapter->sessionId;
+                unitTestArgs->module_id          = apps_args[0];
+                unitTestArgs->num_args           = apps_args[1];
+                for (i = 0, j = 2; i < unitTestArgs->num_args; i++, j++) {
+                    unitTestArgs->args[i] = apps_args[j];
+                }
+                msg.type = SIR_HAL_UNIT_TEST_CMD;
+                msg.reserved = 0;
+                msg.bodyptr = unitTestArgs;
+                if (VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA,
+                                                                    &msg)) {
+                    vos_mem_free(unitTestArgs);
+                    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                        FL("Not able to post UNIT_TEST_CMD message to WDA"));
+                    return -EINVAL;
+                }
+            }
+        break;
         default:
             {
-                hddLog(LOGE, "%s: Invalid IOCTL command %d",
-                       __func__, sub_cmd );
+                hddLog(LOGE, FL("Invalid IOCTL command %d"), sub_cmd );
             }
             break;
     }
@@ -9211,11 +9250,11 @@ int hdd_setBand(struct net_device *dev, u8 ui_band)
 
                  hddLog(VOS_TRACE_LEVEL_INFO,
                          "%s STA (Device mode=%d) connected in band %u, Changing band to %u, Issuing Disconnect"
-                         "Set HDD connState to eConnectionState_Disconnecting",
+                         "Set HDD connState to eConnectionState_NotConnected",
                             __func__, pAdapter->device_mode,
                             currBand, band);
 
-                 pHddStaCtx->conn_info.connState = eConnectionState_Disconnecting;
+                 pHddStaCtx->conn_info.connState = eConnectionState_NotConnected;
                  INIT_COMPLETION(pAdapter->disconnect_comp_var);
 
                  status = sme_RoamDisconnect( WLAN_HDD_GET_HAL_CTX(pAdapter),
@@ -9238,8 +9277,6 @@ int hdd_setBand(struct net_device *dev, u8 ui_band)
                                 __func__);
                     return -ETIMEDOUT ;
                  }
-
-                 pHddStaCtx->conn_info.connState = eConnectionState_NotConnected;
             }
 
             sme_ScanFlushResult(hHal, pAdapter->sessionId);
@@ -10536,6 +10573,11 @@ static const struct iw_priv_args we_private_args[] = {
        0,
        "setTdlsConfig" },
 #endif
+    {
+        WE_UNIT_TEST_CMD,
+        IW_PRIV_TYPE_INT | MAX_VAR_ARGS,
+        0,
+        "setUnitTestCmd" },
 
     /* handlers for main ioctl */
     {   WLAN_PRIV_ADD_TSPEC,

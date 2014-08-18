@@ -7804,28 +7804,7 @@ eHalStatus sme_HandleChangeCountryCode(tpAniSirGlobal pMac,  void *pMsgBuf)
            vos_mem_zero( pMac->scan.countryCode11d, sizeof( pMac->scan.countryCode11d ) );
        }
    }
-#ifndef CONFIG_ENABLE_LINUX_REG
-   /* set to default domain ID */
-   pMac->scan.domainIdDefault = pMac->scan.domainIdCurrent;
 
-   /* get the channels based on new cc */
-   status = csrInitGetChannels( pMac );
-
-   if ( status != eHAL_STATUS_SUCCESS )
-   {
-       smsLog( pMac, LOGE, FL("  fail to get Channels "));
-       return status;
-   }
-
-   /* reset info based on new cc, and we are done */
-   csrResetCountryInformation(pMac, eANI_BOOLEAN_TRUE, eANI_BOOLEAN_TRUE);
-   /* Country code  Changed, Purge Only scan result
-    * which does not have channel number belong to 11d
-    * channel list
-    */
-   csrScanFilterResults(pMac);
-
-#endif
    if( pMsg->changeCCCallback )
    {
       ((tSmeChangeCountryCallback)(pMsg->changeCCCallback))((void *)pMsg->pDevContext);
@@ -8676,6 +8655,46 @@ eHalStatus sme_SetMaxTxPower(tHalHandle hHal, tSirMacAddr pBssid,
     {
         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "%s: Not able to post WDA_SET_MAX_TX_POWER_REQ message to WDA", __func__);
         vos_mem_free(pMaxTxParams);
+        return eHAL_STATUS_FAILURE;
+    }
+
+    return eHAL_STATUS_SUCCESS;
+}
+
+/* ---------------------------------------------------------------------------
+
+    \fn sme_SetCustomMacAddr
+
+    \brief Set the customer Mac Address.
+
+    \param customMacAddr  customer MAC Address
+    \- return eHalStatus
+
+  ---------------------------------------------------------------------------*/
+eHalStatus sme_SetCustomMacAddr(tSirMacAddr customMacAddr)
+{
+    vos_msg_t msg;
+    tSirMacAddr *pBaseMacAddr;
+
+    pBaseMacAddr = vos_mem_malloc(sizeof(tSirMacAddr));
+    if (NULL == pBaseMacAddr)
+    {
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+            FL("Not able to allocate memory for pBaseMacAddr"));
+        return eHAL_STATUS_FAILURE;
+    }
+
+    vos_mem_copy(*pBaseMacAddr, customMacAddr, sizeof(tSirMacAddr));
+
+    msg.type = SIR_HAL_SET_BASE_MACADDR_IND;
+    msg.reserved = 0;
+    msg.bodyptr = pBaseMacAddr;
+
+    if (VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA, &msg))
+    {
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+            FL("Not able to post SIR_HAL_SET_BASE_MACADDR_IND message to WDA"));
+        vos_mem_free(pBaseMacAddr);
         return eHAL_STATUS_FAILURE;
     }
 
@@ -11404,17 +11423,23 @@ VOS_STATUS sme_SelectCBMode(tHalHandle hHal, eCsrPhyMode eCsrPhyMode, tANI_U8 ch
           }
       }
 
-      if (pMac->roam.configParam.channelBondingMode24GHz) {
-          if (channel >= 1 && channel <= 5)
-             smeConfig.csrConfig.channelBondingMode24GHz =
-                eCSR_INI_DOUBLE_CHANNEL_LOW_PRIMARY;
-          else if (channel >= 6 && channel <= 13)
-             smeConfig.csrConfig.channelBondingMode24GHz =
-                eCSR_INI_DOUBLE_CHANNEL_HIGH_PRIMARY;
-          else if (channel ==14)
-             smeConfig.csrConfig.channelBondingMode24GHz =
-                eCSR_INI_SINGLE_CHANNEL_CENTERED;
-      }
+#ifdef QCA_HT_2040_COEX
+      /* if obss is enabled, the channel bonding mode is coming from hostapd,
+         so we don't need to hard code it here  */
+      if (!pMac->roam.configParam.obssEnabled)
+#endif
+          if (pMac->roam.configParam.channelBondingMode24GHz)
+          {
+              if (channel >= 1 && channel <= 5)
+                 smeConfig.csrConfig.channelBondingMode24GHz =
+                  eCSR_INI_DOUBLE_CHANNEL_LOW_PRIMARY;
+              else if (channel >= 6 && channel <= 13)
+                 smeConfig.csrConfig.channelBondingMode24GHz =
+                  eCSR_INI_DOUBLE_CHANNEL_HIGH_PRIMARY;
+              else if (channel ==14)
+                 smeConfig.csrConfig.channelBondingMode24GHz =
+                  eCSR_INI_SINGLE_CHANNEL_CENTERED;
+          }
    }
 
    /*

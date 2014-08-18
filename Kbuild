@@ -6,9 +6,6 @@ else
 	KERNEL_BUILD := 0
 endif
 
-# This driver does not support integrated SOC
-CONFIG_QCA_WIFI_ISOC=0
-
 # This driver supports the QCACLD 2.0 software architecture
 CONFIG_QCA_WIFI_2_0=1
 
@@ -73,8 +70,6 @@ ifeq ($(KERNEL_BUILD), 0)
                 endif
         endif
 
-	#Flag to enable new Linux Regulatory implementation
-	CONFIG_ENABLE_LINUX_REG := y
 
         #Flag to enable Protected Managment Frames (11w) feature
         ifeq ($(CONFIG_ROME_IF),usb)
@@ -321,46 +316,11 @@ HIF_INC := -I$(WLAN_ROOT)/$(HIF_COMMON_DIR) \
            -I$(WLAN_ROOT)/$(HIF_SDIO_NATIVE_INC_DIR) \
            -I$(WLAN_ROOT)/$(HIF_SDIO_NATIVE_SRC_DIR)
 
-HIF_OBJS := $(HIF_DIR_OBJS)\
-			$(HIF_COMMON_OBJS)\
-            $(HIF_SDIO_OBJS)\
-            $(HIF_SDIO_LINUX_OBJS)\
-            $(HIF_SDIO_NATIVE_OBJS)
-else
-############ DXE ############
-DXE_DIR :=	CORE/DXE
-DXE_INC_DIR :=	$(DXE_DIR)/inc
-DXE_SRC_DIR :=	$(DXE_DIR)/src
-
-DXE_INC := 	-I$(WLAN_ROOT)/$(DXE_INC_DIR) \
-		-I$(WLAN_ROOT)/$(DXE_SRC_DIR)
-
-HIF_DXE_DIR :=  CORE/SERVICES/HIF/DXE
-HIF_DXE_INC :=  -I$(WLAN_ROOT)/$(HIF_DXE_DIR)
-
-ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
-DXE_OBJS =      $(DXE_SRC_DIR)/wlan_qct_dxe.o \
-                $(DXE_SRC_DIR)/wlan_qct_dxe_cfg_i.o
-else
-ifeq ($(CONFIG_QCA_WIFI_ISOC), 1)
-HIF_DXE_INC :=  -I$(WLAN_ROOT)/$(HIF_DXE_DIR) \
-		-I$(WLAN_ROOT)/$(HIF_DXE_DIR)/linux
-
-HIF_DXE_OBJS:=  $(HIF_DXE_DIR)/hif_dxe.o \
-                $(HIF_DXE_DIR)/hif_dxe_config.o \
-                $(HIF_DXE_DIR)/linux/hif_dxe_os.o \
-                $(HIF_DXE_DIR)/dmux_dxe.o \
-                $(DXE_DIR)/htt_dxe_tx.o \
-                $(DXE_DIR)/htt_dxe_fw_stats.o \
-                $(DXE_DIR)/htt_dxe_h2t.o \
-                $(DXE_DIR)/htt_dxe_t2h.o \
-                $(DXE_DIR)/htt_dxe.o \
-                $(DXE_DIR)/htt_dxe_rx.o
-
-DXE_INC += $(HIF_DXE_INC)
-DXE_OBJS := $(HIF_DXE_OBJS)
-endif
-endif
+HIF_OBJS :=	$(HIF_DIR_OBJS) \
+		$(HIF_COMMON_OBJS) \
+		$(HIF_SDIO_OBJS) \
+		$(HIF_SDIO_LINUX_OBJS) \
+		$(HIF_SDIO_NATIVE_OBJS)
 endif
 
 ############ HDD ############
@@ -653,14 +613,8 @@ SYS_OBJS :=	$(SYS_COMMON_SRC_DIR)/wlan_qct_sys.o \
 ############ TL ############
 TL_DIR :=	CORE/TL
 TL_INC_DIR :=	$(TL_DIR)/inc
-TL_SRC_DIR :=	$(TL_DIR)/src
 
-TL_INC := 	-I$(WLAN_ROOT)/$(TL_INC_DIR) \
-		-I$(WLAN_ROOT)/$(TL_SRC_DIR)
-
-TL_OBJS := 	$(TL_SRC_DIR)/wlan_qct_tl.o \
-		$(TL_SRC_DIR)/wlan_qct_tl_ba.o \
-		$(TL_SRC_DIR)/wlan_qct_tl_hosupport.o
+TL_INC := 	-I$(WLAN_ROOT)/$(TL_INC_DIR)
 
 ############ VOSS ############
 VOSS_DIR :=	CORE/VOSS
@@ -684,10 +638,7 @@ VOSS_OBJS :=    $(VOSS_SRC_DIR)/vos_api.o \
 		$(VOSS_SRC_DIR)/vos_timer.o \
 		$(VOSS_SRC_DIR)/vos_trace.o \
 		$(VOSS_SRC_DIR)/vos_types.o \
-                $(VOSS_SRC_DIR)/vos_utils.o \
-                $(VOSS_SRC_DIR)/wlan_nv_parser.o \
-                $(VOSS_SRC_DIR)/wlan_nv_stream_read.o \
-                $(VOSS_SRC_DIR)/wlan_nv_template_builtin.o
+                $(VOSS_SRC_DIR)/vos_utils.o
 
 ifeq ($(BUILD_DIAG_VERSION),1)
 VOSS_OBJS += $(VOSS_SRC_DIR)/vos_diag.o
@@ -758,29 +709,21 @@ PKTLOG_OBJS :=	$(PKTLOG_DIR)/pktlog_ac.o \
 HTT_DIR :=      CORE/CLD_TXRX/HTT
 HTT_INC :=      -I$(WLAN_ROOT)/$(HTT_DIR)
 
-ifeq ($(CONFIG_QCA_WIFI_ISOC), 0)
 HTT_OBJS := $(HTT_DIR)/htt_tx.o \
             $(HTT_DIR)/htt.o \
             $(HTT_DIR)/htt_t2h.o \
             $(HTT_DIR)/htt_h2t.o \
             $(HTT_DIR)/htt_fw_stats.o \
             $(HTT_DIR)/htt_rx.o
-endif
 
 ############## HTC ##########
 HTC_DIR := CORE/SERVICES/HTC
-
 HTC_INC := -I$(WLAN_ROOT)/$(HTC_DIR)
 
-ifeq ($(CONFIG_QCA_WIFI_ISOC), 1)
-HTC_INC += -I$(WLAN_ROOT)/$(HTC_DIR)/linux/
-HTC_OBJS := $(HTC_DIR)/linux/htc_smd.o
-else
 HTC_OBJS := $(HTC_DIR)/htc.o \
             $(HTC_DIR)/htc_send.o \
             $(HTC_DIR)/htc_recv.o \
             $(HTC_DIR)/htc_services.o
-endif
 
 ifneq ($(CONFIG_QCA_WIFI_SDIO), 1)
 ########### HIF ###########
@@ -816,18 +759,15 @@ endif
 endif
 
 ############ WMA ############
-WMA_DIR :=      CORE/SERVICES/WMA
+WMA_DIR :=	CORE/SERVICES/WMA
 
-WMA_INC :=      -I$(WLAN_ROOT)/$(WMA_DIR)
+WMA_INC :=	-I$(WLAN_ROOT)/$(WMA_DIR)
 
-WMA_OBJS :=     $(WMA_DIR)/wma.o \
+WMA_OBJS :=	$(WMA_DIR)/regdomain.o \
+		$(WMA_DIR)/wlan_nv.o \
+		$(WMA_DIR)/wma.o \
 		$(WMA_DIR)/wma_dfs_interface.o
 
-ifeq ($(CONFIG_QCA_WIFI_ISOC), 1)
-WMA_OBJS +=     $(WMA_DIR)/wma_isoc.o
-else
-WMA_OBJS +=     $(WMA_DIR)/regdomain.o
-endif
 endif
 
 ############ WDA ############
@@ -840,20 +780,14 @@ WDA_INC := 	-I$(WLAN_ROOT)/$(WDA_INC_DIR) \
 		-I$(WLAN_ROOT)/$(WDA_SRC_DIR)
 
 WDA_OBJS :=	$(WDA_SRC_DIR)/wlan_qct_wda_debug.o \
-		$(WDA_SRC_DIR)/wlan_qct_wda_legacy.o \
-		$(WDA_SRC_DIR)/wlan_nv.o
-
-ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
-WDA_OBJS +=	$(WDA_SRC_DIR)/wlan_qct_wda.o \
-		$(WDA_SRC_DIR)/wlan_qct_wda_ds.o
-endif
+		$(WDA_SRC_DIR)/wlan_qct_wda_legacy.o
 
 ############ WDI ############
 WDI_DIR :=	CORE/WDI
 
 WDI_CP_INC :=	-I$(WLAN_ROOT)/$(WDI_DIR)/CP/inc/
 
-WDI_DP_INC := -I$(WLAN_ROOT)/$(WDI_DIR)/DP/inc/
+WDI_DP_INC :=	-I$(WLAN_ROOT)/$(WDI_DIR)/DP/inc/
 
 WDI_TRP_INC :=	-I$(WLAN_ROOT)/$(WDI_DIR)/TRP/CTS/inc/ \
 		-I$(WLAN_ROOT)/$(WDI_DIR)/TRP/DTS/inc/
@@ -875,7 +809,6 @@ WCNSS_INC :=	-I$(WLAN_ROOT)/wcnss/inc
 LINUX_INC :=	-Iinclude/linux
 
 INCS :=		$(BAP_INC) \
-		$(DXE_INC) \
 		$(HDD_INC) \
 		$(EPPING_INC) \
 		$(LINUX_INC) \
@@ -891,9 +824,7 @@ INCS :=		$(BAP_INC) \
 		$(WDI_INC) \
 		$(DFS_INC)
 
-ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
-INCS +=		$(DXE_INC)
-else
+ifeq ($(CONFIG_QCA_WIFI_2_0), 1)
 INCS +=		$(WMA_INC) \
 		$(COMMON_INC) \
 		$(WMI_INC) \
@@ -906,16 +837,11 @@ INCS +=		$(WMA_INC) \
 		$(HTC_INC) \
 		$(DFS_INC)
 
-ifeq ($(CONFIG_QCA_WIFI_ISOC), 0)
 INCS +=		$(HIF_INC) \
 		$(BMI_INC)
 
 ifeq ($(CONFIG_REMOVE_PKT_LOG), 0)
 INCS +=		$(PKTLOG_INC)
-endif
-
-else
-INCS +=		$(DXE_INC)
 endif
 
 endif
@@ -933,10 +859,6 @@ OBJS :=		$(BAP_OBJS) \
 		$(WDI_OBJS) \
 		$(DFS_OBJS)
 
-ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
-OBJS +=		$(DXE_OBJS) \
-		$(TL_OBJS)
-else
 OBJS +=		$(WMA_OBJS) \
 		$(TLSHIM_OBJS) \
 		$(TXRX_OBJS) \
@@ -946,19 +868,12 @@ OBJS +=		$(WMA_OBJS) \
 		$(ADF_OBJS) \
 		$(DFS_OBJS)
 
-ifeq ($(CONFIG_QCA_WIFI_ISOC), 0)
 OBJS +=		$(HIF_OBJS) \
 		$(BMI_OBJS) \
 		$(HTT_OBJS)
 
 ifeq ($(CONFIG_REMOVE_PKT_LOG), 0)
 OBJS +=		$(PKTLOG_OBJS)
-endif
-
-else
-OBJS +=		$(DXE_OBJS)
-endif
-
 endif
 
 EXTRA_CFLAGS += $(INCS)
@@ -1026,9 +941,7 @@ ifeq ($(CONFIG_ARCH_MSM), y)
 CDEFINES += -DMSM_PLATFORM
 endif
 
-ifeq ($(CONFIG_QCA_WIFI_2_0), 0)
-CDEFINES +=	-DWLANTL_DEBUG
-else
+ifeq ($(CONFIG_QCA_WIFI_2_0), 1)
 CDEFINES +=	-DOSIF_NEED_RX_PEER_ID \
 		-DQCA_SUPPORT_TXRX_LOCAL_PEER_ID
 ifeq ($(CONFIG_ROME_IF),pci)
@@ -1156,12 +1069,6 @@ ifeq ($(WLAN_OPEN_SOURCE), 1)
 CDEFINES += -DWLAN_OPEN_SOURCE
 endif
 
-ifeq ($(CONFIG_ENABLE_LINUX_REG), y)
-ifeq ($(CONFIG_QCA_WIFI_2_0), 1)
-CDEFINES += -DCONFIG_ENABLE_LINUX_REG
-endif
-endif
-
 ifeq ($(CONFIG_FEATURE_STATS_EXT), 1)
 CDEFINES += -DWLAN_FEATURE_STATS_EXT
 endif
@@ -1172,11 +1079,6 @@ endif
 
 ifeq ($(CONFIG_QCA_WIFI_2_0), 1)
 CDEFINES += -DQCA_WIFI_2_0
-endif
-
-ifeq ($(CONFIG_QCA_WIFI_ISOC), 1)
-CDEFINES += -DQCA_WIFI_ISOC
-CDEFINES += -DANI_BUS_TYPE_PLATFORM=1
 endif
 
 ifeq ($(CONFIG_QCA_WIFI_2_0), 1)
