@@ -72,6 +72,7 @@
 #ifdef WLAN_FEATURE_NAN
 #include "nan_Api.h"
 #endif
+#include "regdomain_common.h"
 
 extern tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 
@@ -2247,6 +2248,12 @@ eHalStatus sme_ProcessMsg(tHalHandle hHal, vos_msg_t* pMsg)
                csrProcessRoamOffloadSynchInd(pMac, pMsg->bodyptr);
                vos_mem_free(pMsg->bodyptr);
                break;
+          case eWNI_SME_HO_FAIL_IND:
+               VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                     "LFR3:%s: Rcvd eWNI_SME_HO_FAIL_IND", __func__);
+               csrProcessHOFailInd(pMac, pMsg->bodyptr);
+               vos_mem_free(pMsg->bodyptr);
+               break;
 #endif
           case eWNI_PMC_ENTER_BMPS_RSP:
           case eWNI_PMC_EXIT_BMPS_RSP:
@@ -2705,7 +2712,22 @@ eHalStatus sme_ProcessMsg(tHalHandle hHal, vos_msg_t* pMsg)
                 }
                 break;
 #endif /* WLAN_FEATURE_NAN */
+          case eWNI_SME_LINK_STATUS_IND:
+          {
+                tAniGetLinkStatus *pLinkStatus =
+                             (tAniGetLinkStatus *) pMsg->bodyptr;
+                if (pLinkStatus) {
+                    if (pMac->sme.linkStatusCallback) {
+                        pMac->sme.linkStatusCallback(pLinkStatus->linkStatus,
+                                               pMac->sme.linkStatusContext);
+                    }
 
+                    pMac->sme.linkStatusCallback = NULL;
+                    pMac->sme.linkStatusContext = NULL;
+                    vos_mem_free(pLinkStatus);
+                }
+                break;
+          }
           default:
 
              if ( ( pMsg->type >= eWNI_SME_MSG_TYPES_BEGIN )
@@ -5152,6 +5174,51 @@ eHalStatus sme_GetStatistics(tHalHandle hHal, eCsrStatsRequesterType requesterId
 
    return (status);
 
+}
+
+eHalStatus sme_getLinkStatus(tHalHandle hHal,
+                             tCsrLinkStatusCallback callback,
+                             void *pContext,
+                             tANI_U8 sessionId)
+{
+   eHalStatus status = eHAL_STATUS_FAILURE;
+   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
+   tAniGetLinkStatus *pMsg;
+   vos_msg_t vosMessage;
+
+   status = sme_AcquireGlobalLock(&pMac->sme);
+   if (HAL_STATUS_SUCCESS(status)) {
+        pMsg = vos_mem_malloc(sizeof(tAniGetLinkStatus));
+        if (NULL == pMsg) {
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                   "%s: Not able to allocate memory for link status", __func__);
+            sme_ReleaseGlobalLock( &pMac->sme );
+            return eHAL_STATUS_FAILURE;
+        }
+
+        pMsg->msgType = WDA_LINK_STATUS_GET_REQ;
+        pMsg->msgLen = (tANI_U16)sizeof(tAniGetLinkStatus);
+        pMsg->sessionId = sessionId;
+        pMac->sme.linkStatusContext = pContext;
+        pMac->sme.linkStatusCallback = callback;
+
+        vosMessage.type = WDA_LINK_STATUS_GET_REQ;
+        vosMessage.bodyptr = pMsg;
+        vosMessage.reserved = 0;
+
+        if (!VOS_IS_STATUS_SUCCESS(vos_mq_post_message(VOS_MODULE_ID_WDA,
+                                   &vosMessage))) {
+           VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                         "%s: Post LINK STATUS MSG fail", __func__);
+           vos_mem_free(pMsg);
+           pMac->sme.linkStatusContext = NULL;
+           pMac->sme.linkStatusCallback = NULL;
+           status = eHAL_STATUS_FAILURE;
+        }
+   }
+
+   sme_ReleaseGlobalLock(&pMac->sme);
+   return (status);
 }
 
 /* ---------------------------------------------------------------------------
@@ -10937,6 +11004,7 @@ eHalStatus sme_UpdateTdlsPeerState(tHalHandle hHal,
     tANI_U8 num;
     tANI_U8 chanId;
     tANI_U8 i;
+    tANI_U8 preOffChanOffset;
 
     if (eHAL_STATUS_SUCCESS == (status = sme_AcquireGlobalLock(&pMac->sme)))
     {
@@ -11032,6 +11100,19 @@ eHalStatus sme_UpdateTdlsPeerState(tHalHandle hHal,
            peerStateParams->peerCap.prefOffChanNum;
        pTdlsPeerStateParams->peerCap.prefOffChanBandwidth =
            peerStateParams->peerCap.prefOffChanBandwidth;
+
+       /* Ideally better to get offset from ini or userspace, for now
+        * in case of 40MHz, assume lower primary
+        */
+       if (pTdlsPeerStateParams->peerCap.prefOffChanBandwidth == 20)
+           preOffChanOffset = BW20;
+       else
+           preOffChanOffset = BW40_LOW_PRIMARY;
+
+       pTdlsPeerStateParams->peerCap.opClassForPrefOffChan =
+           regdm_get_opclass_from_channel(pMac->scan.countryCodeCurrent,
+                           pTdlsPeerStateParams->peerCap.prefOffChanNum,
+                           preOffChanOffset);
 
        vosMessage.type = WDA_UPDATE_TDLS_PEER_STATE;
        vosMessage.reserved = 0;
