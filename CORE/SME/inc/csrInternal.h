@@ -220,6 +220,7 @@ typedef enum
     eCSR_ROAM_SUBSTATE_JOINED_NO_TRAFFIC,
     eCSR_ROAM_SUBSTATE_JOINED_NON_REALTIME_TRAFFIC,
     eCSR_ROAM_SUBSTATE_JOINED_REALTIME_TRAFFIC,
+    eCSR_ROAM_SUBSTATE_DISASSOC_STA_HAS_LEFT,
 //  max is 15 unless the bitfield is expanded...
 } eCsrRoamSubState;
 
@@ -980,6 +981,7 @@ typedef struct tagCsrRoamSession
     tCsrRoamOffloadSynchStruct roamOffloadSynchParams;
     tANI_U8 psk_pmk[SIR_ROAM_SCAN_PSK_SIZE];
     size_t  pmk_len;
+    tANI_U8 RoamKeyMgmtOffloadEnabled;
 #endif
 
     /* SME FT Context */

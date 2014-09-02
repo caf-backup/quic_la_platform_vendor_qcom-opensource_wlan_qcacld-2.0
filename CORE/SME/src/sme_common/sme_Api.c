@@ -1704,6 +1704,46 @@ void sme_ProcessReadyToSuspend( tHalHandle hHal,
    }
 }
 
+#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
+/*--------------------------------------------------------------------------
+
+  \fn - sme_ProcessReadyToExtWoW
+  \brief - On getting ready to Ext WoW indication, this function calls
+             callback registered (HDD callbacks) with SME to inform
+             ready to ExtWoW indication.
+
+  \param hHal - Handle returned by macOpen.
+   pReadyToExtWoW - Parameter received along with ready to Ext WoW
+                                indication from WMA.
+
+  \return None
+
+  \sa
+
+ --------------------------------------------------------------------------*/
+void sme_ProcessReadyToExtWoW( tHalHandle hHal,
+                                 tpSirReadyToExtWoWInd pReadyToExtWoW)
+{
+   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
+
+   if (NULL == pMac)
+   {
+       VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_FATAL,
+             "%s: pMac is null", __func__);
+       return ;
+   }
+
+   if (NULL != pMac->readyToExtWoWCallback)
+   {
+       pMac->readyToExtWoWCallback (pMac->readyToExtWoWContext,
+                                    pReadyToExtWoW->status);
+       pMac->readyToExtWoWCallback = NULL;
+       pMac->readyToExtWoWContext = NULL;
+   }
+
+}
+#endif
+
 /* ---------------------------------------------------------------------------
     \fn sme_ChangeConfigParams
     \brief The SME API exposed for HDD to provide config params to SME during
@@ -2622,6 +2662,21 @@ eHalStatus sme_ProcessMsg(tHalHandle hHal, vos_msg_t* pMsg)
                     smsLog(pMac, LOGE, "Empty rsp message for (eWNI_SME_READY_TO_SUSPEND_IND), nothing to process");
                 }
                 break ;
+
+#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
+           case eWNI_SME_READY_TO_EXTWOW_IND:
+                if (pMsg->bodyptr)
+                {
+                     sme_ProcessReadyToExtWoW(pMac, pMsg->bodyptr);
+                     vos_mem_free(pMsg->bodyptr);
+                }
+                else
+                {
+                     smsLog(pMac, LOGE, "Empty rsp message"
+                     "for (eWNI_SME_READY_TO_EXTWOW_IND), nothing to process");
+                }
+                break ;
+#endif
 
 #ifdef FEATURE_WLAN_CH_AVOID
            /* channel avoid message arrived, send IND to client */
@@ -3855,14 +3910,19 @@ eHalStatus sme_RoamFreeConnectProfile(tHalHandle hHal,
     \param numItems - a variable that has the number of tPmkidCacheInfo
                       allocated when retruning, this is either the number needed
                       or number of items put into pPMKIDCache
+    \param update_entire_cache - this bool value specifies if the entire pmkid
+                               cache should be overwritten or should it be
+                               updated entry by entry.
     \return eHalStatus - when fail, it usually means the buffer allocated is not
                          big enough and pNumItems has the number of
                          tPmkidCacheInfo.
     \Note: pNumItems is a number of tPmkidCacheInfo,
            not sizeof(tPmkidCacheInfo) * something
   ---------------------------------------------------------------------------*/
-eHalStatus sme_RoamSetPMKIDCache( tHalHandle hHal, tANI_U8 sessionId, tPmkidCacheInfo *pPMKIDCache,
-                                  tANI_U32 numItems )
+eHalStatus sme_RoamSetPMKIDCache( tHalHandle hHal, tANI_U8 sessionId,
+                                  tPmkidCacheInfo *pPMKIDCache,
+                                  tANI_U32 numItems,
+                                  tANI_BOOLEAN update_entire_cache )
 {
    eHalStatus status = eHAL_STATUS_FAILURE;
    tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
@@ -3874,7 +3934,8 @@ eHalStatus sme_RoamSetPMKIDCache( tHalHandle hHal, tANI_U8 sessionId, tPmkidCach
    {
       if( CSR_IS_SESSION_VALID( pMac, sessionId ) )
       {
-         status = csrRoamSetPMKIDCache( pMac, sessionId, pPMKIDCache, numItems );
+         status = csrRoamSetPMKIDCache( pMac, sessionId, pPMKIDCache,
+                                        numItems, update_entire_cache);
       }
       else
       {
@@ -3886,7 +3947,9 @@ eHalStatus sme_RoamSetPMKIDCache( tHalHandle hHal, tANI_U8 sessionId, tPmkidCach
    return (status);
 }
 
-eHalStatus sme_RoamDelPMKIDfromCache( tHalHandle hHal, tANI_U8 sessionId, tANI_U8 *pBSSId )
+eHalStatus sme_RoamDelPMKIDfromCache( tHalHandle hHal, tANI_U8 sessionId,
+                                      tANI_U8 *pBSSId,
+                                      tANI_BOOLEAN flush_cache )
 {
    eHalStatus status = eHAL_STATUS_FAILURE;
    tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
@@ -3895,7 +3958,8 @@ eHalStatus sme_RoamDelPMKIDfromCache( tHalHandle hHal, tANI_U8 sessionId, tANI_U
    {
       if( CSR_IS_SESSION_VALID( pMac, sessionId ) )
       {
-         status = csrRoamDelPMKIDfromCache( pMac, sessionId, pBSSId );
+         status = csrRoamDelPMKIDfromCache( pMac, sessionId,
+                                            pBSSId, flush_cache );
       }
       else
       {
@@ -5944,260 +6008,6 @@ VOS_STATUS sme_NeighborReportRequest (tHalHandle hHal, tANI_U8 sessionId,
 }
 #endif
 
-//The following are debug APIs to support direct read/write register/memory
-//They are placed in SME because HW cannot be access when in LOW_POWER state
-//AND not connected. The knowledge and synchronization is done in SME
-
-//sme_DbgReadRegister
-//Caller needs to validate the input values
-VOS_STATUS sme_DbgReadRegister(tHalHandle hHal, v_U32_t regAddr, v_U32_t *pRegValue)
-{
-   VOS_STATUS   status = VOS_STATUS_E_FAILURE;
-   tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-   tPmcPowerState PowerState;
-   tANI_U32  sessionId = 0;
-   MTRACE(vos_trace(VOS_MODULE_ID_SME,
-               TRACE_CODE_SME_RX_HDD_DBG_READREG, NO_SESSION, 0));
-
-   /* 1) To make Quarky work in FTM mode **************************************/
-
-   if(eDRIVER_TYPE_MFG == pMac->gDriverType)
-   {
-      if (eWLAN_PAL_STATUS_SUCCESS == wpalDbgReadRegister(regAddr, pRegValue))
-      {
-         return VOS_STATUS_SUCCESS;
-      }
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   /* 2) NON FTM mode driver *************************************************/
-
-   /* Acquire SME global lock */
-   if (eHAL_STATUS_SUCCESS != sme_AcquireGlobalLock(&pMac->sme))
-   {
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   if(HAL_STATUS_SUCCESS(pmcQueryPowerState(pMac, &PowerState, NULL, NULL)))
-   {
-      /* Are we not in IMPS mode? Or are we in connected? Then we're safe*/
-      if(!csrIsConnStateDisconnected(pMac, sessionId) || (ePMC_LOW_POWER != PowerState))
-      {
-         if (eWLAN_PAL_STATUS_SUCCESS == wpalDbgReadRegister(regAddr, pRegValue))
-         {
-            status = VOS_STATUS_SUCCESS;
-         }
-         else
-         {
-            status = VOS_STATUS_E_FAILURE;
-         }
-      }
-      else
-      {
-         status = VOS_STATUS_E_FAILURE;
-      }
-   }
-
-   /* This is a hack for Qualky/pttWniSocket
-      Current implementation doesn't allow pttWniSocket to inform Qualky an error */
-   if ( VOS_STATUS_SUCCESS != status )
-   {
-      *pRegValue = 0xDEADBEEF;
-       status = VOS_STATUS_SUCCESS;
-   }
-
-   /* Release SME global lock */
-   sme_ReleaseGlobalLock(&pMac->sme);
-
-   return (status);
-}
-
-
-//sme_DbgWriteRegister
-//Caller needs to validate the input values
-VOS_STATUS sme_DbgWriteRegister(tHalHandle hHal, v_U32_t regAddr, v_U32_t regValue)
-{
-   VOS_STATUS    status = VOS_STATUS_E_FAILURE;
-   tpAniSirGlobal  pMac = PMAC_STRUCT(hHal);
-   tPmcPowerState PowerState;
-   tANI_U32   sessionId = 0;
-
-   /* 1) To make Quarky work in FTM mode **************************************/
-
-   MTRACE(vos_trace(VOS_MODULE_ID_SME,
-                    TRACE_CODE_SME_RX_HDD_DBG_WRITEREG, NO_SESSION, 0));
-   if(eDRIVER_TYPE_MFG == pMac->gDriverType)
-   {
-      if (eWLAN_PAL_STATUS_SUCCESS == wpalDbgWriteRegister(regAddr, regValue))
-      {
-         return VOS_STATUS_SUCCESS;
-      }
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   /* 2) NON FTM mode driver *************************************************/
-
-   /* Acquire SME global lock */
-   if (eHAL_STATUS_SUCCESS != sme_AcquireGlobalLock(&pMac->sme))
-   {
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   if(HAL_STATUS_SUCCESS(pmcQueryPowerState(pMac, &PowerState, NULL, NULL)))
-   {
-      /* Are we not in IMPS mode? Or are we in connected? Then we're safe*/
-      if(!csrIsConnStateDisconnected(pMac, sessionId) || (ePMC_LOW_POWER != PowerState))
-      {
-         if (eWLAN_PAL_STATUS_SUCCESS == wpalDbgWriteRegister(regAddr, regValue))
-         {
-            status = VOS_STATUS_SUCCESS;
-         }
-         else
-         {
-            status = VOS_STATUS_E_FAILURE;
-         }
-      }
-      else
-      {
-         status = VOS_STATUS_E_FAILURE;
-      }
-   }
-
-   /* Release SME global lock */
-   sme_ReleaseGlobalLock(&pMac->sme);
-
-   return (status);
-}
-
-
-
-//sme_DbgReadMemory
-//Caller needs to validate the input values
-//pBuf caller allocated buffer has the length of nLen
-VOS_STATUS sme_DbgReadMemory(tHalHandle hHal, v_U32_t memAddr, v_U8_t *pBuf, v_U32_t nLen)
-{
-   VOS_STATUS  status  = VOS_STATUS_E_FAILURE;
-   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
-   tPmcPowerState PowerState;
-   tANI_U32 sessionId  = 0;
-   tANI_U32 cmd = READ_MEMORY_DUMP_CMD;
-   tANI_U32 arg1 = memAddr;
-   tANI_U32 arg2 = nLen/4;
-   tANI_U32 arg3 = 4;
-   tANI_U32 arg4 = 0;
-   /* 1) To make Quarky work in FTM mode **************************************/
-
-   MTRACE(vos_trace(VOS_MODULE_ID_SME,
-                       TRACE_CODE_SME_RX_HDD_DBG_READMEM, NO_SESSION, 0));
-   if(eDRIVER_TYPE_MFG == pMac->gDriverType)
-   {
-      if (VOS_STATUS_SUCCESS == WDA_HALDumpCmdReq(pMac, cmd, arg1, arg2, arg3, arg4, (tANI_U8*)pBuf))
-      {
-         return VOS_STATUS_SUCCESS;
-      }
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   /* 2) NON FTM mode driver *************************************************/
-
-   /* Acquire SME global lock */
-   if (eHAL_STATUS_SUCCESS != sme_AcquireGlobalLock(&pMac->sme))
-   {
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   if(HAL_STATUS_SUCCESS(pmcQueryPowerState(pMac, &PowerState, NULL, NULL)))
-   {
-      /* Are we not in IMPS mode? Or are we in connected? Then we're safe*/
-      if(!csrIsConnStateDisconnected(pMac, sessionId) || (ePMC_LOW_POWER != PowerState))
-      {
-         if (VOS_STATUS_SUCCESS == WDA_HALDumpCmdReq(pMac, cmd, arg1, arg2, arg3, arg4, (tANI_U8 *)pBuf))
-         {
-            status = VOS_STATUS_SUCCESS;
-         }
-         else
-         {
-            status = VOS_STATUS_E_FAILURE;
-         }
-      }
-      else
-      {
-         status = VOS_STATUS_E_FAILURE;
-      }
-   }
-
-   /* This is a hack for Qualky/pttWniSocket
-      Current implementation doesn't allow pttWniSocket to inform Qualky an error */
-   if (VOS_STATUS_SUCCESS != status)
-   {
-      vos_mem_set(pBuf, nLen, 0xCD);
-      status = VOS_STATUS_SUCCESS;
-      smsLog(pMac, LOGE, FL(" filled with 0xCD because it cannot access the hardware"));
-   }
-
-   /* Release SME lock */
-   sme_ReleaseGlobalLock(&pMac->sme);
-
-   return (status);
-}
-
-
-//sme_DbgWriteMemory
-//Caller needs to validate the input values
-VOS_STATUS sme_DbgWriteMemory(tHalHandle hHal, v_U32_t memAddr, v_U8_t *pBuf, v_U32_t nLen)
-{
-   VOS_STATUS    status = VOS_STATUS_E_FAILURE;
-   tpAniSirGlobal  pMac = PMAC_STRUCT(hHal);
-   tPmcPowerState PowerState;
-   tANI_U32   sessionId = 0;
-
-   /* 1) To make Quarky work in FTM mode **************************************/
-
-   MTRACE(vos_trace(VOS_MODULE_ID_SME,
-                      TRACE_CODE_SME_RX_HDD_DBG_WRITEMEM, NO_SESSION, 0));
-   if(eDRIVER_TYPE_MFG == pMac->gDriverType)
-   {
-      {
-         return VOS_STATUS_SUCCESS;
-      }
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   /* 2) NON FTM mode driver *************************************************/
-
-   /* Acquire SME global lock */
-   if (eHAL_STATUS_SUCCESS != sme_AcquireGlobalLock(&pMac->sme))
-   {
-      return VOS_STATUS_E_FAILURE;
-   }
-
-   if(HAL_STATUS_SUCCESS(pmcQueryPowerState(pMac, &PowerState, NULL, NULL)))
-   {
-      /* Are we not in IMPS mode? Or are we in connected? Then we're safe*/
-      if(!csrIsConnStateDisconnected(pMac, sessionId) || (ePMC_LOW_POWER != PowerState))
-      {
-         if (eWLAN_PAL_STATUS_SUCCESS == wpalDbgWriteMemory(memAddr, (void *)pBuf, nLen))
-         {
-            status = VOS_STATUS_SUCCESS;
-         }
-         else
-         {
-            status = VOS_STATUS_E_FAILURE;
-         }
-      }
-      else
-      {
-         status = VOS_STATUS_E_FAILURE;
-      }
-   }
-
-   /* Release Global lock */
-   sme_ReleaseGlobalLock(&pMac->sme);
-
-   return (status);
-}
-
-
 void pmcLog(tpAniSirGlobal pMac, tANI_U32 loglevel, const char *pString, ...)
 {
     VOS_TRACE_LEVEL  vosDebugLevel;
@@ -7480,6 +7290,173 @@ eHalStatus sme_ConfigureResumeReq( tHalHandle hHal,
     }
     return(status);
 }
+
+#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
+/* ---------------------------------------------------------------------------
+
+  \fn    sme_ConfigureExtWoW
+
+  \brief
+    SME will pass this request to lower mac to configure Extr WoW
+
+  \param
+
+    hHal - The handle returned by macOpen.
+
+    wlanExtParams- Depicts the wlan Ext params
+
+  \return eHalStatus
+
+
+--------------------------------------------------------------------------- */
+eHalStatus sme_ConfigureExtWoW( tHalHandle hHal,
+                          tpSirExtWoWParams  wlanExtParams,
+                          csrReadyToExtWoWCallback callback,
+                             void *callbackContext)
+{
+    eHalStatus status = eHAL_STATUS_SUCCESS;
+    VOS_STATUS vosStatus = VOS_STATUS_SUCCESS;
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+    vos_msg_t vosMessage;
+    tpSirExtWoWParams MsgPtr = vos_mem_malloc(sizeof(*MsgPtr));
+
+    if (!MsgPtr)
+        return eHAL_STATUS_FAILURE;
+
+    MTRACE(vos_trace(VOS_MODULE_ID_SME,
+                  TRACE_CODE_SME_RX_HDD_CONFIG_EXTWOW, NO_SESSION, 0));
+
+    pMac->readyToExtWoWCallback = callback;
+    pMac->readyToExtWoWContext = callbackContext;
+
+    if ( eHAL_STATUS_SUCCESS ==
+              ( status = sme_AcquireGlobalLock( &pMac->sme ) ) ) {
+
+        /* serialize the req through MC thread */
+        vos_mem_copy(MsgPtr, wlanExtParams, sizeof(*MsgPtr));
+        vosMessage.bodyptr = MsgPtr;
+        vosMessage.type =  WDA_WLAN_EXT_WOW;
+        vosStatus = vos_mq_post_message( VOS_MQ_ID_WDA, &vosMessage );
+        if ( !VOS_IS_STATUS_SUCCESS(vosStatus) ) {
+            pMac->readyToExtWoWCallback = NULL;
+            pMac->readyToExtWoWContext = NULL;
+            vos_mem_free(MsgPtr);
+            status = eHAL_STATUS_FAILURE;
+        }
+        sme_ReleaseGlobalLock( &pMac->sme );
+    } else {
+        pMac->readyToExtWoWCallback = NULL;
+        pMac->readyToExtWoWContext = NULL;
+        vos_mem_free(MsgPtr);
+    }
+
+    return(status);
+}
+
+/* ---------------------------------------------------------------------------
+
+  \fn    sme_ConfigureAppType1Params
+
+  \brief
+   SME will pass this request to lower mac to configure Indoor WoW parameters.
+
+  \param
+
+    hHal - The handle returned by macOpen.
+
+    wlanAppType1Params- Depicts the wlan App Type 1(Indoor) params
+
+  \return eHalStatus
+
+
+--------------------------------------------------------------------------- */
+eHalStatus sme_ConfigureAppType1Params( tHalHandle hHal,
+                          tpSirAppType1Params  wlanAppType1Params)
+{
+    eHalStatus status = eHAL_STATUS_SUCCESS;
+    VOS_STATUS vosStatus = VOS_STATUS_SUCCESS;
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+    vos_msg_t       vosMessage;
+    tpSirAppType1Params MsgPtr = vos_mem_malloc(sizeof(*MsgPtr));
+
+    if (!MsgPtr)
+        return eHAL_STATUS_FAILURE;
+
+    MTRACE(vos_trace(VOS_MODULE_ID_SME,
+                  TRACE_CODE_SME_RX_HDD_CONFIG_APP_TYPE1, NO_SESSION, 0));
+
+    if ( eHAL_STATUS_SUCCESS ==
+              ( status = sme_AcquireGlobalLock( &pMac->sme ) ) ) {
+
+        /* serialize the req through MC thread */
+        vos_mem_copy(MsgPtr, wlanAppType1Params, sizeof(*MsgPtr));
+        vosMessage.bodyptr = MsgPtr;
+        vosMessage.type    =  WDA_WLAN_SET_APP_TYPE1_PARAMS;
+        vosStatus = vos_mq_post_message( VOS_MQ_ID_WDA, &vosMessage );
+        if ( !VOS_IS_STATUS_SUCCESS(vosStatus) ) {
+           vos_mem_free(MsgPtr);
+           status = eHAL_STATUS_FAILURE;
+        }
+        sme_ReleaseGlobalLock( &pMac->sme );
+    } else {
+        vos_mem_free(MsgPtr);
+    }
+
+    return(status);
+}
+
+/* ---------------------------------------------------------------------------
+
+  \fn    sme_ConfigureAppType2Params
+
+  \brief
+   SME will pass this request to lower mac to configure Indoor WoW parameters.
+
+  \param
+
+    hHal - The handle returned by macOpen.
+
+    wlanAppType2Params- Depicts the wlan App Type 2 (Outdoor) params
+
+  \return eHalStatus
+
+
+--------------------------------------------------------------------------- */
+eHalStatus sme_ConfigureAppType2Params( tHalHandle hHal,
+                          tpSirAppType2Params  wlanAppType2Params)
+{
+    eHalStatus status = eHAL_STATUS_SUCCESS;
+    VOS_STATUS vosStatus = VOS_STATUS_SUCCESS;
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+    vos_msg_t       vosMessage;
+    tpSirAppType2Params MsgPtr = vos_mem_malloc(sizeof(*MsgPtr));
+
+    if (!MsgPtr)
+        return eHAL_STATUS_FAILURE;
+
+    MTRACE(vos_trace(VOS_MODULE_ID_SME,
+                  TRACE_CODE_SME_RX_HDD_CONFIG_APP_TYPE2, NO_SESSION, 0));
+
+    if ( eHAL_STATUS_SUCCESS ==
+            ( status = sme_AcquireGlobalLock( &pMac->sme ) ) ) {
+
+        /* serialize the req through MC thread */
+        vos_mem_copy(MsgPtr, wlanAppType2Params, sizeof(*MsgPtr));
+        vosMessage.bodyptr = MsgPtr;
+        vosMessage.type =  WDA_WLAN_SET_APP_TYPE2_PARAMS;
+        vosStatus = vos_mq_post_message( VOS_MQ_ID_WDA, &vosMessage );
+        if ( !VOS_IS_STATUS_SUCCESS(vosStatus) ) {
+           vos_mem_free(MsgPtr);
+           status = eHAL_STATUS_FAILURE;
+        }
+        sme_ReleaseGlobalLock( &pMac->sme );
+    } else {
+        vos_mem_free(MsgPtr);
+    }
+
+    return(status);
+}
+#endif
 
 /* ---------------------------------------------------------------------------
 
@@ -13937,6 +13914,45 @@ eHalStatus sme_UpdateRoamOffloadEnabled(tHalHandle hHal,
                               pMac->roam.configParam.isRoamOffloadEnabled,
                                                      nRoamOffloadEnabled);
         pMac->roam.configParam.isRoamOffloadEnabled = nRoamOffloadEnabled;
+        sme_ReleaseGlobalLock(&pMac->sme);
+    }
+
+    return status ;
+}
+
+/*--------------------------------------------------------------------------
+  \brief sme_UpdateRoamKeyMgmtOffloadEnabled() - enable/disable key mgmt offload
+  This is a synchronous call
+  \param hHal - The handle returned by macOpen.
+  \param  sessionId - Session Identifier
+  \param nRoamKeyMgmtOffloadEnabled - The boolean to update with
+  \return eHAL_STATUS_SUCCESS - SME update config successfully.
+          Other status means SME is failed to update.
+  \sa
+  --------------------------------------------------------------------------*/
+
+eHalStatus sme_UpdateRoamKeyMgmtOffloadEnabled(tHalHandle hHal,
+                                     tANI_U8 sessionId,
+                                     v_BOOL_t nRoamKeyMgmtOffloadEnabled)
+
+{
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+    eHalStatus status    = eHAL_STATUS_SUCCESS;
+
+    status = sme_AcquireGlobalLock(&pMac->sme);
+    if (HAL_STATUS_SUCCESS(status))
+    {
+        if (CSR_IS_SESSION_VALID(pMac, sessionId)) {
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+                      "%s: LFR3: KeyMgmtOffloadEnabled changed to %d",
+                      __func__,
+                      nRoamKeyMgmtOffloadEnabled);
+            status = csrRoamSetKeyMgmtOffload(pMac,
+                                              sessionId,
+                                              nRoamKeyMgmtOffloadEnabled);
+        } else {
+            status = eHAL_STATUS_INVALID_PARAMETER;
+        }
         sme_ReleaseGlobalLock(&pMac->sme);
     }
 

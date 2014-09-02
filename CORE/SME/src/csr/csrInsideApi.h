@@ -761,7 +761,10 @@ eHalStatus csrRoamReconnect(tpAniSirGlobal pMac, tANI_U32 sessionId);
     has the number of tPmkidCacheInfo.
     \Note: pNumItems is a number of tPmkidCacheInfo, not sizeof(tPmkidCacheInfo) * something
   -------------------------------------------------------------------------------*/
-eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId, tPmkidCacheInfo *pPMKIDCache, tANI_U32 numItems );
+eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
+                                 tPmkidCacheInfo *pPMKIDCache,
+                                 tANI_U32 numItems,
+                                 tANI_BOOLEAN update_entire_cache );
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /* ---------------------------------------------------------------------------
@@ -775,6 +778,19 @@ eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId, tPmkid
  *-------------------------------------------------------------------------------*/
 eHalStatus csrRoamSetPSK_PMK(tpAniSirGlobal pMac, tANI_U32 sessionId,
                              tANI_U8 *pPSK_PMK, size_t pmk_len);
+
+/* ---------------------------------------------------------------------------
+ *\fn csrRoamSetKeyMgmtOffload
+ *\brief sets nRoamKeyMgmtOffloadEnabled
+ *\param pMac  - pointer to global structure for MAC
+ *\param sessionId - Sme session id
+ *\param nRoamKeyMgmtOffloadEnabled - value of key mgmt offload enable
+ *\return eHalStatus - usually it succeed unless sessionId is not found
+ *\Note:
+ *-------------------------------------------------------------------------------*/
+eHalStatus csrRoamSetKeyMgmtOffload(tpAniSirGlobal pMac,
+                                    tANI_U32 sessionId,
+                                    v_BOOL_t nRoamKeyMgmtOffloadEnabled);
 #endif
 /* ---------------------------------------------------------------------------
     \fn csrRoamGetWpaRsnReqIE
@@ -1025,7 +1041,7 @@ eHalStatus csrScanCreateEntryInScanCache(tpAniSirGlobal pMac, tANI_U32 sessionId
 
 eHalStatus csrUpdateChannelList(tpAniSirGlobal pMac);
 eHalStatus csrRoamDelPMKIDfromCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
-                                 tANI_U8 *pBSSId );
+                                     tANI_U8 *pBSSId, tANI_BOOLEAN flush_cache );
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 eHalStatus csrRoamEnqueueRoamOffloadSynch(
     tpAniSirGlobal pMac, tANI_U32 sessionId, tpSirBssDescription pBssDescription,

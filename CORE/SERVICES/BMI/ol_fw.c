@@ -54,8 +54,14 @@
 #include <net/cnss.h>
 #endif
 
-static struct hash_fw fw_hash;
 #include "qwlan_version.h"
+
+#ifdef FEATURE_SECURE_FIRMWARE
+#define MAX_FIRMWARE_SIZE (1*1024*1024)
+
+static u8 fw_mem[MAX_FIRMWARE_SIZE];
+static struct hash_fw fw_hash;
+#endif
 
 #ifdef HIF_PCI
 static u_int32_t refclk_speed_to_hz[] = {
@@ -359,6 +365,7 @@ exit:
 	return status;
 }
 
+#ifdef FEATURE_SECURE_FIRMWARE
 static int ol_check_fw_hash(const u8* data, u32 data_size, ATH_BIN_FILE file)
 {
 	u8 *hash = NULL;
@@ -417,6 +424,7 @@ static int ol_check_fw_hash(const u8* data, u32 data_size, ATH_BIN_FILE file)
 end:
 	return ret;
 }
+#endif
 
 static int __ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 				u_int32_t address, bool compressed)
@@ -432,9 +440,6 @@ static int __ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 	int bin_off, bin_len;
 	SIGN_HEADER_T *sign_header;
 #endif
-	u8 *fw_ptr;
-	u32 fw_size;
-
 	int ret;
 
 	if (scn->enablesinglebinary && file != ATH_BOARD_DATA_FILE) {
@@ -590,24 +595,21 @@ static int __ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 	fw_entry_size = fw_entry->size;
 	tempEeprom = NULL;
 
-	fw_size = fw_entry->size;
-	fw_ptr = OS_MALLOC(scn->sc_osdev, fw_size, GFP_ATOMIC);
-
-	if (!fw_ptr) {
-		pr_err("Failed to allocate fw_ptr memory\n");
+#ifdef FEATURE_SECURE_FIRMWARE
+	if (fw_entry_size <= MAX_FIRMWARE_SIZE) {
+		OS_MEMCPY(fw_mem, fw_entry->data, fw_entry_size);
+	} else {
+		pr_err("%s: No enough memory to copy FW data!", __func__);
 		status = A_ERROR;
 		goto end;
 	}
-	OS_MEMCPY(fw_ptr, fw_entry->data, fw_size);
 
-	if (ol_check_fw_hash(fw_ptr, fw_size, file)) {
+	if (ol_check_fw_hash(fw_mem, fw_entry_size, file)) {
 		pr_err("Hash Check failed for file:%s\n", filename);
 		status = A_ERROR;
-		OS_FREE(fw_ptr);
 		goto end;
 	}
-
-	OS_FREE(fw_ptr);
+#endif
 
 	if (file == ATH_BOARD_DATA_FILE)
 	{
@@ -857,7 +859,7 @@ int dump_CE_register(struct ol_softc *scn)
 }
 #endif
 
-#if  defined(CONFIG_CNSS)
+#if  defined(CONFIG_CNSS) || defined(HIF_SDIO)
 static struct ol_softc *ramdump_scn;
 
 int ol_copy_ramdump(struct ol_softc *scn)
@@ -879,7 +881,9 @@ out:
 
 static void ramdump_work_handler(struct work_struct *ramdump)
 {
+#if !defined(HIF_SDIO)
 	int ret;
+#endif
 	u_int32_t host_interest_address;
 	u_int32_t dram_dump_values[4];
 
@@ -887,7 +891,7 @@ static void ramdump_work_handler(struct work_struct *ramdump)
 		printk("No RAM dump will be collected since ramdump_scn is NULL!\n");
 		goto out_fail;
 	}
-
+#if !defined(HIF_SDIO)
 #ifdef DEBUG
 	ret = hif_pci_check_soc_status(ramdump_scn->hif_sc);
 	if (ret)
@@ -899,14 +903,17 @@ static void ramdump_work_handler(struct work_struct *ramdump)
 
 	dump_CE_debug_register(ramdump_scn->hif_sc);
 #endif
+#endif
 
 	if (HIFDiagReadMem(ramdump_scn->hif_hdl,
 		host_interest_item_address(ramdump_scn->target_type,
 		offsetof(struct host_interest_s, hi_failure_state)),
 		(A_UCHAR *)&host_interest_address, sizeof(u_int32_t)) != A_OK) {
 		printk(KERN_ERR "HifDiagReadiMem FW Dump Area Pointer failed!\n");
+#if !defined(HIF_SDIO)
 		dump_CE_register(ramdump_scn);
 		dump_CE_debug_register(ramdump_scn->hif_sc);
+#endif
 
 		goto out_fail;
 	}
@@ -926,17 +933,27 @@ static void ramdump_work_handler(struct work_struct *ramdump)
 
 	printk("%s: RAM dump collecting completed!\n", __func__);
 	msleep(250);
-
+#if defined(HIF_SDIO)
+	panic("CNSS Ram dump collected\n");
+#else
 	/* Notify SSR framework the target has crashed. */
 	cnss_device_crashed();
+#endif
 	return;
 
 out_fail:
 	/* Silent SSR on dump failure */
 #ifdef CNSS_SELF_RECOVERY
+#if !defined(HIF_SDIO)
 	cnss_device_self_recovery();
+#endif
+#else
+
+#if defined(HIF_SDIO)
+	panic("CNSS Ram dump collection failed \n");
 #else
 	cnss_device_crashed();
+#endif
 #endif
 	return;
 }
@@ -951,7 +968,9 @@ void ol_schedule_ramdump_work(struct ol_softc *scn)
 
 static void fw_indication_work_handler(struct work_struct *fw_indication)
 {
+#if !defined(HIF_SDIO)
 	cnss_device_self_recovery();
+#endif
 }
 
 static DECLARE_WORK(fw_indication_work, fw_indication_work_handler);
@@ -1213,7 +1232,7 @@ void ol_target_failure(void *instance, A_STATUS status)
 	}
 #endif
 
-#if  defined(CONFIG_CNSS)
+#if  defined(CONFIG_CNSS) || defined(HIF_SDIO)
 	/* Collect the RAM dump through a workqueue */
 	ol_schedule_ramdump_work(scn);
 #endif
@@ -1749,6 +1768,36 @@ A_STATUS ol_patch_pll_switch(struct ol_softc * scn)
 }
 #endif
 
+#ifdef CONFIG_CNSS
+/* AXI Start Address */
+#define TARGET_ADDR (0xa0000)
+
+void ol_transfer_codeswap_struct(struct ol_softc *scn) {
+	struct hif_pci_softc *sc = scn->hif_sc;
+	struct codeswap_codeseg_info wlan_codeswap;
+	A_STATUS rv;
+
+	if (!sc || !sc->hif_device) {
+		pr_err("%s: hif_pci_softc is null\n", __func__);
+		return;
+	}
+
+	if (cnss_get_codeswap_struct(&wlan_codeswap)) {
+		pr_err("%s: failed to get codeswap structure\n", __func__);
+		return;
+	}
+
+	rv = BMIWriteMemory(scn->hif_hdl, TARGET_ADDR,
+		(u_int8_t *)&wlan_codeswap, sizeof(wlan_codeswap), scn);
+
+	if (rv != A_OK) {
+		pr_err("Failed to Write 0xa0000 for Target Memory Expansion\n");
+		return;
+	}
+	pr_info("%s:codeswap structure is successfully downloaded\n", __func__);
+}
+#endif
+
 int ol_download_firmware(struct ol_softc *scn)
 {
 	u_int32_t param, address = 0;
@@ -1820,6 +1869,10 @@ int ol_download_firmware(struct ol_softc *scn)
 		printk("%s: Using 0x%x for the remainder of init\n", __func__, address);
 
 		if ( scn->enablesinglebinary == FALSE ) {
+#ifdef CONFIG_CNSS
+			ol_transfer_codeswap_struct(scn);
+#endif
+
 			status = ol_transfer_bin_file(scn, ATH_OTP_FILE,
 						      address, TRUE);
 			if (status == EOK) {
@@ -1956,7 +2009,7 @@ int ol_download_firmware(struct ol_softc *scn)
 	return status;
 }
 
-#ifdef HIF_PCI
+#if defined(HIF_PCI) || defined(HIF_SDIO)
 int ol_diag_read(struct ol_softc *scn, u_int8_t *buffer,
 	u_int32_t pos, size_t count)
 {
@@ -1966,6 +2019,7 @@ int ol_diag_read(struct ol_softc *scn, u_int8_t *buffer,
 		result = HIFDiagReadAccess(scn->hif_hdl, pos,
 			(u_int32_t*)buffer);
 	} else {
+#ifdef HIF_PCI
 		size_t amountRead = 0;
 		size_t readSize = PCIE_READ_LIMIT;
 		size_t remainder = 0;
@@ -1983,9 +2037,12 @@ int ol_diag_read(struct ol_softc *scn, u_int8_t *buffer,
 				}
 			}
 		} else {
+#endif
 			result = HIFDiagReadMem(scn->hif_hdl, pos,
 					buffer, count);
+#ifdef HIF_PCI
 		}
+#endif
 	}
 
 	if (!result) {
@@ -1995,6 +2052,7 @@ int ol_diag_read(struct ol_softc *scn, u_int8_t *buffer,
 	}
 }
 
+#if defined(HIF_PCI)
 static int ol_ath_get_reg_table(A_UINT32 target_version,
 				tgt_reg_table *reg_table)
 {
@@ -2091,6 +2149,7 @@ static int ol_diag_read_reg_loc(struct ol_softc *scn, u_int8_t *buffer,
 out:
 	return result;
 }
+#endif
 
 /**---------------------------------------------------------------------------
  *   \brief  ol_target_coredump
@@ -2152,10 +2211,12 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 		}
 
 		if ((blockLength - amountRead) >= readLen) {
+#if !defined(HIF_SDIO)
 			if (pos == REGISTER_LOCATION)
 				result = ol_diag_read_reg_loc(scn, bufferLoc,
 						blockLength - amountRead);
 			else
+#endif
 				result = ol_diag_read(scn, bufferLoc,
 						      pos, readLen);
 			if (result != -EIO) {

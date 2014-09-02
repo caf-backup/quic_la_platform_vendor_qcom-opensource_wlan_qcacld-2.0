@@ -3763,6 +3763,7 @@ REG_TABLE_ENTRY g_registry_table[] =
                CFG_ENABLE_LPASS_SUPPORT_MIN,
                CFG_ENABLE_LPASS_SUPPORT_MAX),
 #endif
+
    REG_VARIABLE( CFG_ENABLE_SELF_RECOVERY, WLAN_PARAM_Integer,
               hdd_config_t, enableSelfRecovery,
               VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -3778,6 +3779,98 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_SAP_SCC_CHAN_AVOIDANCE_MIN,
                  CFG_SAP_SCC_CHAN_AVOIDANCE_MAX),
 #endif /* FEATURE_WLAN_FORCE_SAP_SCC */
+
+   REG_VARIABLE( CFG_ENABLE_SAP_SUSPEND, WLAN_PARAM_Integer,
+               hdd_config_t, enableSapSuspend,
+               VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+               CFG_ENABLE_SAP_SUSPEND_DEFAULT,
+               CFG_ENABLE_SAP_SUSPEND_MIN,
+               CFG_ENABLE_SAP_SUSPEND_MAX ),
+
+#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
+   REG_VARIABLE( CFG_EXTWOW_GO_TO_SUSPEND, WLAN_PARAM_Integer,
+              hdd_config_t, extWowGotoSuspend,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_GO_TO_SUSPEND_DEFAULT,
+              CFG_EXTWOW_GO_TO_SUSPEND_MIN,
+              CFG_EXTWOW_GO_TO_SUSPEND_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_APP1_WAKE_PIN_NUMBER, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp1WakeupPinNumber,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_APP1_WAKE_PIN_NUMBER_DEFAULT,
+              CFG_EXTWOW_APP1_WAKE_PIN_NUMBER_MIN,
+              CFG_EXTWOW_APP1_WAKE_PIN_NUMBER_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_APP2_WAKE_PIN_NUMBER, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2WakeupPinNumber,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_APP2_WAKE_PIN_NUMBER_DEFAULT,
+              CFG_EXTWOW_APP2_WAKE_PIN_NUMBER_MIN,
+              CFG_EXTWOW_APP2_WAKE_PIN_NUMBER_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_KA_INIT_PING_INTERVAL, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2KAInitPingInterval,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_KA_INIT_PING_INTERVAL_DEFAULT,
+              CFG_EXTWOW_KA_INIT_PING_INTERVAL_MIN,
+              CFG_EXTWOW_KA_INIT_PING_INTERVAL_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_KA_MIN_PING_INTERVAL, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2KAMinPingInterval,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_KA_MIN_PING_INTERVAL_DEFAULT,
+              CFG_EXTWOW_KA_MIN_PING_INTERVAL_MIN,
+              CFG_EXTWOW_KA_MIN_PING_INTERVAL_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_KA_MAX_PING_INTERVAL, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2KAMaxPingInterval,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_KA_MAX_PING_INTERVAL_DEFAULT,
+              CFG_EXTWOW_KA_MAX_PING_INTERVAL_MIN,
+              CFG_EXTWOW_KA_MAX_PING_INTERVAL_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_KA_INC_PING_INTERVAL, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2KAIncPingInterval,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_KA_INC_PING_INTERVAL_DEFAULT,
+              CFG_EXTWOW_KA_INC_PING_INTERVAL_MIN,
+              CFG_EXTWOW_KA_INC_PING_INTERVAL_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_TCP_SRC_PORT, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2TcpSrcPort,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_TCP_SRC_PORT_DEFAULT,
+              CFG_EXTWOW_TCP_SRC_PORT_MIN,
+              CFG_EXTWOW_TCP_SRC_PORT_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_TCP_DST_PORT, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2TcpDstPort,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_TCP_DST_PORT_DEFAULT,
+              CFG_EXTWOW_TCP_DST_PORT_MIN,
+              CFG_EXTWOW_TCP_DST_PORT_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_TCP_TX_TIMEOUT, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2TcpTxTimeout,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_TCP_TX_TIMEOUT_DEFAULT,
+              CFG_EXTWOW_TCP_TX_TIMEOUT_MIN,
+              CFG_EXTWOW_TCP_TX_TIMEOUT_MAX ),
+
+   REG_VARIABLE( CFG_EXTWOW_TCP_RX_TIMEOUT, WLAN_PARAM_Integer,
+              hdd_config_t, extWowApp2TcpRxTimeout,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_EXTWOW_TCP_RX_TIMEOUT_DEFAULT,
+              CFG_EXTWOW_TCP_RX_TIMEOUT_MIN,
+              CFG_EXTWOW_TCP_RX_TIMEOUT_MAX ),
+#endif
+   REG_VARIABLE( CFG_ENABLE_DEAUTH_TO_DISASSOC_MAP_NAME, WLAN_PARAM_Integer,
+              hdd_config_t, gEnableDeauthToDisassocMap,
+              VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+              CFG_ENABLE_DEAUTH_TO_DISASSOC_MAP_DEFAULT,
+              CFG_ENABLE_DEAUTH_TO_DISASSOC_MAP_MIN,
+              CFG_ENABLE_DEAUTH_TO_DISASSOC_MAP_MAX ),
 };
 
 #ifdef WLAN_FEATURE_MBSSID
@@ -4315,9 +4408,61 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
             "Name = [gEnableLpassSupport] Value = [%u] ",
             pHddCtx->cfg_ini->enablelpasssupport);
 #endif
+
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
            "Name = [gEnableSelfRecovery] Value = [%u]",
                    pHddCtx->cfg_ini->enableSelfRecovery);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+            "Name = [gEnableSapSuspend] Value = [%u]",
+            pHddCtx->cfg_ini->enableSapSuspend);
+
+#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWgotoSuspend] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowGotoSuspend);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWowApp1WakeupPinNumber] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp1WakeupPinNumber);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWowApp2WakeupPinNumber] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2WakeupPinNumber);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2KAInitPingInterval] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2KAInitPingInterval);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2KAMinPingInterval] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2KAMinPingInterval);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2KAMaxPingInterval] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2KAMaxPingInterval);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2KAIncPingInterval] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2KAIncPingInterval);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2TcpSrcPort] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2TcpSrcPort);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2TcpDstPort] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2TcpDstPort);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2TcpTxTimeout] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2TcpTxTimeout);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+           "Name = [gExtWoWApp2TcpRxTimeout] Value = [%u]",
+                   pHddCtx->cfg_ini->extWowApp2TcpRxTimeout);
+#endif
+
 }
 
 #define CFG_VALUE_MAX_LEN 256

@@ -3258,7 +3258,8 @@ hdd_smeRoamCallback(void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U32 roamId,
                     pHddStaCtx->hdd_ReassocScenario = VOS_FALSE;
             }
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
-            pRoamInfo->roamSynchInProgress = VOS_FALSE;
+            if (pRoamInfo != NULL)
+                pRoamInfo->roamSynchInProgress = VOS_FALSE;
 #endif
             break;
 #ifdef WLAN_FEATURE_VOWIFI_11R
@@ -3640,7 +3641,8 @@ static tANI_S32 hdd_ProcessGENIE(hdd_adapter_t *pAdapter,
             // Finally set the PMKSA ID Cache in CSR
             result = sme_RoamSetPMKIDCache(halHandle,pAdapter->sessionId,
                                            PMKIDCache,
-                                           dot11RSNIE.pmkid_count );
+                                           dot11RSNIE.pmkid_count,
+                                           FALSE);
         }
     }
     else if (gen_ie[0] == DOT11F_EID_WPA)

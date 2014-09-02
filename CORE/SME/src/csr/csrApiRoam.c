@@ -2733,6 +2733,14 @@ eHalStatus csrRoamIssueDisassociate( tpAniSirGlobal pMac, tANI_U32 sessionId,
     {
         reasonCode = eSIR_MAC_DISASSOC_DUE_TO_FTHANDOFF_REASON;
     }
+    else if (eCSR_ROAM_SUBSTATE_DISASSOC_STA_HAS_LEFT == NewSubstate)
+    {
+        reasonCode = eSIR_MAC_DISASSOC_LEAVING_BSS_REASON;
+        NewSubstate = eCSR_ROAM_SUBSTATE_DISASSOC_FORCED;
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+            FL("set to reason code eSIR_MAC_DISASSOC_LEAVING_BSS_REASON"
+            " and set back NewSubstate"));
+    }
     else
     {
         reasonCode = eSIR_MAC_UNSPEC_FAILURE_REASON;
@@ -5441,6 +5449,43 @@ eCsrPhyMode csrRoamdot11modeToPhymode(tANI_U8 dot11mode)
     return phymode;
 }
 #endif
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+eHalStatus csrRoamOffloadSendSynchCnf(tpAniSirGlobal pMac, tANI_U8 sessionId)
+{
+    tpSirSmeRoamOffloadSynchCnf pRoamOffloadSynchCnf;
+    vos_msg_t msg;
+    pRoamOffloadSynchCnf =
+            vos_mem_malloc(sizeof(tSirSmeRoamOffloadSynchCnf));
+    if (NULL == pRoamOffloadSynchCnf)
+    {
+        VOS_TRACE(VOS_MODULE_ID_SME,
+          VOS_TRACE_LEVEL_ERROR,
+          "%s: not able to allocate memory for roam"
+          "offload synch confirmation data", __func__);
+        return eHAL_STATUS_FAILURE;
+    }
+    pRoamOffloadSynchCnf->sessionId = sessionId;
+    msg.type     = WDA_ROAM_OFFLOAD_SYNCH_CNF;
+    msg.reserved = 0;
+    msg.bodyptr  = pRoamOffloadSynchCnf;
+    VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
+                "LFR3: Posting WDA_ROAM_OFFLOAD_SYNCH_CNF");
+    if (!VOS_IS_STATUS_SUCCESS(vos_mq_post_message(
+                                    VOS_MODULE_ID_WDA, &msg)))
+    {
+            VOS_TRACE(VOS_MODULE_ID_SME,
+                VOS_TRACE_LEVEL_DEBUG,
+                "%s: Not able to post"
+                  "WDA_ROAM_OFFLOAD_SYNCH_CNF message to WDA",
+                     __func__);
+            vos_mem_free(pRoamOffloadSynchCnf);
+         return eHAL_STATUS_FAILURE;
+    }
+    return eHAL_STATUS_SUCCESS;
+}
+#endif
+
 //Return true means the command can be release, else not
 static tANI_BOOLEAN csrRoamProcessResults( tpAniSirGlobal pMac, tSmeCmd *pCommand,
                                        eCsrRoamCompleteResult Result, void *Context )
@@ -5631,6 +5676,17 @@ static tANI_BOOLEAN csrRoamProcessResults( tpAniSirGlobal pMac, tSmeCmd *pComman
 
                     //Save sessionId in case of timeout
                     pMac->roam.WaitForKeyTimerInfo.sessionId = (tANI_U8)sessionId;
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+        if (pSession->roamOffloadSynchParams.bRoamSynchInProgress &&
+           (pSession->roamOffloadSynchParams.authStatus ==
+                                     CSR_ROAM_AUTH_STATUS_CONNECTED))
+        {
+             VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
+             FL("LFR3:Send Synch Cnf for Auth status connected"));
+             csrRoamOffloadSendSynchCnf( pMac, sessionId);
+
+         }
+#endif
                     //This time should be long enough for the rest of the process plus setting key
                     if(!HAL_STATUS_SUCCESS( csrRoamStartWaitForKeyTimer( pMac, key_timeout_interval ) ) )
                     {
@@ -7263,6 +7319,14 @@ eHalStatus csrRoamProcessDisassocDeauth( tpAniSirGlobal pMac, tSmeCmd *pCommand,
         {
             NewSubstate = eCSR_ROAM_SUBSTATE_DISASSOC_HANDOFF;
         }
+        else if ((eCsrForcedDisassoc == pCommand->u.roamCmd.roamReason)
+            && (eSIR_MAC_DISASSOC_LEAVING_BSS_REASON ==
+            pCommand->u.roamCmd.reason))
+        {
+            NewSubstate = eCSR_ROAM_SUBSTATE_DISASSOC_STA_HAS_LEFT;
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+                FL("set to substate eCSR_ROAM_SUBSTATE_DISASSOC_STA_HAS_LEFT"));
+        }
         if( fDisassoc )
         {
             status = csrRoamIssueDisassociate( pMac, sessionId, NewSubstate, fMICFailure );
@@ -7363,6 +7427,12 @@ eHalStatus csrRoamIssueDisassociateCmd( tpAniSirGlobal pMac, tANI_U32 sessionId,
             break;
         case eCSR_DISCONNECT_REASON_IBSS_LEAVE:
             pCommand->u.roamCmd.roamReason = eCsrForcedIbssLeave;
+            break;
+        case eCSR_DISCONNECT_REASON_STA_HAS_LEFT:
+            pCommand->u.roamCmd.roamReason = eCsrForcedDisassoc;
+            pCommand->u.roamCmd.reason = eSIR_MAC_DISASSOC_LEAVING_BSS_REASON;
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+                FL("SME convert to internal reason code eCsrStaHasLeft"));
             break;
         default:
             break;
@@ -12380,19 +12450,22 @@ eHalStatus csrRoamSetPSK_PMK(tpAniSirGlobal pMac, tANI_U32 sessionId,
 }
 #endif /* WLAN_FEATURE_ROAM_OFFLOAD */
 eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
-                                 tPmkidCacheInfo *pPMKIDCache, tANI_U32 numItems )
+                                 tPmkidCacheInfo *pPMKIDCache,
+                                 tANI_U32 numItems,
+                                 tANI_BOOLEAN update_entire_cache )
 {
     eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
     tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, sessionId );
 
-    if(!pSession)
+    if (!pSession)
     {
         smsLog(pMac, LOGE, FL("  session %d not found "), sessionId);
         return eHAL_STATUS_FAILURE;
     }
 
     smsLog(pMac, LOGW, "csrRoamSetPMKIDCache called, numItems = %d", numItems);
-    if(numItems <= CSR_MAX_PMKID_ALLOWED)
+
+    if (numItems <= CSR_MAX_PMKID_ALLOWED)
     {
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_CSR
         {
@@ -12410,52 +12483,105 @@ eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
             WLAN_VOS_DIAG_EVENT_REPORT(&secEvent, EVENT_WLAN_SECURITY);
         }
 #endif//FEATURE_WLAN_DIAG_SUPPORT_CSR
+
         status = eHAL_STATUS_SUCCESS;
-        //numItems may be 0 to clear the cache
-        pSession->NumPmkidCache = (tANI_U16)numItems;
-        if(numItems && pPMKIDCache)
-        {
-            vos_mem_copy(pSession->PmkidCacheInfo, pPMKIDCache,
-                         sizeof(tPmkidCacheInfo) * numItems);
-            status = eHAL_STATUS_SUCCESS;
+        if (update_entire_cache) {
+            pSession->NumPmkidCache = (tANI_U16)numItems;
+            if (numItems && pPMKIDCache)
+            {
+                vos_mem_copy(pSession->PmkidCacheInfo, pPMKIDCache,
+                             sizeof(tPmkidCacheInfo) * numItems);
+            }
+        } else {
+            tANI_U32 i = 0, j = 0;
+            tANI_U8 BSSIDMatched = 0;
+            tPmkidCacheInfo *pmksa;
+
+            for (i = 0; i < numItems; i++) {
+                pmksa = &pPMKIDCache[i];
+                for (j = 0; j < CSR_MAX_PMKID_ALLOWED; j++) {
+                    if (vos_mem_compare(pSession->PmkidCacheInfo[j].BSSID,
+                                pmksa->BSSID, VOS_MAC_ADDR_SIZE)) {
+                        /* If a matching BSSID found, update it */
+                        BSSIDMatched = 1;
+                        vos_mem_copy(pSession->PmkidCacheInfo[j].PMKID,
+                                     pmksa->PMKID, CSR_RSN_PMKID_SIZE);
+                        break;
+                    }
+                }
+
+                if (!BSSIDMatched) {
+                    vos_mem_copy(
+                       pSession->PmkidCacheInfo[pSession->NumPmkidCache].BSSID,
+                       pmksa->BSSID, ETHER_ADDR_LEN);
+                    vos_mem_copy(
+                       pSession->PmkidCacheInfo[pSession->NumPmkidCache].PMKID,
+                       pmksa->PMKID, CSR_RSN_PMKID_SIZE);
+                    /* Increment the CSR local cache index */
+                    if (pSession->NumPmkidCache < (CSR_MAX_PMKID_ALLOWED - 1))
+                        pSession->NumPmkidCache++;
+                    else
+                        pSession->NumPmkidCache = 0;
+                }
+                BSSIDMatched = 0;
+            }
         }
     }
     return (status);
 }
 
 eHalStatus csrRoamDelPMKIDfromCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
-                                 tANI_U8 *pBSSId )
+                                     tANI_U8 *pBSSId,
+                                     tANI_BOOLEAN flush_cache )
 {
     eHalStatus status = eHAL_STATUS_FAILURE;
     tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, sessionId );
     tANI_BOOLEAN fMatchFound = FALSE;
     tANI_U32 Index;
+
     if(!pSession)
     {
         smsLog(pMac, LOGE, FL("  session %d not found "), sessionId);
         return eHAL_STATUS_FAILURE;
     }
-    do
-    {
-        for( Index=0; Index < pSession->NumPmkidCache; Index++ )
-        {
-            smsLog(pMac, LOGW, "Delete PMKID for "
-                   MAC_ADDRESS_STR, MAC_ADDR_ARRAY(pBSSId));
-            if( vos_mem_compare( pBSSId, pSession->PmkidCacheInfo[Index].BSSID, sizeof(tCsrBssid) ) )
-            {
-                fMatchFound = TRUE;
-                break;
-            }
-        }
-        if( !fMatchFound ) break;
-        vos_mem_set(pSession->PmkidCacheInfo[Index].BSSID, sizeof(tCsrBssid), 0);
-        status = eHAL_STATUS_SUCCESS;
+
+    /* Check if there are no entries to delete */
+    if (0 == pSession->NumPmkidCache) {
+       smsLog(pMac, LOG1, FL("No entries to delete/Flush"));
+       return eHAL_STATUS_SUCCESS;
     }
-    while( 0 );
-    smsLog(pMac, LOGW, "csrDelPMKID called return match = %d Status = %d",
-        fMatchFound, status);
-    return status;
+
+    if (!flush_cache) {
+        for (Index = 0; Index < CSR_MAX_PMKID_ALLOWED; Index++) {
+            if (vos_mem_compare(pSession->PmkidCacheInfo[Index].BSSID,
+                      pBSSId, VOS_MAC_ADDR_SIZE)) {
+                fMatchFound = 1;
+
+                /* Clear this - the matched entry */
+                 vos_mem_zero(&pSession->PmkidCacheInfo[Index],
+                              sizeof(tPmkidCacheInfo));
+
+                 status = eHAL_STATUS_SUCCESS;
+                 break;
+              }
+        }
+
+        if (Index == CSR_MAX_PMKID_ALLOWED && !fMatchFound) {
+           smsLog(pMac, LOG1, FL("No such PMKSA entry exists "MAC_ADDRESS_STR),
+                  MAC_ADDR_ARRAY(pBSSId));
+           return status;
+        }
+
+        return status;
+    } else {
+        /* Flush the entire cache */
+        vos_mem_zero(pSession->PmkidCacheInfo,
+                     sizeof(tPmkidCacheInfo) * CSR_MAX_PMKID_ALLOWED);
+        pSession->NumPmkidCache = 0;
+        return eHAL_STATUS_SUCCESS;
+    }
 }
+
 tANI_U32 csrRoamGetNumPMKIDCache(tpAniSirGlobal pMac, tANI_U32 sessionId)
 {
     return (pMac->roam.roamSession[sessionId].NumPmkidCache);
@@ -16308,6 +16434,19 @@ csrRoamScanOffloadPrepareProbeReqTemplate(tpAniSirGlobal pMac,
 }
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
+eHalStatus csrRoamSetKeyMgmtOffload(tpAniSirGlobal pMac,
+                                    tANI_U32 sessionId,
+                                    v_BOOL_t nRoamKeyMgmtOffloadEnabled)
+{
+    tCsrRoamSession *pSession = CSR_GET_SESSION(pMac, sessionId);
+    if (!pSession) {
+        smsLog(pMac, LOGE, FL("session %d not found"), sessionId);
+        return eHAL_STATUS_FAILURE;
+    }
+    pSession->RoamKeyMgmtOffloadEnabled = nRoamKeyMgmtOffloadEnabled;
+    return eHAL_STATUS_SUCCESS;
+}
+
 void csrRoamOffload(tpAniSirGlobal pMac, tSirRoamOffloadScanReq *pRequestBuf,
                                                    tCsrRoamSession *pSession)
 {
@@ -16661,6 +16800,7 @@ eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 sessionId,
    pRequestBuf->allowDFSChannelRoam = pMac->roam.configParam.allowDFSChannelRoam;
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
    pRequestBuf->RoamOffloadEnabled = csrRoamIsRoamOffloadEnabled(pMac);
+   pRequestBuf->RoamKeyMgmtOffloadEnabled = pSession->RoamKeyMgmtOffloadEnabled;
    /* Roam Offload piggybacks upon the Roam Scan offload command.*/
    if (pRequestBuf->RoamOffloadEnabled){
        csrRoamOffload(pMac, pRequestBuf, pSession);

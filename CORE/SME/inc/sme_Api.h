@@ -824,16 +824,21 @@ eHalStatus sme_RoamFreeConnectProfile(tHalHandle hHal,
     \param pPMKIDCache - caller allocated buffer point to an array of
                          tPmkidCacheInfo
     \param numItems - a variable that has the number of tPmkidCacheInfo
-                      allocated when retruning, this is either the number needed
-                      or number of items put into pPMKIDCache
+                      allocated when retruning, this is either the number
+                      needed or number of items put into pPMKIDCache
+    \param update_entire_cache - if TRUE, then it overwrites the entire cache
+                                 with pPMKIDCache, else it updates entry by
+                                 entry without deleting the old entries.
     \return eHalStatus - when fail, it usually means the buffer allocated is not
                          big enough and pNumItems has the number of
                          tPmkidCacheInfo.
     \Note: pNumItems is a number of tPmkidCacheInfo,
            not sizeof(tPmkidCacheInfo) * something
   ---------------------------------------------------------------------------*/
-eHalStatus sme_RoamSetPMKIDCache( tHalHandle hHal, tANI_U8 sessionId, tPmkidCacheInfo *pPMKIDCache,
-                                  tANI_U32 numItems );
+eHalStatus sme_RoamSetPMKIDCache( tHalHandle hHal, tANI_U8 sessionId,
+                                  tPmkidCacheInfo *pPMKIDCache,
+                                  tANI_U32 numItems,
+                                  tANI_BOOLEAN update_entire_cache );
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /* ---------------------------------------------------------------------------
@@ -1828,27 +1833,6 @@ VOS_STATUS sme_NeighborReportRequest (tHalHandle hHal, tANI_U8 sessionId,
                 tpRrmNeighborReq pRrmNeighborReq, tpRrmNeighborRspCallbackInfo callbackInfo);
 #endif
 
-//The following are debug APIs to support direct read/write register/memory
-//They are placed in SME because HW cannot be access when in LOW_POWER state
-//AND not connected. The knowledge and synchronization is done in SME
-
-//sme_DbgReadRegister
-//Caller needs to validate the input values
-VOS_STATUS sme_DbgReadRegister(tHalHandle hHal, v_U32_t regAddr, v_U32_t *pRegValue);
-
-//sme_DbgWriteRegister
-//Caller needs to validate the input values
-VOS_STATUS sme_DbgWriteRegister(tHalHandle hHal, v_U32_t regAddr, v_U32_t regValue);
-
-//sme_DbgReadMemory
-//Caller needs to validate the input values
-//pBuf caller allocated buffer has the length of nLen
-VOS_STATUS sme_DbgReadMemory(tHalHandle hHal, v_U32_t memAddr, v_U8_t *pBuf, v_U32_t nLen);
-
-//sme_DbgWriteMemory
-//Caller needs to validate the input values
-VOS_STATUS sme_DbgWriteMemory(tHalHandle hHal, v_U32_t memAddr, v_U8_t *pBuf, v_U32_t nLen);
-
 VOS_STATUS sme_GetWcnssWlanCompiledVersion(tHalHandle hHal,
                                            tSirVersionType *pVersion);
 VOS_STATUS sme_GetWcnssWlanReportedVersion(tHalHandle hHal,
@@ -2130,6 +2114,70 @@ eHalStatus sme_ConfigureSuspendInd( tHalHandle hHal,
 eHalStatus sme_ConfigureResumeReq( tHalHandle hHal,
                              tpSirWlanResumeParam  wlanResumeParam);
 
+#ifdef WLAN_FEATURE_EXTWOW_SUPPORT
+/* ---------------------------------------------------------------------------
+
+  \fn    sme_ConfigureExtWoW
+
+  \brief
+    SME will pass this request to lower mac to configure Indoor WoW parameters.
+
+  \param
+
+    hHal - The handle returned by macOpen.
+
+    wlanExtParams- Depicts the wlan Ext params
+
+  \return eHalStatus
+
+
+--------------------------------------------------------------------------- */
+eHalStatus sme_ConfigureExtWoW( tHalHandle hHal,
+                          tpSirExtWoWParams  wlanExtParams,
+                          csrReadyToSuspendCallback callback,
+                          void *callbackContext);
+
+
+/* ---------------------------------------------------------------------------
+
+  \fn    sme_ConfigureAppType1Params
+
+  \brief
+    SME will pass this request to lower mac to configure Indoor WoW parameters.
+
+  \param
+
+    hHal - The handle returned by macOpen.
+
+    wlanAppType1Params- Depicts the wlan Indoor params
+
+  \return eHalStatus
+
+
+--------------------------------------------------------------------------- */
+eHalStatus sme_ConfigureAppType1Params( tHalHandle hHal,
+                          tpSirAppType1Params  wlanAppType1Params);
+
+/* ---------------------------------------------------------------------------
+
+  \fn    sme_ConfigureAppType2Params
+
+  \brief
+    SME will pass this request to lower mac to configure Indoor WoW parameters.
+
+  \param
+
+    hHal - The handle returned by macOpen.
+
+    wlanAppType2Params- Depicts the wlan Indoor params
+
+  \return eHalStatus
+
+
+--------------------------------------------------------------------------- */
+eHalStatus sme_ConfigureAppType2Params( tHalHandle hHal,
+                          tpSirAppType2Params  wlanAppType2Params);
+#endif
 
 /* ---------------------------------------------------------------------------
 
@@ -3505,7 +3553,9 @@ eHalStatus smeIssueFastRoamNeighborAPEvent (tHalHandle hHal,
                                             tSmeFastRoamTrigger fastRoamTrig,
                                             tANI_U8 sessionId);
 
-eHalStatus sme_RoamDelPMKIDfromCache( tHalHandle hHal, tANI_U8 sessionId, tANI_U8 *pBSSId );
+eHalStatus sme_RoamDelPMKIDfromCache( tHalHandle hHal, tANI_U8 sessionId,
+                                      tANI_U8 *pBSSId,
+                                      tANI_BOOLEAN flush_cache );
 
 void smeGetCommandQStatus( tHalHandle hHal );
 
@@ -3973,6 +4023,21 @@ eHalStatus sme_SetLinkLayerStatsIndCB
   --------------------------------------------------------------------------*/
 eHalStatus sme_UpdateRoamOffloadEnabled(tHalHandle hHal,
                                      v_BOOL_t nRoamOffloadEnabled);
+
+/*--------------------------------------------------------------------------
+  \brief sme_UpdateRoamKeyMgmtOffloadEnabled() - enable/disable key mgmt offload
+  This is a synchronous call
+  \param hHal - The handle returned by macOpen.
+  \param  sessionId - Session Identifier
+  \param nRoamKeyMgmtOffloadEnabled - The boolean to update with
+  \return eHAL_STATUS_SUCCESS - SME update config successfully.
+          Other status means SME is failed to update.
+  \sa
+  --------------------------------------------------------------------------*/
+eHalStatus sme_UpdateRoamKeyMgmtOffloadEnabled(tHalHandle hHal,
+                                     tANI_U8 sessionId,
+                                     v_BOOL_t nRoamKeyMgmtOffloadEnabled);
+
 #endif
 
 #ifdef WLAN_FEATURE_NAN

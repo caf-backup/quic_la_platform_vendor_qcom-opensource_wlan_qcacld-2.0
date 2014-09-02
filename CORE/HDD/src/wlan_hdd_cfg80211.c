@@ -4066,13 +4066,6 @@ int wlan_hdd_cfg80211_alloc_new_beacon(hdd_adapter_t *pAdapter,
         return -EINVAL;
     }
 
-    if (params->tail && !params->tail_len)
-    {
-        VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                   FL("tail_len is zero but tail is not NULL"));
-        return -EINVAL;
-    }
-
     if(params->head)
         head_len = params->head_len;
     else
@@ -5644,14 +5637,16 @@ static int wlan_hdd_cfg80211_stop_ap (struct wiphy *wiphy,
 
     mutex_lock(&pHddCtx->sap_lock);
     if (test_bit(SOFTAP_BSS_STARTED, &pAdapter->event_flags)) {
+        hdd_hostapd_state_t *pHostapdState =
+                    WLAN_HDD_GET_HOSTAP_STATE_PTR(pAdapter);
+
+        vos_event_reset(&pHostapdState->vosEvent);
 #ifdef WLAN_FEATURE_MBSSID
         status = WLANSAP_StopBss(WLAN_HDD_GET_SAP_CTX_PTR(pAdapter));
 #else
         status = WLANSAP_StopBss(pHddCtx->pvosContext);
 #endif
         if (VOS_IS_STATUS_SUCCESS(status)) {
-            hdd_hostapd_state_t *pHostapdState = WLAN_HDD_GET_HOSTAP_STATE_PTR(pAdapter);
-
             status = vos_wait_single_event(&pHostapdState->vosEvent, 10000);
 
             if (!VOS_IS_STATUS_SUCCESS(status)) {
@@ -9548,7 +9543,6 @@ static int __wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
         return status;
     }
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
-#define KEY_MGMT_OFFLOAD_BITMASK 0x4
     /* Supplicant indicate its decision to offload key management
      * by setting the third bit in flags in case of Secure connection
      * so if the supplicant does not support this then LFR3.0 shall
@@ -9559,26 +9553,29 @@ static int __wlan_hdd_cfg80211_connect( struct wiphy *wiphy,
      * enabled in INI and FW also has the capability to handle
      * key management offload as part of LFR3.0
      */
-    VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_DEBUG,
-            "%s: LFR3:Supplicant key mgmt offload capability flags %x",
-                                                  __func__,req->flags);
-    if (!(req->auth_type == NL80211_AUTHTYPE_OPEN_SYSTEM) ||
-        (req->auth_type == NL80211_AUTHTYPE_FT)) {
-        if (!(req->flags & KEY_MGMT_OFFLOAD_BITMASK)) {
-            hddLog(VOS_TRACE_LEVEL_DEBUG,
-            FL("Supplicant does not support key mgmt offload for this AP"));
-            pHddCtx->cfg_ini->isRoamOffloadEnabled = 0;
-            status =    sme_UpdateRoamOffloadEnabled(pHddCtx->hHal, FALSE);
-        } else {
-            pHddCtx->cfg_ini->isRoamOffloadEnabled = 1;
-            status =    sme_UpdateRoamOffloadEnabled(pHddCtx->hHal, TRUE);
-        }
-        if (0 != status) {
-            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                   "%s: Could not update the RoamOffload enable", __func__);
-            return status;
-        }
+
+#ifdef NL80211_KEY_LEN_PMK /* if kernel supports key mgmt offload */
+    VOS_TRACE( VOS_MODULE_ID_HDD,
+               VOS_TRACE_LEVEL_ERROR,
+               "%s: LFR3:Supplicant association request flags %x",
+               __func__, req->flags);
+    if (!(req->flags & ASSOC_REQ_OFFLOAD_KEY_MGMT)) {
+        hddLog(VOS_TRACE_LEVEL_ERROR,
+        FL("Supplicant does not support key mgmt offload for this AP"));
+        sme_UpdateRoamKeyMgmtOffloadEnabled(pHddCtx->hHal,
+                                            pAdapter->sessionId,
+                                            FALSE);
+    } else {
+        sme_UpdateRoamKeyMgmtOffloadEnabled(pHddCtx->hHal,
+                                            pAdapter->sessionId,
+                                            TRUE);
     }
+#else
+    hddLog(VOS_TRACE_LEVEL_ERROR,
+        FL("Kernel does not support key mgmt offload"));
+    sme_UpdateRoamKeyMgmtOffloadEnabled(pHddCtx->hHal, pAdapter->sessionId, FALSE);
+#endif /* #ifdef NL80211_KEY_LEN_PMK */
+
 #endif
     if (vos_max_concurrent_connections_reached()) {
         hddLog(VOS_TRACE_LEVEL_ERROR, FL("Reached max concurrent connections"));
@@ -9810,14 +9807,24 @@ static int __wlan_hdd_cfg80211_disconnect( struct wiphy *wiphy,
 
         case WLAN_REASON_PREV_AUTH_NOT_VALID:
         case WLAN_REASON_CLASS2_FRAME_FROM_NONAUTH_STA:
-        case WLAN_REASON_DEAUTH_LEAVING:
              reasonCode = eCSR_DISCONNECT_REASON_DEAUTH;
              break;
 
+        case WLAN_REASON_DEAUTH_LEAVING:
+             reasonCode = pHddCtx->cfg_ini->gEnableDeauthToDisassocMap ?
+                 eCSR_DISCONNECT_REASON_STA_HAS_LEFT :
+                 eCSR_DISCONNECT_REASON_DEAUTH;
+             break;
+        case WLAN_REASON_DISASSOC_STA_HAS_LEFT:
+             reasonCode = eCSR_DISCONNECT_REASON_STA_HAS_LEFT;
+             break;
         default:
              reasonCode = eCSR_DISCONNECT_REASON_UNSPECIFIED;
             break;
         }
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                  FL("convert to internal reason %d to reasonCode %d"),
+                  reason, reasonCode);
         pHddStaCtx->conn_info.connState = eConnectionState_NotConnected;
         pScanInfo =  &pAdapter->scan_info;
         if (pScanInfo->mScanPending) {
@@ -10890,7 +10897,8 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
             }
             if (rate_flags & eHAL_TX_RATE_SGI)
             {
-                sinfo->txrate.flags |= RATE_INFO_FLAGS_MCS;
+                if (!(sinfo->txrate.flags & RATE_INFO_FLAGS_VHT_MCS))
+                    sinfo->txrate.flags |= RATE_INFO_FLAGS_MCS;
                 sinfo->txrate.flags |= RATE_INFO_FLAGS_SHORT_GI;
             }
 
@@ -11263,14 +11271,12 @@ static int wlan_hdd_cfg80211_add_station(struct wiphy *wiphy,
 static int __wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *dev,
             struct cfg80211_pmksa *pmksa)
 {
-    tANI_U32 j=0;
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
-    hdd_station_ctx_t *pHddStaCtx;
+    hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     tHalHandle halHandle;
     eHalStatus result = eHAL_STATUS_SUCCESS;
     int status;
-    tANI_U8  BSSIDMatched = 0;
-    hdd_context_t *pHddCtx;
+    tPmkidCacheInfo pmk_id;
 
     if (!pmksa) {
         hddLog(LOGE, FL("pmksa is NULL"));
@@ -11282,10 +11288,10 @@ static int __wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device 
                pmksa->bssid, pmksa->pmkid);
         return -EINVAL;
     }
+
     hddLog(VOS_TRACE_LEVEL_DEBUG, FL("set PMKSA for "MAC_ADDRESS_STR),
            MAC_ADDR_ARRAY(pmksa->bssid));
 
-    pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     status = wlan_hdd_validate_context(pHddCtx);
 
     if (0 != status) {
@@ -11294,61 +11300,18 @@ static int __wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device 
     }
 
     halHandle = WLAN_HDD_GET_HAL_CTX(pAdapter);
-    pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
 
-    for (j = 0; j < pHddStaCtx->PMKIDCacheIndex; j++) {
-        if (vos_mem_compare(pHddStaCtx->PMKIDCache[j].BSSID,
-                    pmksa->bssid, VOS_MAC_ADDR_SIZE)) {
-            /* BSSID matched previous entry. Overwrite it. */
-            BSSIDMatched = 1;
-            vos_mem_copy(pHddStaCtx->PMKIDCache[j].BSSID,
-                    pmksa->bssid, VOS_MAC_ADDR_SIZE);
-            vos_mem_copy(pHddStaCtx->PMKIDCache[j].PMKID,
-                    pmksa->pmkid,
-                    CSR_RSN_PMKID_SIZE);
-            hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Reusing cache entry %d"), j);
-            hddLog(VOS_TRACE_LEVEL_INFO, MAC_ADDRESS_STR,
-               MAC_ADDR_ARRAY(pmksa->bssid));
-            dump_pmkid(halHandle, pmksa->pmkid);
-            break;
-        }
-    }
+    vos_mem_copy(pmk_id.BSSID, pmksa->bssid, ETHER_ADDR_LEN);
+    vos_mem_copy(pmk_id.PMKID, pmksa->pmkid, CSR_RSN_PMKID_SIZE);
 
-    /* Check we compared all entries,if then take the first slot now */
-    if (j == CSR_MAX_PMKID_ALLOWED) pHddStaCtx->PMKIDCacheIndex = 0;
-
-    if (!BSSIDMatched) {
-        /* Now, we DON'T have a BSSID match, so take a new entry in the cache */
-        vos_mem_copy(pHddStaCtx->PMKIDCache[pHddStaCtx->PMKIDCacheIndex].BSSID,
-                pmksa->bssid, ETHER_ADDR_LEN);
-        vos_mem_copy(pHddStaCtx->PMKIDCache[pHddStaCtx->PMKIDCacheIndex].PMKID,
-                pmksa->pmkid,
-                CSR_RSN_PMKID_SIZE);
-        hddLog(VOS_TRACE_LEVEL_DEBUG,
-               FL("Adding a new cache entry %d"), pHddStaCtx->PMKIDCacheIndex);
-        hddLog(VOS_TRACE_LEVEL_INFO, MAC_ADDRESS_STR,
-               MAC_ADDR_ARRAY(pmksa->bssid));
-        dump_pmkid(halHandle, pmksa->pmkid);
-        /* Increment the HDD Local Cache index */
-        if (pHddStaCtx->PMKIDCacheIndex <= (CSR_MAX_PMKID_ALLOWED - 1))
-            pHddStaCtx->PMKIDCacheIndex++;
-        else
-            pHddStaCtx->PMKIDCacheIndex = 0;
-    }
-
-
-    /* Calling csrRoamSetPMKIDCache to configure the PMKIDs into the cache */
-    hddLog(VOS_TRACE_LEVEL_DEBUG,
-           FL("Calling sme_RoamSetPMKIDCache with %d cache entries"),
-           pHddStaCtx->PMKIDCacheIndex);
-
-    /* Finally set the PMKSA ID Cache in CSR */
+    /* Add to the PMKSA ID Cache in CSR */
     result = sme_RoamSetPMKIDCache(halHandle,pAdapter->sessionId,
-                                    pHddStaCtx->PMKIDCache,
-                                    pHddStaCtx->PMKIDCacheIndex);
+                                   &pmk_id, 1, FALSE);
+
     MTRACE(vos_trace(VOS_MODULE_ID_HDD,
                      TRACE_CODE_HDD_CFG80211_SET_PMKSA,
                      pAdapter->sessionId, result));
+
     return HAL_STATUS_SUCCESS(result) ? 0 : -EINVAL;
 }
 
@@ -11368,12 +11331,9 @@ static int wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *d
 static int __wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *dev,
              struct cfg80211_pmksa *pmksa)
 {
-    tANI_U32 j = 0;
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
-    hdd_station_ctx_t *pHddStaCtx;
+    hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     tHalHandle halHandle;
-    tANI_U8  BSSIDMatched = 0;
-    hdd_context_t *pHddCtx;
     int status = 0;
 
     if (!pmksa) {
@@ -11385,10 +11345,10 @@ static int __wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device 
         hddLog(LOGE, FL("pmksa->bssid is NULL"));
         return -EINVAL;
     }
+
     hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Deleting PMKSA for "MAC_ADDRESS_STR),
            MAC_ADDR_ARRAY(pmksa->bssid));
 
-    pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     status = wlan_hdd_validate_context(pHddCtx);
 
     if (0 != status) {
@@ -11397,70 +11357,16 @@ static int __wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device 
     }
 
     halHandle = WLAN_HDD_GET_HAL_CTX(pAdapter);
-    pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
 
-    /* In case index is 0,no entry to delete */
-    if (0 == pHddStaCtx->PMKIDCacheIndex) {
-       hddLog(VOS_TRACE_LEVEL_INFO, FL("No entries to delete"));
-       return 0;
+    /* Delete the PMKID CSR cache */
+    if (eHAL_STATUS_SUCCESS !=
+        sme_RoamDelPMKIDfromCache(halHandle,
+                                  pAdapter->sessionId, pmksa->bssid, FALSE)) {
+       hddLog(LOGE, FL("Failed to delete PMKSA for "MAC_ADDRESS_STR),
+                      MAC_ADDR_ARRAY(pmksa->bssid));
+       status = -EINVAL;
     }
 
-    /* Find the matching PMKSA entry from j=0 to (index-1),
-     * and delete the matched one
-     */
-    for (j = 0; j < pHddStaCtx->PMKIDCacheIndex; j++) {
-          if (vos_mem_compare(pHddStaCtx->PMKIDCache[j].BSSID,
-                             pmksa->bssid,
-                             VOS_MAC_ADDR_SIZE)) {
-             /* BSSID matched entry */
-             BSSIDMatched = 1;
-
-             if (j < pHddStaCtx->PMKIDCacheIndex-1) {
-                 /* Replace the matching entry with the last entry
-                    in HDD local cache */
-                 vos_mem_copy(pHddStaCtx->PMKIDCache[j].BSSID,
-                      pHddStaCtx->PMKIDCache[pHddStaCtx->PMKIDCacheIndex-1].BSSID,
-                      VOS_MAC_ADDR_SIZE);
-                 vos_mem_copy(pHddStaCtx->PMKIDCache[j].PMKID,
-                      pHddStaCtx->PMKIDCache[pHddStaCtx->PMKIDCacheIndex-1].PMKID,
-                      CSR_RSN_PMKID_SIZE);
-              }
-
-             /* Clear the last entry in HDD cache ---[index-1] */
-             vos_mem_zero(pHddStaCtx->PMKIDCache[pHddStaCtx->PMKIDCacheIndex-1].BSSID,
-                          VOS_MAC_ADDR_SIZE);
-             vos_mem_zero(pHddStaCtx->PMKIDCache[pHddStaCtx->PMKIDCacheIndex-1].PMKID,
-                          CSR_RSN_PMKID_SIZE);
-
-             /* Reduce the PMKID array index */
-             pHddStaCtx->PMKIDCacheIndex--;
-
-             /* Delete the last PMKID cache in CSR */
-             if (eHAL_STATUS_SUCCESS !=
-                 sme_RoamDelPMKIDfromCache(halHandle,
-                                           pAdapter->sessionId, pmksa->bssid))
-             {
-                hddLog(LOGE, FL("Cannot delete PMKSA %d CONTENT"),
-                             pHddStaCtx->PMKIDCacheIndex);
-                status = -EINVAL;
-             }
-
-             hddLog(VOS_TRACE_LEVEL_INFO, MAC_ADDRESS_STR,
-               MAC_ADDR_ARRAY(pmksa->bssid));
-             dump_pmkid(halHandle,pmksa->pmkid);
-
-             break;
-          }
-    }
-
-    /* We compare all entries, but cannot find matching entry */
-    if (j == CSR_MAX_PMKID_ALLOWED && !BSSIDMatched) {
-       hddLog(VOS_TRACE_LEVEL_DEBUG,
-              FL("No such PMKSA entry exists "MAC_ADDRESS_STR),
-              MAC_ADDR_ARRAY(pmksa->bssid));
-       dump_pmkid(halHandle, pmksa->pmkid);
-       return -EINVAL;
-    }
     return status;
 }
 
@@ -11480,12 +11386,9 @@ static int wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *d
 
 static int __wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device *dev)
 {
-    tANI_U32 j = 0;
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
-    hdd_station_ctx_t *pHddStaCtx;
+    hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     tHalHandle halHandle;
-    hdd_context_t *pHddCtx;
-    tANI_U8 *pBSSId;
     int status = 0;
 
     hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Flushing PMKSA"));
@@ -11500,32 +11403,13 @@ static int __wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_devic
 
     /* Retrieve halHandle */
     halHandle = WLAN_HDD_GET_HAL_CTX(pAdapter);
-    pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
 
-    /* In case index is 0,no entry to delete */
-    if (0 == pHddStaCtx->PMKIDCacheIndex)
-    {
-       hddLog(VOS_TRACE_LEVEL_INFO, FL("No entries to flush"));
-       return 0;
+    /* Flush the PMKID cache in CSR */
+    if (eHAL_STATUS_SUCCESS !=
+        sme_RoamDelPMKIDfromCache(halHandle, pAdapter->sessionId, NULL, TRUE)) {
+       hddLog(VOS_TRACE_LEVEL_ERROR, FL("Cannot flush PMKIDCache"));
+       status = -EINVAL;
     }
-
-    /* Delete all the PMKSA one by one */
-    for (j = 0; j < pHddStaCtx->PMKIDCacheIndex; j++) {
-          pBSSId =(tANI_U8 *)(pHddStaCtx->PMKIDCache[j].BSSID);
-
-          /* Delete the PMKID in CSR */
-          if (eHAL_STATUS_SUCCESS !=
-              sme_RoamDelPMKIDfromCache(halHandle,
-                                        pAdapter->sessionId, pBSSId)) {
-             hddLog(VOS_TRACE_LEVEL_ERROR, FL("Cannot flush PMKIDCache %d"), j);
-             status = -EINVAL;
-          }
-          /* Clear the entry in HDD cache 0--index-1 */
-          vos_mem_zero(pHddStaCtx->PMKIDCache[j].BSSID, VOS_MAC_ADDR_SIZE);
-          vos_mem_zero(pHddStaCtx->PMKIDCache[j].PMKID, CSR_RSN_PMKID_SIZE);
-    }
-
-    pHddStaCtx->PMKIDCacheIndex = 0;
 
     return status;
 }
@@ -13454,15 +13338,31 @@ int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
      * CAC is done for a SoftAP which is in started state.
      */
     status = hdd_get_front_adapter(pHddCtx, &pAdapterNode);
-
     while (NULL != pAdapterNode && VOS_STATUS_SUCCESS == status) {
         pAdapter = pAdapterNode->pAdapter;
-        if (WLAN_HDD_SOFTAP == pAdapter->device_mode  &&
-              BSS_START == WLAN_HDD_GET_HOSTAP_STATE_PTR(pAdapter)->bssState &&
-              VOS_TRUE == WLAN_HDD_GET_AP_CTX_PTR(pAdapter)->dfs_cac_block_tx) {
-           hddLog(VOS_TRACE_LEVEL_DEBUG,
-                 FL("RADAR detection in progress, do not allow suspend"));
-           return -EAGAIN;
+        if (WLAN_HDD_SOFTAP == pAdapter->device_mode) {
+            if (BSS_START ==
+                    WLAN_HDD_GET_HOSTAP_STATE_PTR(pAdapter)->bssState &&
+                VOS_TRUE ==
+                    WLAN_HDD_GET_AP_CTX_PTR(pAdapter)->dfs_cac_block_tx) {
+                hddLog(VOS_TRACE_LEVEL_DEBUG,
+                    FL("RADAR detection in progress, do not allow suspend"));
+                return -EAGAIN;
+            } else if (!pHddCtx->cfg_ini->enableSapSuspend) {
+                /* return -EOPNOTSUPP if SAP does not support suspend
+                 */
+                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                    "%s:SAP does not support suspend!!", __func__);
+                return -EOPNOTSUPP;
+            }
+        } else if (WLAN_HDD_P2P_GO == pAdapter->device_mode) {
+            if (!pHddCtx->cfg_ini->enableSapSuspend) {
+                /* return -EOPNOTSUPP if GO does not support suspend
+                 */
+                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                    "%s:GO does not support suspend!!", __func__);
+                return -EOPNOTSUPP;
+            }
         }
         status = hdd_get_next_adapter(pHddCtx, pAdapterNode, &pNext);
         pAdapterNode = pNext;
