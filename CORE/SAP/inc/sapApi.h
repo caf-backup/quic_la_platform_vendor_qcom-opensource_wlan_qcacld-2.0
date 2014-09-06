@@ -205,6 +205,7 @@ typedef enum {
     eSAP_DFS_RADAR_DETECT,
     eSAP_DFS_NOL_GET,  /* Event sent when user need to get the DFS NOL from CNSS */
     eSAP_DFS_NOL_SET,  /* Event sent when user need to set the DFS NOL to CNSS */
+    eSAP_DFS_NO_AVAILABLE_CHANNEL, /* No ch available after DFS RADAR detect */
 } eSapHddEvent;
 
 typedef enum {
@@ -560,6 +561,14 @@ typedef struct sSapDfsInfo
     v_U8_t              numCurrentRegDomainDfsChannels;
     tSapDfsNolInfo      sapDfsChannelNolList[NUM_5GHZ_CHANNELS];
     v_U8_t              is_dfs_cac_timer_running;
+    /*
+     * New channel width and new channel bonding mode
+     * will only be updated via channel fallback mechanism
+     */
+    tANI_U8             orig_cbMode;
+    tANI_U8             orig_chanWidth;
+    tANI_U8             new_chanWidth;
+    tANI_U8             new_cbMode;
 } tSapDfsInfo;
 
 typedef struct tagSapCtxList
