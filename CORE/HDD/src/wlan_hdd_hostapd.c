@@ -254,8 +254,6 @@ int hdd_hostapd_open (struct net_device *dev)
        goto done;
    }
 
-   WLAN_HDD_GET_AP_CTX_PTR(pAdapter)->dfs_cac_block_tx = VOS_TRUE;
-
    //Turn ON carrier state
    netif_carrier_on(dev);
    //Enable all Tx queues
@@ -2651,6 +2649,13 @@ static iw_softap_setparam(struct net_device *dev,
                         set_value, VDEV_CMD);
                 break;
             }
+        case QCASAP_SET_PHYMODE:
+            {
+                hdd_context_t *phddctx = WLAN_HDD_GET_CTX(pHostapdAdapter);
+
+                ret = wlan_hdd_update_phymode(dev, hHal, set_value, phddctx);
+                break;
+            }
         default:
             hddLog(LOGE, FL("Invalid setparam command %d value %d"),
                     sub_cmd, set_value);
@@ -4810,6 +4815,11 @@ static const struct iw_priv_args hostapd_private_args[] = {
         "set_nss" },
 #endif /* QCA_WIFI_2_0 */
 
+    {   QCASAP_SET_PHYMODE,
+        IW_PRIV_TYPE_INT| IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "setphymode" },
+
   { QCSAP_IOCTL_GETPARAM, 0,
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,    "getparam" },
   { QCSAP_IOCTL_GETPARAM, 0,
@@ -4960,6 +4970,7 @@ static const struct iw_priv_args hostapd_private_args[] = {
         IW_PRIV_TYPE_INT| IW_PRIV_SIZE_FIXED | 1,
         0,
         "setTrafficMon" },
+
 };
 
 static const iw_handler hostapd_private[] = {
@@ -5044,6 +5055,12 @@ VOS_STATUS hdd_init_ap_mode( hdd_adapter_t *pAdapter )
     }
 
     pAdapter->sessionCtx.ap.sapContext = sapContext;
+
+    /*
+     * DFS requirement: Do not transmit during CAC. This flag will be reset
+     * when BSS starts(if not in a DFS channel) or CAC ends.
+     */
+    pAdapter->sessionCtx.ap.dfs_cac_block_tx = VOS_TRUE;
 
     status = WLANSAP_Start(sapContext);
     if ( ! VOS_IS_STATUS_SUCCESS( status ) )
