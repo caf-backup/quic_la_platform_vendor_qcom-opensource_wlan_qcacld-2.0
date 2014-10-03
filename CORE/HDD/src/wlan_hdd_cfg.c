@@ -3040,20 +3040,6 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_MAX_MEDIUM_TIME_STAMIN,
                  CFG_MAX_MEDIUM_TIME_STAMAX ),
 
-   REG_VARIABLE( CFG_ENABLE_TRAFFIC_MONITOR, WLAN_PARAM_Integer,
-                 hdd_config_t, enableTrafficMonitor,
-                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-                 CFG_ENABLE_TRAFFIC_MONITOR_DEFAULT,
-                 CFG_ENABLE_TRAFFIC_MONITOR_MIN,
-                 CFG_ENABLE_TRAFFIC_MONITOR_MAX),
-
-   REG_VARIABLE( CFG_TRAFFIC_IDLE_TIMEOUT, WLAN_PARAM_Integer,
-                 hdd_config_t, trafficIdleTimeout,
-                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-                 CFG_TRAFFIC_IDLE_TIMEOUT_DEFAULT,
-                 CFG_TRAFFIC_IDLE_TIMEOUT_MIN,
-                 CFG_TRAFFIC_IDLE_TIMEOUT_MAX),
-
 #ifdef WLAN_FEATURE_11AC
    REG_VARIABLE( CFG_ENABLE_VHT_FOR_24GHZ_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, enableVhtFor24GHzBand,
@@ -3474,6 +3460,27 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_SAP_SCAN_BAND_PREFERENCE_MAX ),
 
 #ifdef QCA_LL_TX_FLOW_CT
+   REG_VARIABLE( CFG_LL_TX_FLOW_LWM, WLAN_PARAM_Integer,
+                 hdd_config_t, TxFlowLowWaterMark,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_LL_TX_FLOW_LWM_DEFAULT,
+                 CFG_LL_TX_FLOW_LWM_MIN,
+                 CFG_LL_TX_FLOW_LWM_MAX ),
+
+   REG_VARIABLE( CFG_LL_TX_FLOW_HWM_OFFSET, WLAN_PARAM_Integer,
+                 hdd_config_t, TxFlowHighWaterMarkOffset,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_LL_TX_FLOW_HWM_OFFSET_DEFAULT,
+                 CFG_LL_TX_FLOW_HWM_OFFSET_MIN,
+                 CFG_LL_TX_FLOW_HWM_OFFSET_MAX ),
+
+   REG_VARIABLE( CFG_LL_TX_FLOW_MAX_Q_DEPTH, WLAN_PARAM_Integer,
+                 hdd_config_t, TxFlowMaxQueueDepth,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_LL_TX_FLOW_MAX_Q_DEPTH_DEFAULT,
+                 CFG_LL_TX_FLOW_MAX_Q_DEPTH_MIN,
+                 CFG_LL_TX_FLOW_MAX_Q_DEPTH_MAX ),
+
    REG_VARIABLE( CFG_LL_TX_LBW_FLOW_LWM, WLAN_PARAM_Integer,
                  hdd_config_t, TxLbwFlowLowWaterMark,
                  VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4377,8 +4384,6 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gEnableSSR] Value = [%u] ",pHddCtx->cfg_ini->enableSSR);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gEnableVhtFor24GHzBand] Value = [%u] ",pHddCtx->cfg_ini->enableVhtFor24GHzBand);
 
-  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gEnableTrafficMonitor] Value = [%u] ", pHddCtx->cfg_ini->enableTrafficMonitor);
-  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gTrafficIdleTimeout] Value = [%u] ", pHddCtx->cfg_ini->trafficIdleTimeout);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gFlexConnectPowerFactor] Value = [%u] ", pHddCtx->cfg_ini->flexConnectPowerFactor);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gEnableIbssHeartBeatOffload] Value = [%u] ", pHddCtx->cfg_ini->enableIbssHeartBeatOffload);
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH, "Name = [gAntennaDiversity] Value = [%u] ", pHddCtx->cfg_ini->antennaDiversity);

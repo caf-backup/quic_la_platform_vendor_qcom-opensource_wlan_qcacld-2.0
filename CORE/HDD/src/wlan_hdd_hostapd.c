@@ -2408,43 +2408,45 @@ static iw_softap_setparam(struct net_device *dev,
 
                 hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d", set_value);
 
-                rix = RC_2_RATE_IDX(set_value);
-                if (set_value & 0x80) {
-                    if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11b ||
-                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11b_ONLY ||
-                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11g ||
-                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11g_ONLY ||
-                        pConfig->SapHw_mode == eSAP_DOT11_MODE_abg ||
-                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11a) {
-                        hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid mode for HT");
-                        ret = -EIO;
-                        break;
+                if (set_value != 0xff) {
+                    rix = RC_2_RATE_IDX(set_value);
+                    if (set_value & 0x80) {
+                        if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11b ||
+                            pConfig->SapHw_mode == eSAP_DOT11_MODE_11b_ONLY ||
+                            pConfig->SapHw_mode == eSAP_DOT11_MODE_11g ||
+                            pConfig->SapHw_mode == eSAP_DOT11_MODE_11g_ONLY ||
+                            pConfig->SapHw_mode == eSAP_DOT11_MODE_abg ||
+                            pConfig->SapHw_mode == eSAP_DOT11_MODE_11a) {
+                            hddLog(LOGE, "Not valid mode for HT");
+                            ret = -EIO;
+                            break;
+                        }
+                        preamble = WMI_RATE_PREAMBLE_HT;
+                        nss = HT_RC_2_STREAMS(set_value) - 1;
+                    } else if (set_value & 0x10) {
+                        if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11a) {
+                            hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid for cck");
+                            ret = -EIO;
+                            break;
+                        }
+                        preamble = WMI_RATE_PREAMBLE_CCK;
+                        /* Enable Short preamble always for CCK except 1mbps */
+                        if (rix != 0x3)
+                            rix |= 0x4;
+                    } else {
+                        if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11b ||
+                            pConfig->SapHw_mode == eSAP_DOT11_MODE_11b_ONLY) {
+                            hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid for OFDM");
+                            ret = -EIO;
+                            break;
+                        }
+                        preamble = WMI_RATE_PREAMBLE_OFDM;
                     }
-                    preamble = WMI_RATE_PREAMBLE_HT;
-                    nss = HT_RC_2_STREAMS(set_value) - 1;
-                } else if (set_value & 0x10) {
-                    if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11a) {
-                        hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid for cck");
-                        ret = -EIO;
-                        break;
-                    }
-                    preamble = WMI_RATE_PREAMBLE_CCK;
-                    /* Enable Short preamble always for CCK except 1mbps */
-                    if (rix != 0x3)
-                        rix |= 0x4;
-                } else {
-                    if (pConfig->SapHw_mode == eSAP_DOT11_MODE_11b ||
-                        pConfig->SapHw_mode == eSAP_DOT11_MODE_11b_ONLY) {
-                        hddLog(VOS_TRACE_LEVEL_ERROR, "Not valid for OFDM");
-                        ret = -EIO;
-                        break;
-                    }
-                    preamble = WMI_RATE_PREAMBLE_OFDM;
+
+                    set_value = (preamble << 6) | (nss << 4) | rix;
                 }
                 hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d rix %d "
                     "preamble %x nss %d", set_value, rix, preamble, nss);
-
-                set_value = (preamble << 6) | (nss << 4) | rix;
                 ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
                                               (int)WMI_VDEV_PARAM_FIXED_RATE,
                                               set_value, VDEV_CMD);
@@ -2453,7 +2455,7 @@ static iw_softap_setparam(struct net_device *dev,
 
         case QCASAP_SET_VHT_RATE:
             {
-                u_int8_t preamble, nss, rix;
+                u_int8_t preamble = 0, nss = 0, rix = 0;
                 tsap_Config_t *pConfig =
                     &pHostapdAdapter->sessionCtx.ap.sapConfig;
 
@@ -2466,14 +2468,16 @@ static iw_softap_setparam(struct net_device *dev,
                     break;
                 }
 
-                rix = RC_2_RATE_IDX_11AC(set_value);
-                preamble = WMI_RATE_PREAMBLE_VHT;
-                nss = HT_RC_2_STREAMS_11AC(set_value) - 1;
+                if (set_value != 0xff) {
+                    rix = RC_2_RATE_IDX_11AC(set_value);
+                    preamble = WMI_RATE_PREAMBLE_VHT;
+                    nss = HT_RC_2_STREAMS_11AC(set_value) - 1;
 
+                    set_value = (preamble << 6) | (nss << 4) | rix;
+                }
                 hddLog(LOG1, "WMI_VDEV_PARAM_FIXED_RATE val %d rix %d "
                     "preamble %x nss %d", set_value, rix, preamble, nss);
 
-                set_value = (preamble << 6) | (nss << 4) | rix;
                 ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
                                               (int)WMI_VDEV_PARAM_FIXED_RATE,
                                               set_value, VDEV_CMD);
@@ -3097,25 +3101,6 @@ static iw_softap_set_tx_power(struct net_device *dev,
         return -EIO;
     }
 
-    return 0;
-}
-
-/**---------------------------------------------------------------------------
-
-  \brief iw_softap_set_trafficmonitor() -
-   This function dynamically enable/disable traffic monitor functionality
-   the command iwpriv wlanX setTrafficMon <value>.
-
-  \param  - dev - Pointer to the net device.
-              - addr - Pointer to the sockaddr.
-  \return - 0 for success, non zero for failure
-
-  --------------------------------------------------------------------------*/
-
-static int iw_softap_set_trafficmonitor(struct net_device *dev,
-        struct iw_request_info *info,
-        union iwreq_data *wrqu, char *extra)
-{
     return 0;
 }
 
@@ -4890,12 +4875,6 @@ static const struct iw_priv_args hostapd_private_args[] = {
         "getConfig" },
 
     /* handlers for main ioctl */
-    {   QCSAP_IOCTL_SET_TRAFFIC_MONITOR,
-        IW_PRIV_TYPE_INT| IW_PRIV_SIZE_FIXED | 1,
-        0,
-        "setTrafficMon" },
-
-    /* handlers for main ioctl */
     {   QCSAP_IOCTL_SET_TWO_INT_GET_NONE,
         IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 2,
         0,
@@ -4933,7 +4912,6 @@ static const iw_handler hostapd_private[] = {
    [QCSAP_IOCTL_DATAPATH_SNAP_SHOT - SIOCIWFIRSTPRIV]  =   iw_display_data_path_snapshot,
    [QCSAP_IOCTL_SET_INI_CFG - SIOCIWFIRSTPRIV]  =  iw_softap_set_ini_cfg,
    [QCSAP_IOCTL_GET_INI_CFG - SIOCIWFIRSTPRIV]  =  iw_softap_get_ini_cfg,
-   [QCSAP_IOCTL_SET_TRAFFIC_MONITOR - SIOCIWFIRSTPRIV]  =  iw_softap_set_trafficmonitor,
    [QCSAP_IOCTL_SET_TWO_INT_GET_NONE - SIOCIWFIRSTPRIV] =
                                                 iw_softap_set_two_ints_getnone,
 };

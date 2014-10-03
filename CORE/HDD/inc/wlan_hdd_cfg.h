@@ -2166,19 +2166,6 @@ typedef enum
 #define CFG_MAX_MEDIUM_TIME_STADEFAULT           WNI_CFG_MAX_MEDIUM_TIME_STADEF
 
 /*
- * SAP/P2P-GO mode traffic monitor
- */
-#define CFG_ENABLE_TRAFFIC_MONITOR                "gEnableTrafficMonitor"
-#define CFG_ENABLE_TRAFFIC_MONITOR_MIN            ( 0 )
-#define CFG_ENABLE_TRAFFIC_MONITOR_MAX            ( 1 )
-#define CFG_ENABLE_TRAFFIC_MONITOR_DEFAULT        ( 0 )
-
-#define CFG_TRAFFIC_IDLE_TIMEOUT                  "gTrafficIdleTimeout"
-#define CFG_TRAFFIC_IDLE_TIMEOUT_MIN              ( 3000 )
-#define CFG_TRAFFIC_IDLE_TIMEOUT_MAX              ( 10000 )
-#define CFG_TRAFFIC_IDLE_TIMEOUT_DEFAULT          ( 5000 )
-
-/*
  * SCAN Offload
  */
 #define CFG_SCAN_OFFLOAD_NAME                     "gEnableDirectedScanOffload"
@@ -2508,6 +2495,30 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_SET_TXPOWER_LIMIT5G_DEFAULT            ( 15 )
 
 #ifdef QCA_LL_TX_FLOW_CT
+/* Default, single interface case flow control parameters */
+#define CFG_LL_TX_FLOW_LWM                         "TxFlowLowWaterMark"
+#define CFG_LL_TX_FLOW_LWM_MIN                     ( 0 )
+#define CFG_LL_TX_FLOW_LWM_MAX                     ( 1000 )
+#if defined(CONFIG_HL_SUPPORT)
+#define CFG_LL_TX_FLOW_LWM_DEFAULT                 ( 0 )
+#else
+#define CFG_LL_TX_FLOW_LWM_DEFAULT                 ( 300 )
+#endif /* defined(CONFIG_HL_SUPPORT) */
+
+#define CFG_LL_TX_FLOW_HWM_OFFSET                  "TxFlowHighWaterMarkOffset"
+#define CFG_LL_TX_FLOW_HWM_OFFSET_MIN              ( 0 )
+#define CFG_LL_TX_FLOW_HWM_OFFSET_MAX              ( 300 )
+#if defined(CONFIG_HL_SUPPORT)
+#define CFG_LL_TX_FLOW_HWM_OFFSET_DEFAULT          ( 0 )
+#else
+#define CFG_LL_TX_FLOW_HWM_OFFSET_DEFAULT          ( 94 )
+#endif /* defined(CONFIG_HL_SUPPORT) */
+
+#define CFG_LL_TX_FLOW_MAX_Q_DEPTH                 "TxFlowMaxQueueDepth"
+#define CFG_LL_TX_FLOW_MAX_Q_DEPTH_MIN             ( 400 )
+#define CFG_LL_TX_FLOW_MAX_Q_DEPTH_MAX             ( 3500 )
+#define CFG_LL_TX_FLOW_MAX_Q_DEPTH_DEFAULT         ( 1500 )
+
 #define CFG_LL_TX_LBW_FLOW_LWM                     "TxLbwFlowLowWaterMark"
 #define CFG_LL_TX_LBW_FLOW_LWM_MIN                 ( 0 )
 #define CFG_LL_TX_LBW_FLOW_LWM_MAX                 ( 1000 )
@@ -3221,8 +3232,6 @@ typedef struct
    v_BOOL_t                    enableSSR;
    char                        listOfNon11acCountryCode[128];
    v_U32_t                     cfgMaxMediumTime;
-   v_U8_t                      enableTrafficMonitor;
-   v_U32_t                     trafficIdleTimeout;
    v_BOOL_t                    enableVhtFor24GHzBand;
    v_U8_t                      fScanOffload;
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
@@ -3309,6 +3318,9 @@ typedef struct
    v_BOOL_t                    fRegChangeDefCountry;
    v_U8_t                      acsScanBandPreference;
 #ifdef QCA_LL_TX_FLOW_CT
+   v_U32_t                     TxFlowLowWaterMark;
+   v_U32_t                     TxFlowHighWaterMarkOffset;
+   v_U32_t                     TxFlowMaxQueueDepth;
    v_U32_t                     TxLbwFlowLowWaterMark;
    v_U32_t                     TxLbwFlowHighWaterMarkOffset;
    v_U32_t                     TxLbwFlowMaxQueueDepth;

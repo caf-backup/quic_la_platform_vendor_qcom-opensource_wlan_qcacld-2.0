@@ -650,7 +650,7 @@ limCleanupRxPath(tpAniSirGlobal pMac, tpDphHashNode pStaDs,tpPESession psessionE
         if (!pStaDs->mlmStaContext.updateContext)
         {
             /**
-             * There is no context at Polaris to delete.
+             * There is no context to delete.
              * Release our assigned AID back to the free pool
              */
             if ((psessionEntry->limSystemRole == eLIM_AP_ROLE) ||
@@ -908,7 +908,7 @@ limSendDelStaCnf(tpAniSirGlobal pMac, tSirMacAddr staDsAddr,
  *FUNCTION:
  * This function is called whenever Re/Association Request need
  * to be rejected due to failure in assigning an AID or failure
- * in adding STA context at Polaris or reject by applications.
+ * in adding STA context reject by applications.
  *
  *LOGIC:
  * Resources allocated if any are freedup and (Re) Association
@@ -928,7 +928,6 @@ limSendDelStaCnf(tpAniSirGlobal pMac, tSirMacAddr staDsAddr,
  * @param  staId    - Indicates staId of the STA being rejected
  *                    association
  * @param  deleteSta - Indicates whether to delete STA context
- *                     at Polaris
  * @param  rCode    - Indicates what reasonCode to be sent in
  *                    Re/Assoc response to STA
  *
@@ -980,7 +979,6 @@ limRejectAssociation(tpAniSirGlobal pMac, tSirMacAddr peerAddr, tANI_U8 subType,
         }
 
         /**
-         * Polaris has state for this STA.
          * Trigger cleanup.
          */
         pStaDs->mlmStaContext.cleanupTrigger = eLIM_REASSOC_REJECT;
@@ -1442,7 +1440,7 @@ limPostReassocFailure(tpAniSirGlobal pMac,
  *
  *LOGIC:
  * Reassociation failure timer is stopped, Old (or current) AP's
- * context is restored both at Polaris & software
+ * context is restored at software
  *
  *ASSUMPTIONS:
  *
@@ -1599,20 +1597,20 @@ tSirRetStatus limPopulateVhtMcsSet(tpAniSirGlobal pMac,
                }
             }
 
-            if ((pPeerVHTCaps->rxMCSMap & mcsMapMask) < (pRates->vhtRxMCSMap & mcsMapMask)) {
+            if ((pPeerVHTCaps->txMCSMap & mcsMapMask) < (pRates->vhtRxMCSMap & mcsMapMask)) {
                 pRates->vhtRxMCSMap &= ~(mcsMapMask);
-                pRates->vhtRxMCSMap |= (pPeerVHTCaps->rxMCSMap & mcsMapMask);
+                pRates->vhtRxMCSMap |= (pPeerVHTCaps->txMCSMap & mcsMapMask);
             }
-            if ((pPeerVHTCaps->txMCSMap & mcsMapMask) < (pRates->vhtTxMCSMap & mcsMapMask)) {
+            if ((pPeerVHTCaps->rxMCSMap & mcsMapMask) < (pRates->vhtTxMCSMap & mcsMapMask)) {
                 pRates->vhtTxMCSMap &= ~(mcsMapMask);
-                pRates->vhtTxMCSMap |= (pPeerVHTCaps->txMCSMap & mcsMapMask);
+                pRates->vhtTxMCSMap |= (pPeerVHTCaps->rxMCSMap & mcsMapMask);
             }
 
             if (mcsMapMask2x2) {
 
                 tANI_U16 peerMcsMap, selfMcsMap;
 
-                peerMcsMap = pPeerVHTCaps->rxMCSMap & mcsMapMask2x2;
+                peerMcsMap = pPeerVHTCaps->txMCSMap & mcsMapMask2x2;
                 selfMcsMap = pRates->vhtRxMCSMap & mcsMapMask2x2;
 
                 if ((selfMcsMap != mcsMapMask2x2) &&
@@ -1622,7 +1620,7 @@ tSirRetStatus limPopulateVhtMcsSet(tpAniSirGlobal pMac,
                     pRates->vhtRxMCSMap |= peerMcsMap;
                 }
 
-                peerMcsMap = (pPeerVHTCaps->txMCSMap & mcsMapMask2x2);
+                peerMcsMap = (pPeerVHTCaps->rxMCSMap & mcsMapMask2x2);
                 selfMcsMap = (pRates->vhtTxMCSMap & mcsMapMask2x2);
 
                 if ((selfMcsMap != mcsMapMask2x2) &&
@@ -2013,7 +2011,6 @@ limPopulateMatchingRateSet(tpAniSirGlobal pMac,
                            tSirMacRateSet *pOperRateSet,
                            tSirMacRateSet *pExtRateSet,
                            tANI_U8* pSupportedMCSSet,
-                           tSirMacPropRateSet *pAniLegRateSet,
                            tpPESession  psessionEntry,
                            tDot11fIEVHTCaps *pVHTCaps)
 
@@ -2024,7 +2021,6 @@ limPopulateMatchingRateSet(tpAniSirGlobal pMac,
                            tSirMacRateSet *pOperRateSet,
                            tSirMacRateSet *pExtRateSet,
                            tANI_U8* pSupportedMCSSet,
-                           tSirMacPropRateSet *pAniLegRateSet,
                            tpPESession  psessionEntry)
 #endif
 {
@@ -2182,20 +2178,6 @@ limPopulateMatchingRateSet(tpAniSirGlobal pMac,
                 }
             }
         }
-
-
-        //Now add the Polaris rates only when Proprietary rates are enabled.
-        val = 0;
-        if(wlan_cfgGetInt(pMac, WNI_CFG_PROPRIETARY_RATES_ENABLED, &val) != eSIR_SUCCESS)
-        {
-            limLog(pMac, LOGP, FL("could not retrieve prop rate enabled flag from CFG"));
-        }
-        else if(val)
-        {
-            for(i=0; i<pAniLegRateSet->numPropRates; i++)
-                rates->aniLegacyRates[i] = pAniLegRateSet->propRate[i];
-        }
-
     }
 
 
