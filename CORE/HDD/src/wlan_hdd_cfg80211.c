@@ -1171,7 +1171,9 @@ int wlan_hdd_cfg80211_init(struct device *dev,
     wiphy->vendor_events = wlan_hdd_cfg80211_vendor_events;
     wiphy->n_vendor_events = ARRAY_SIZE(wlan_hdd_cfg80211_vendor_events);
 
-    wiphy->flags |= WIPHY_FLAG_DFS_OFFLOAD;
+    if (pCfg->enableDFSMasterCap) {
+        wiphy->flags |= WIPHY_FLAG_DFS_OFFLOAD;
+    }
 
     wiphy->max_ap_assoc_sta = pCfg->maxNumberOfPeers;
 
@@ -5316,6 +5318,7 @@ static int wlan_hdd_cfg80211_update_bss( struct wiphy *wiphy,
     }
 
     sme_ScanResultPurge(hHal, pResult);
+    sme_ScanFlushResult(hHal, pAdapter->sessionId);
 
     return 0;
 }
