@@ -20161,7 +20161,11 @@ VOS_STATUS WDA_TxPacket(void *wma_context, void *tx_frame, u_int16_t frmLen,
         if (wma_handle->roam_preauth_scan_state == WMA_ROAM_PREAUTH_ON_CHAN) {
                 chanfreq = wma_handle->roam_preauth_chanfreq;
                 WMA_LOGI("%s: Preauth frame on channel %d", __func__, chanfreq);
-        } else {
+        } else if(pFc->subType == SIR_MAC_MGMT_PROBE_RSP){
+		chanfreq = wma_handle->interfaces[vdev_id].mhz;
+                WMA_LOGI("%s: Probe response frame on channel %d", __func__, chanfreq);
+                WMA_LOGI("%s: Probe response frame on vdev id %d", __func__, vdev_id);
+	} else {
                 chanfreq = 0;
         }
         if (pMac->fEnableDebugLog & 0x1) {
