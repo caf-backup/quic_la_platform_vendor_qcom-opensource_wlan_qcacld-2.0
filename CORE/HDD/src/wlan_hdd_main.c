@@ -442,7 +442,8 @@ void hdd_wlan_green_ap_mc(hdd_context_t *pHddCtx,
             break;
 
         case GREEN_AP_PS_STOP_EVENT:
-            green_ap->ps_enable = 0;
+            if (!(hdd_get_concurrency_mode() & VOS_SAP))
+                green_ap->ps_enable = 0;
             break;
 
         case GREEN_AP_ADD_STA_EVENT:
@@ -521,7 +522,7 @@ void hdd_wlan_green_ap_mc(hdd_context_t *pHddCtx,
                 }
                 hdd_wlan_green_ap_update(pHddCtx,
                     GREEN_AP_PS_OFF_STATE, GREEN_AP_PS_WAIT_EVENT);
-            } else if ((green_ap->ps_event = GREEN_AP_PS_WAIT_EVENT) &&
+            } else if ((green_ap->ps_event == GREEN_AP_PS_WAIT_EVENT) &&
                     (green_ap->ps_on_time)) {
 
                 /* ps_on_time timeout, switch to ps off */
@@ -5925,7 +5926,29 @@ static void hdd_update_tgt_ht_cap(hdd_context_t *hdd_ctx,
     else
     {
         pconfig->enable2x2 = 0;
+        pconfig->enableTxSTBC = 0;
+
+        /* 1x1 */
+        /* Update Rx Highest Long GI data Rate */
+        if (ccmCfgSetInt(hdd_ctx->hHal,
+                    WNI_CFG_VHT_RX_HIGHEST_SUPPORTED_DATA_RATE,
+                    HDD_VHT_RX_HIGHEST_SUPPORTED_DATA_RATE_1_1, NULL,
+                    eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE)
+        {
+            hddLog(LOGE, "Could not pass on "
+                    "WNI_CFG_VHT_RX_HIGHEST_SUPPORTED_DATA_RATE to CCM");
+        }
+
+        /* Update Tx Highest Long GI data Rate */
+        if (ccmCfgSetInt(hdd_ctx->hHal, WNI_CFG_VHT_TX_HIGHEST_SUPPORTED_DATA_RATE,
+                    HDD_VHT_TX_HIGHEST_SUPPORTED_DATA_RATE_1_1, NULL,
+                    eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE)
+        {
+            hddLog(LOGE, "Could not pass on "
+                    "HDD_VHT_RX_HIGHEST_SUPPORTED_DATA_RATE_1_1 to CCM");
+        }
     }
+
     val32 = val16;
     status = ccmCfgSetInt(hdd_ctx->hHal, WNI_CFG_HT_CAP_INFO,
                           val32, NULL, eANI_BOOLEAN_FALSE);
