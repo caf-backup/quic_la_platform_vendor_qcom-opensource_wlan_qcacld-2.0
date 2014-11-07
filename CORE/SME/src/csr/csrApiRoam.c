@@ -6535,7 +6535,7 @@ eHalStatus csrRoamEnqueuePreauth(tpAniSirGlobal pMac, tANI_U32 sessionId, tpSirB
     return (status);
 }
 
-eHalStatus csrRoamDequeuePreauth(tpAniSirGlobal pMac)
+eHalStatus csrDequeueRoamCommand(tpAniSirGlobal pMac, eCsrRoamReason reason)
 {
     tListElem *pEntry;
     tSmeCmd *pCommand;
@@ -6544,14 +6544,24 @@ eHalStatus csrRoamDequeuePreauth(tpAniSirGlobal pMac)
     {
         pCommand = GET_BASE_ADDR( pEntry, tSmeCmd, Link );
         if ( (eSmeCommandRoam == pCommand->command) &&
-                (eCsrPerformPreauth == pCommand->u.roamCmd.roamReason))
+                (eCsrPerformPreauth == reason))
         {
             smsLog( pMac, LOG1, FL("DQ-Command = %d, Reason = %d"),
                     pCommand->command, pCommand->u.roamCmd.roamReason);
             if (csrLLRemoveEntry( &pMac->sme.smeCmdActiveList, pEntry, LL_ACCESS_LOCK )) {
                 csrReleaseCommandPreauth( pMac, pCommand );
             }
-        } else  {
+        }
+        else if ((eSmeCommandRoam == pCommand->command) &&
+                (eCsrSmeIssuedFTReassoc == reason))
+        {
+            smsLog( pMac, LOG1, FL("DQ-Command = %d, Reason = %d"),
+                    pCommand->command, pCommand->u.roamCmd.roamReason);
+            if (csrLLRemoveEntry( &pMac->sme.smeCmdActiveList, pEntry, LL_ACCESS_LOCK )) {
+                csrReleaseCommandRoam( pMac, pCommand );
+            }
+        }
+        else  {
             smsLog( pMac, LOGE, FL("Command = %d, Reason = %d "),
                     pCommand->command, pCommand->u.roamCmd.roamReason);
         }
@@ -7904,28 +7914,28 @@ static void csrRoamRoamingStateReassocRspProcessor( tpAniSirGlobal pMac, tpSirSm
     {
         smsLog( pMac, LOGW, "CSR SmeReassocReq failed with statusCode= 0x%08X [%d]", pSmeJoinRsp->statusCode, pSmeJoinRsp->statusCode );
         result = eCsrReassocFailure;
-#ifdef WLAN_FEATURE_VOWIFI_11R
+#if defined(WLAN_FEATURE_VOWIFI_11R) || defined(FEATURE_WLAN_ESE) || \
+    defined(FEATURE_WLAN_LFR)
         if ((eSIR_SME_FT_REASSOC_TIMEOUT_FAILURE == pSmeJoinRsp->statusCode) ||
-                        (eSIR_SME_FT_REASSOC_FAILURE == pSmeJoinRsp->statusCode))
-        {
-                // Inform HDD to turn off FT flag in HDD
-                if (pNeighborRoamInfo)
-                {
-                        vos_mem_zero(&roamInfo, sizeof(tCsrRoamInfo));
-                        csrRoamCallCallback(pMac, pNeighborRoamInfo->csrSessionId,
-                                        &roamInfo, roamId, eCSR_ROAM_FT_REASSOC_FAILED, eSIR_SME_SUCCESS);
-                        /*
-                         * Since the above callback sends a disconnect
-                         * to HDD, we should clean-up our state
-                         * machine as well to be in sync with the upper
-                         * layers. There is no need to send a disassoc
-                         * since: 1) we will never reassoc to the current
-                         * AP in LFR, and 2) there is no need to issue a
-                         * disassoc to the AP with which we were trying
-                         * to reassoc.
-                         */
-                        csrRoamComplete( pMac, eCsrJoinFailure, NULL );
-                        return;
+            (eSIR_SME_FT_REASSOC_FAILURE == pSmeJoinRsp->statusCode)) {
+                /* Inform HDD to turn off FT flag in HDD */
+                if (pNeighborRoamInfo) {
+                    vos_mem_zero(&roamInfo, sizeof(tCsrRoamInfo));
+                    csrRoamCallCallback(pMac, pSmeJoinRsp->sessionId, &roamInfo,
+                                        roamId, eCSR_ROAM_FT_REASSOC_FAILED,
+                                        eSIR_SME_SUCCESS);
+                    /*
+                     * Since the above callback sends a disconnect
+                     * to HDD, we should clean-up our state
+                     * machine as well to be in sync with the upper
+                     * layers. There is no need to send a disassoc
+                     * since: 1) we will never reassoc to the current
+                     * AP in LFR, and 2) there is no need to issue a
+                     * disassoc to the AP with which we were trying
+                     * to reassoc.
+                     */
+                    csrRoamComplete(pMac, eCsrJoinFailure, NULL);
+                    return;
                 }
         }
 #endif
@@ -12015,72 +12025,6 @@ static void csrRoamUpdateConnectedProfileFromNewBss( tpAniSirGlobal pMac, tANI_U
     return;
 }
 
-#ifdef FEATURE_WLAN_WAPI
-eHalStatus csrRoamSetBKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId, tBkidCacheInfo *pBKIDCache,
-                                 tANI_U32 numItems )
-{
-   eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
-   tCsrRoamSession *pSession;
-   if(!CSR_IS_SESSION_VALID( pMac, sessionId ))
-   {
-       smsLog(pMac, LOGE, FL("  Invalid session ID"));
-       return status;
-   }
-   smsLog(pMac, LOGW, "csrRoamSetBKIDCache called, numItems = %d", numItems);
-   pSession = CSR_GET_SESSION( pMac, sessionId );
-   if(numItems <= CSR_MAX_BKID_ALLOWED)
-   {
-       status = eHAL_STATUS_SUCCESS;
-       //numItems may be 0 to clear the cache
-       pSession->NumBkidCache = (tANI_U16)numItems;
-       if(numItems && pBKIDCache)
-       {
-           vos_mem_copy(pSession->BkidCacheInfo, pBKIDCache,
-                        sizeof(tBkidCacheInfo) * numItems);
-           status = eHAL_STATUS_SUCCESS;
-       }
-   }
-   return (status);
-}
-eHalStatus csrRoamGetBKIDCache(tpAniSirGlobal pMac, tANI_U32 sessionId, tANI_U32 *pNum,
-                                tBkidCacheInfo *pBkidCache)
-{
-   eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
-   tCsrRoamSession *pSession;
-   if(!CSR_IS_SESSION_VALID( pMac, sessionId ))
-   {
-       smsLog(pMac, LOGE, FL("  Invalid session ID"));
-       return status;
-   }
-   pSession = CSR_GET_SESSION( pMac, sessionId );
-   if(pNum && pBkidCache)
-   {
-       if(pSession->NumBkidCache == 0)
-       {
-           *pNum = 0;
-           status = eHAL_STATUS_SUCCESS;
-       }
-       else if(*pNum >= pSession->NumBkidCache)
-       {
-           if(pSession->NumBkidCache > CSR_MAX_PMKID_ALLOWED)
-           {
-               smsLog(pMac, LOGE, FL("NumPmkidCache :%d is more than CSR_MAX_PMKID_ALLOWED, resetting to CSR_MAX_PMKID_ALLOWED"),
-                 pSession->NumBkidCache);
-               pSession->NumBkidCache = CSR_MAX_PMKID_ALLOWED;
-           }
-           vos_mem_copy(pBkidCache, pSession->BkidCacheInfo,
-                        sizeof(tBkidCacheInfo) * pSession->NumBkidCache);
-           *pNum = pSession->NumBkidCache;
-           status = eHAL_STATUS_SUCCESS;
-       }
-   }
-   return (status);
-}
-tANI_U32 csrRoamGetNumBKIDCache(tpAniSirGlobal pMac, tANI_U32 sessionId)
-{
-   return (pMac->roam.roamSession[sessionId].NumBkidCache);
-}
-#endif /* FEATURE_WLAN_WAPI */
 eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
                                  tPmkidCacheInfo *pPMKIDCache, tANI_U32 numItems )
 {

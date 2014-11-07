@@ -3535,22 +3535,22 @@ int wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
         (request->initiator == NL80211_REGDOM_SET_BY_CORE) ||
         (request->initiator == NL80211_REGDOM_SET_BY_USER))
     {
-       if (wiphy->bands[IEEE80211_BAND_5GHZ])
-       {
-          for (j=0; j<wiphy->bands[IEEE80211_BAND_5GHZ]->n_channels; j++)
-          {
-              // UNII-1 band channels are passive when domain is FCC.
-             if ((wiphy->bands[IEEE80211_BAND_5GHZ ]->channels[j].center_freq == 5180 ||
-                  wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
-                  wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
-                  wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
-                  ((request->alpha2[0]== 'U'&& request->alpha2[1]=='S') &&
-                                pHddCtx->nEnableStrictRegulatoryForFCC))
-             {
-                 wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags |= IEEE80211_CHAN_PASSIVE_SCAN;
-             }
-          }
-       }
+        if (pHddCtx->cfg_ini->gEnableStrictRegulatoryForFCC &&
+            wiphy->bands[IEEE80211_BAND_5GHZ])
+        {
+            for (j=0; j<wiphy->bands[IEEE80211_BAND_5GHZ]->n_channels; j++)
+            {
+                // UNII-1 band channels are passive when domain is FCC.
+                if ((wiphy->bands[IEEE80211_BAND_5GHZ ]->channels[j].center_freq == 5180 ||
+                     wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
+                     wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
+                     wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
+                    (request->alpha2[0]== 'U' && request->alpha2[1]=='S'))
+                {
+                    wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags |= IEEE80211_CHAN_PASSIVE_SCAN;
+                }
+            }
+        }
     }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
@@ -3774,7 +3774,7 @@ VOS_STATUS vos_nv_getRegDomainFromCountryCode( v_REGDOMAIN_t *pRegDomain,
    v_CONTEXT_t pVosContext = NULL;
    hdd_context_t *pHddCtx = NULL;
    struct wiphy *wiphy = NULL;
-   int status;
+   unsigned long rc;
 
    // sanity checks
    if (NULL == pRegDomain)
@@ -3843,11 +3843,10 @@ VOS_STATUS vos_nv_getRegDomainFromCountryCode( v_REGDOMAIN_t *pRegDomain,
 
            INIT_COMPLETION(pHddCtx->driver_crda_req);
            regulatory_hint(wiphy, countryCode);
-           status = wait_for_completion_interruptible_timeout(
+           rc = wait_for_completion_timeout(
                    &pHddCtx->driver_crda_req,
                    msecs_to_jiffies(CRDA_WAIT_TIME));
-           if (!status)
-           {
+           if (!rc) {
                VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
                        "%s: Timeout waiting for CRDA REQ", __func__);
            }
@@ -3951,6 +3950,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
     if (request->initiator == NL80211_REGDOM_SET_BY_USER)
     {
        int status;
+       unsigned long rc;
        wiphy_dbg(wiphy, "info: set by user\n");
        memset(ccode, 0, WNI_CFG_COUNTRY_CODE_LEN);
        memcpy(ccode, request->alpha2, 2);
@@ -3976,11 +3976,10 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                                    eSIR_FALSE);
        if (eHAL_STATUS_SUCCESS == status)
        {
-          status = wait_for_completion_interruptible_timeout(
-                                       &change_country_code,
-                                       msecs_to_jiffies(WLAN_WAIT_TIME_COUNTRY));
-          if(status <= 0)
-          {
+          rc = wait_for_completion_timeout(
+                           &change_country_code,
+                           msecs_to_jiffies(WLAN_WAIT_TIME_COUNTRY));
+          if (!rc) {
              wiphy_dbg(wiphy, "info: set country timed out\n");
           }
        }
@@ -4121,7 +4120,17 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
 
          /* Haven't seen any condition that will set by driver after init.
             If we do, then we should also call sme_ChangeCountryCode */
-         if (wiphy->bands[IEEE80211_BAND_5GHZ])
+
+         /* To Disable the strict regulatory FCC rule, need set
+            gEnableStrictRegulatoryForFCC to zero from INI.
+            By default regulatory FCC rule enable or set to 1, and
+            in this case one can control dynamically using IOCTL
+            (nEnableStrictRegulatoryForFCC).
+            If gEnableStrictRegulatoryForFCC is set to zero then
+            IOCTL operation is inactive                              */
+
+         if ( pHddCtx->cfg_ini->gEnableStrictRegulatoryForFCC &&
+              wiphy->bands[IEEE80211_BAND_5GHZ])
          {
              for (j=0; j<wiphy->bands[IEEE80211_BAND_5GHZ]->n_channels; j++)
              {
@@ -4130,8 +4139,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                       wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
                       wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
                       wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
-                     ((domainIdCurrent == REGDOMAIN_FCC) &&
-                                       pHddCtx->nEnableStrictRegulatoryForFCC))
+                     (ccode[0]== 'U' && ccode[1]=='S'))
                  {
                      wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags |= IEEE80211_CHAN_PASSIVE_SCAN;
                  }
@@ -4139,8 +4147,7 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
                            wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5200 ||
                            wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5220 ||
                            wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].center_freq == 5240) &&
-                          ((domainIdCurrent != REGDOMAIN_FCC) ||
-                                      !pHddCtx->nEnableStrictRegulatoryForFCC))
+                          (ccode[0]!= 'U' && ccode[1]!='S'))
                  {
                      wiphy->bands[IEEE80211_BAND_5GHZ]->channels[j].flags &= ~IEEE80211_CHAN_PASSIVE_SCAN;
                  }
@@ -4152,8 +4159,6 @@ int wlan_hdd_crda_reg_notifier(struct wiphy *wiphy,
              request->processed = 1;
          }
     }
-
-    complete(&pHddCtx->wiphy_channel_update_event);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
     return;

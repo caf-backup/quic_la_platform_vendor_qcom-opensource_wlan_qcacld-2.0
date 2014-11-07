@@ -148,6 +148,9 @@ CONFIG_QCA_SINGLE_BINARY_SUPPORT := 0
 #Enable collecting target RAM dump after kernel panic
 CONFIG_TARGET_RAMDUMP_AFTER_KERNEL_PANIC := 1
 
+#Flag to enable/disable secure firmware feature
+CONFIG_FEATURE_SECURE_FIRMWARE := 0
+
 #Flag to enable Stats Ext implementation
 CONFIG_FEATURE_STATS_EXT := 1
 
@@ -283,6 +286,20 @@ endif
 ifeq ($(CONFIG_QCOM_TDLS),y)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_tdls.o
 endif
+
+############ EPPING ############
+EPPING_DIR :=	CORE/EPPING
+EPPING_INC_DIR :=	$(EPPING_DIR)/inc
+EPPING_SRC_DIR :=	$(EPPING_DIR)/src
+
+EPPING_INC := 	-I$(WLAN_ROOT)/$(EPPING_INC_DIR)
+
+EPPING_OBJS := $(EPPING_SRC_DIR)/epping_main.o \
+		$(EPPING_SRC_DIR)/epping_txrx.o \
+		$(EPPING_SRC_DIR)/epping_tx.o \
+		$(EPPING_SRC_DIR)/epping_rx.o \
+		$(EPPING_SRC_DIR)/epping_helper.o \
+
 
 ############ MAC ############
 MAC_DIR :=	CORE/MAC
@@ -754,6 +771,7 @@ LINUX_INC :=	-Iinclude/linux
 INCS :=		$(BAP_INC) \
 		$(DXE_INC) \
 		$(HDD_INC) \
+		$(EPPING_INC) \
 		$(LINUX_INC) \
 		$(MAC_INC) \
 		$(WCNSS_INC) \
@@ -798,6 +816,7 @@ endif
 
 OBJS :=		$(BAP_OBJS) \
 		$(HDD_OBJS) \
+		$(EPPING_OBJS) \
 		$(MAC_OBJS) \
 		$(SAP_OBJS) \
 		$(SME_OBJS) \
@@ -1152,6 +1171,11 @@ endif
 #Enable collecting target RAM dump after kernel panic
 ifeq ($(CONFIG_TARGET_RAMDUMP_AFTER_KERNEL_PANIC), 1)
 CDEFINES += -DTARGET_RAMDUMP_AFTER_KERNEL_PANIC
+endif
+
+#Enable/disable secure firmware feature
+ifeq ($(CONFIG_FEATURE_SECURE_FIRMWARE), 1)
+CDEFINES += -DFEATURE_SECURE_FIRMWARE
 endif
 
 ifeq ($(CONFIG_ATH_PCIE_ACCESS_DEBUG), 1)

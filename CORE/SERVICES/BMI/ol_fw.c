@@ -42,9 +42,16 @@
 #include "fw_one_bin.h"
 #include "bin_sig.h"
 #include "ar6320v2_dbg_regtable.h"
-
+#include "epping_main.h"
 #if defined(QCA_WIFI_2_0) && !defined(QCA_WIFI_ISOC) && defined(CONFIG_CNSS)
 #include <net/cnss.h>
+#endif
+
+#ifdef FEATURE_SECURE_FIRMWARE
+#define MAX_FIRMWARE_SIZE (1*1024*1024)
+
+static u8 fw_mem[MAX_FIRMWARE_SIZE];
+static struct hash_fw fw_hash;
 #endif
 
 static u_int32_t refclk_speed_to_hz[] = {
@@ -298,8 +305,67 @@ exit:
 	return status;
 }
 
-static int ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
-			 u_int32_t address, bool compressed)
+#ifdef FEATURE_SECURE_FIRMWARE
+static int ol_check_fw_hash(const u8* data, u32 data_size, ATH_BIN_FILE file)
+{
+	u8 *hash = NULL;
+	u8 digest[SHA256_DIGEST_SIZE];
+	u8 temp[SHA256_DIGEST_SIZE] = {};
+	int ret = 0;
+
+	switch(file) {
+	case ATH_BOARD_DATA_FILE:
+		hash = fw_hash.bdwlan;
+		break;
+	case ATH_OTP_FILE:
+		hash = fw_hash.otp;
+		break;
+	case ATH_FIRMWARE_FILE:
+#ifdef QCA_WIFI_FTM
+		if (vos_get_conparam() == VOS_FTM_MODE) {
+			hash = fw_hash.utf;
+			break;
+		}
+#endif
+		hash = fw_hash.qwlan;
+	default:
+		break;
+	}
+
+	if (!hash) {
+		pr_err("No entry for file:%d Download FW in non-secure mode\n", file);
+		goto end;
+	}
+
+	if (!OS_MEMCMP(hash, temp, SHA256_DIGEST_SIZE)) {
+		pr_err("Download FW in non-secure mode:%d\n", file);
+		goto end;
+	}
+
+#ifdef CONFIG_CNSS
+	ret = cnss_get_sha_hash(data, data_size, "sha256", digest);
+
+	if (ret) {
+		pr_err("Sha256 Hash computation fialed err:%d\n", ret);
+		goto end;
+	}
+
+	if (OS_MEMCMP(hash, digest, SHA256_DIGEST_SIZE) != 0) {
+		pr_err("Hash Mismatch");
+		vos_trace_hex_dump(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+						digest, SHA256_DIGEST_SIZE);
+		vos_trace_hex_dump(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+						hash, SHA256_DIGEST_SIZE);
+		ret = A_ERROR;
+	}
+#endif
+end:
+	return ret;
+}
+#endif
+
+static int __ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
+				u_int32_t address, bool compressed)
 {
 	int status = EOK;
 	const char *filename = NULL;
@@ -353,6 +419,12 @@ static int ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 #endif
 		break;
 	case ATH_FIRMWARE_FILE:
+		if (WLAN_IS_EPPING_ENABLED(vos_get_conparam())) {
+			filename = fw_files.epping_file;
+			printk(KERN_INFO "%s: Loading epping firmware file %s\n",
+				__func__, filename);
+			break;
+		}
 #ifdef QCA_WIFI_FTM
 		if (vos_get_conparam() == VOS_FTM_MODE) {
 #ifdef CONFIG_CNSS
@@ -442,6 +514,22 @@ static int ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 
 	fw_entry_size = fw_entry->size;
 	tempEeprom = NULL;
+
+#ifdef FEATURE_SECURE_FIRMWARE
+	if (fw_entry_size <= MAX_FIRMWARE_SIZE) {
+		OS_MEMCPY(fw_mem, fw_entry->data, fw_entry_size);
+	} else {
+		pr_err("%s: No enough memory to copy FW data!", __func__);
+		status = A_ERROR;
+		goto end;
+	}
+
+	if (ol_check_fw_hash(fw_mem, fw_entry_size, file)) {
+		pr_err("Hash Check failed for file:%s\n", filename);
+		status = A_ERROR;
+		goto end;
+	}
+#endif
 
 	if (file == ATH_BOARD_DATA_FILE)
 	{
@@ -611,6 +699,25 @@ end:
 	return status;
 }
 
+static int ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
+				u_int32_t address, bool compressed)
+{
+	int ret;
+
+#ifdef CONFIG_CNSS
+	/* Wait until suspend and resume are completed before loading FW */
+	cnss_lock_pm_sem();
+#endif
+
+	ret = __ol_transfer_bin_file(scn, file, address, compressed);
+
+#ifdef CONFIG_CNSS
+	cnss_release_pm_sem();
+#endif
+
+	return ret;
+}
+
 u_int32_t host_interest_item_address(u_int32_t target_type, u_int32_t item_offset)
 {
 	switch (target_type) {
@@ -669,28 +776,16 @@ static struct ol_softc *ramdump_scn;
 
 int ol_copy_ramdump(struct ol_softc *scn)
 {
-	void __iomem *ramdump_base;
-	unsigned long address;
-	unsigned long size;
 	int ret;
 
-	/* Get RAM dump memory address and size */
-	if (cnss_get_ramdump_mem(&address, &size)) {
-		printk("No RAM dump will be collected since failed to get "
-			"memory address or size!\n");
+	if (!scn->ramdump_base || !scn->ramdump_size) {
+		pr_info("%s: No RAM dump will be collected since ramdump_base "
+			"is NULL or ramdump_size is 0!\n", __func__);
 		ret = -EACCES;
 		goto out;
 	}
 
-	ramdump_base = ioremap(address, size);
-	if (!ramdump_base) {
-		printk("No RAM dump will be collected since ramdump_base is NULL!\n");
-		ret = -EACCES;
-		goto out;
-	}
-
-	ret = ol_target_coredump(scn, ramdump_base, size);
-	iounmap(ramdump_base);
+	ret = ol_target_coredump(scn, scn->ramdump_base, scn->ramdump_size);
 
 out:
 	return ret;
@@ -1515,7 +1610,9 @@ int ol_download_firmware(struct ol_softc *scn)
 				(u_int8_t *)&address, 4, scn);
 	}
 
-	if (scn->enableuartprint) {
+	if (scn->enableuartprint ||
+		(WLAN_IS_EPPING_ENABLED(vos_get_conparam()) &&
+		WLAN_IS_EPPING_FW_UART(vos_get_conparam()))) {
 		if ((scn->target_version == AR6320_REV1_VERSION) || (scn->target_version == AR6320_REV1_1_VERSION))
 			param = 6;
 		else

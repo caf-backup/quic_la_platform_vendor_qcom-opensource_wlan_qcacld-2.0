@@ -71,7 +71,6 @@
 #include "sapApi.h"
 #include "macTrace.h"
 
-
 extern tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 
 #include <wlan_qct_pal_api.h>
@@ -79,6 +78,7 @@ extern tSirRetStatus uMacPostCtrlMsg(void* pSirGlobal, tSirMbMsg* pMb);
 #define READ_MEMORY_DUMP_CMD     9
 #define TL_INIT_STATE            0
 
+static tSelfRecoveryStats gSelfRecoveryStats;
 
 #define CSR_ACTIVE_LIST_CMD_TIMEOUT_VALUE 1000*30*4  //120s
 
@@ -1654,6 +1654,7 @@ eHalStatus sme_UpdateConfig(tHalHandle hHal, tpSmeConfigParams pSmeConfigParams)
    pMac->sme.max_intf_count = pSmeConfigParams->max_intf_count;
 
    pMac->enable5gEBT = pSmeConfigParams->enable5gEBT;
+   pMac->sme.enableSelfRecovery = pSmeConfigParams->enableSelfRecovery;
 
    return status;
 }
@@ -2148,6 +2149,12 @@ eHalStatus sme_SetEseBeaconRequest(tHalHandle hHal, const tANI_U8 sessionId,
    tCsrRoamSession         *pSession         = CSR_GET_SESSION(pMac, sessionId);
    tpRrmSMEContext          pSmeRrmContext   = &pMac->rrm.rrmSmeContext;
 
+   if (pSmeRrmContext->eseBcnReqInProgress == TRUE)
+   {
+      smsLog(pMac, LOGE, "A Beacon Report Req is already in progress");
+      return eHAL_STATUS_RESOURCES;
+   }
+
    /* Store the info in RRM context */
    vos_mem_copy(&pSmeRrmContext->eseBcnReqInfo, pEseBcnReq, sizeof(tCsrEseBeaconReq));
 
@@ -2158,6 +2165,8 @@ eHalStatus sme_SetEseBeaconRequest(tHalHandle hHal, const tANI_U8 sessionId,
       smsLog(pMac, LOGP, "Memory Allocation Failure!!! ESE  BcnReq Ind to SME");
       return eSIR_FAILURE;
    }
+
+   pSmeRrmContext->eseBcnReqInProgress = TRUE;
 
    smsLog(pMac, LOGE, "Sending Beacon Report Req to SME");
    vos_mem_zero( pSmeBcnReportReq, sizeof( tSirBeaconReportReqInd ));
@@ -2177,7 +2186,11 @@ eHalStatus sme_SetEseBeaconRequest(tHalHandle hHal, const tANI_U8 sessionId,
         pSmeBcnReportReq->channelList.channelNumber[counter] = pBeaconReq->channel;
    }
 
-   sme_RrmProcessBeaconReportReqInd(pMac, pSmeBcnReportReq);
+   status = sme_RrmProcessBeaconReportReqInd(pMac, pSmeBcnReportReq);
+
+   if(status != eHAL_STATUS_SUCCESS)
+      pSmeRrmContext->eseBcnReqInProgress = FALSE;
+
    return status;
 }
 
@@ -4020,6 +4033,7 @@ eHalStatus sme_GetConfigParam(tHalHandle hHal, tSmeConfigParams *pParam)
       pParam->fScanOffload = pMac->fScanOffload;
       pParam->fP2pListenOffload = pMac->fP2pListenOffload;
       pParam->max_intf_count = pMac->sme.max_intf_count;
+      pParam->enableSelfRecovery = pMac->sme.enableSelfRecovery;
       sme_ReleaseGlobalLock( &pMac->sme );
    }
 
@@ -6268,88 +6282,6 @@ VOS_STATUS sme_GetWcnssHardwareVersion(tHalHandle hHal,
 
 
 #ifdef FEATURE_WLAN_WAPI
-/* ---------------------------------------------------------------------------
-    \fn sme_RoamSetBKIDCache
-    \brief The SME API exposed to HDD to allow HDD to provde SME the BKID
-    candidate list.
-    \param hHal - Handle to the HAL. The HAL handle is returned by the HAL after
-    it is opened (by calling halOpen).
-    \param pBKIDCache - caller allocated buffer point to an array of tBkidCacheInfo
-    \param numItems - a variable that has the number of tBkidCacheInfo allocated
-    when retruning, this is the number of items put into pBKIDCache
-    \return eHalStatus - when fail, it usually means the buffer allocated is not
-    big enough and pNumItems has the number of tBkidCacheInfo.
-  ---------------------------------------------------------------------------*/
-eHalStatus sme_RoamSetBKIDCache( tHalHandle hHal, tANI_U32 sessionId, tBkidCacheInfo *pBKIDCache,
-                                 tANI_U32 numItems )
-{
-   eHalStatus status = eHAL_STATUS_FAILURE;
-   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
-
-   status = sme_AcquireGlobalLock( &pMac->sme );
-   if ( HAL_STATUS_SUCCESS( status ) )
-   {
-       status = csrRoamSetBKIDCache( pMac, sessionId, pBKIDCache, numItems );
-       sme_ReleaseGlobalLock( &pMac->sme );
-   }
-
-   return (status);
-}
-
-/* ---------------------------------------------------------------------------
-    \fn sme_RoamGetBKIDCache
-    \brief The SME API exposed to HDD to allow HDD to request SME to return its
-    BKID cache.
-    \param hHal - Handle to the HAL. The HAL handle is returned by the HAL after
-    it is opened (by calling halOpen).
-    \param pNum - caller allocated memory that has the space of the number of
-    tBkidCacheInfo as input. Upon returned, *pNum has the needed number of entries
-    in SME cache.
-    \param pBkidCache - Caller allocated memory that contains BKID cache, if any,
-    upon return
-    \return eHalStatus - when fail, it usually means the buffer allocated is not
-    big enough.
-  ---------------------------------------------------------------------------*/
-eHalStatus sme_RoamGetBKIDCache(tHalHandle hHal, tANI_U32 *pNum,
-                                tBkidCacheInfo *pBkidCache)
-{
-   eHalStatus status = eHAL_STATUS_FAILURE;
-   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
-
-   status = sme_AcquireGlobalLock( &pMac->sme );
-   if ( HAL_STATUS_SUCCESS( status ) )
-   {
-       smsLog(pMac, LOGE, FL(" !!!!!!!!!!!!!!!!!!SessionId is hardcoded"));
-       status = csrRoamGetBKIDCache( pMac, 0, pNum, pBkidCache );
-       sme_ReleaseGlobalLock( &pMac->sme );
-   }
-
-   return (status);
-}
-
-/* ---------------------------------------------------------------------------
-    \fn sme_RoamGetNumBKIDCache
-    \brief The SME API exposed to HDD to allow HDD to request SME to return the
-    number of BKID cache entries.
-    \param hHal - Handle to the HAL. The HAL handle is returned by the HAL after
-    it is opened (by calling halOpen).
-    \return tANI_U32 - the number of BKID cache entries.
-  ---------------------------------------------------------------------------*/
-tANI_U32 sme_RoamGetNumBKIDCache(tHalHandle hHal, tANI_U32 sessionId)
-{
-   eHalStatus status = eHAL_STATUS_FAILURE;
-   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
-   tANI_U32 numBkidCache = 0;
-
-   status = sme_AcquireGlobalLock( &pMac->sme );
-   if ( HAL_STATUS_SUCCESS( status ) )
-   {
-       numBkidCache = csrRoamGetNumBKIDCache( pMac, sessionId );
-       sme_ReleaseGlobalLock( &pMac->sme );
-   }
-
-   return (numBkidCache);
-}
 
 /* ---------------------------------------------------------------------------
     \fn sme_ScanGetBKIDCandidateList
@@ -11298,6 +11230,66 @@ eHalStatus sme_StopBatchScanInd
 
 #endif
 
+void sme_getRecoveryStats(tHalHandle hHal) {
+    tANI_U8 i;
+
+    VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, "Self Recovery Stats");
+    for (i = 0; i < MAX_ACTIVE_CMD_STATS; i++) {
+        if (eSmeNoCommand != gSelfRecoveryStats.activeCmdStats[i].command) {
+            VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                        "timestamp %llu: command 0x%0X: reason %d: session %d",
+                        gSelfRecoveryStats.activeCmdStats[i].timestamp,
+                        gSelfRecoveryStats.activeCmdStats[i].command,
+                        gSelfRecoveryStats.activeCmdStats[i].reason,
+                        gSelfRecoveryStats.activeCmdStats[i].sessionId);
+        }
+    }
+}
+
+void sme_SaveActiveCmdStats(tHalHandle hHal) {
+    tSmeCmd *pTempCmd = NULL;
+    tListElem *pEntry;
+    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+    tANI_U8 statsIndx = 0;
+
+    if (NULL == pMac) {
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                  "%s: pMac is NULL", __func__);
+        return;
+    }
+
+    pEntry = csrLLPeekHead(&pMac->sme.smeCmdActiveList, LL_ACCESS_LOCK);
+    if (pEntry) {
+        pTempCmd = GET_BASE_ADDR(pEntry, tSmeCmd, Link);
+    }
+
+    if (pTempCmd) {
+        if (eSmeCsrCommandMask & pTempCmd->command) {
+            statsIndx =  gSelfRecoveryStats.cmdStatsIndx;
+            gSelfRecoveryStats.activeCmdStats[statsIndx].command =
+                                                            pTempCmd->command;
+            gSelfRecoveryStats.activeCmdStats[statsIndx].sessionId =
+                                                          pTempCmd->sessionId;
+            gSelfRecoveryStats.activeCmdStats[statsIndx].timestamp =
+                                            vos_get_monotonic_boottime();
+            if (eSmeCommandRoam == pTempCmd->command) {
+                gSelfRecoveryStats.activeCmdStats[statsIndx].reason =
+                                                pTempCmd->u.roamCmd.roamReason;
+            } else if (eSmeCommandScan == pTempCmd->command) {
+                gSelfRecoveryStats.activeCmdStats[statsIndx].reason =
+                                                pTempCmd->u.scanCmd.reason;
+            } else {
+                gSelfRecoveryStats.activeCmdStats[statsIndx].reason = 0xFF;
+            }
+
+            gSelfRecoveryStats.cmdStatsIndx =
+                   ((gSelfRecoveryStats.cmdStatsIndx + 1) &
+                    (MAX_ACTIVE_CMD_STATS - 1));
+        }
+    }
+    return;
+}
+
 void activeListCmdTimeoutHandle(void *userData)
 {
     if (NULL == userData)
@@ -11306,7 +11298,13 @@ void activeListCmdTimeoutHandle(void *userData)
         "%s: Active List command timeout Cmd List Count %d", __func__,
         csrLLCount(&((tpAniSirGlobal) userData)->sme.smeCmdActiveList) );
     smeGetCommandQStatus((tHalHandle) userData);
-    VOS_BUG(0);
+
+    if (((tpAniSirGlobal)userData)->sme.enableSelfRecovery) {
+        sme_SaveActiveCmdStats((tHalHandle)userData);
+        vos_trigger_recovery();
+    } else {
+        VOS_BUG(0);
+    }
 }
 
 VOS_STATUS sme_notify_modem_power_state(tHalHandle hHal, tANI_U32 value)
@@ -11430,7 +11428,8 @@ eHalStatus sme_PsOffloadDisablePowerSave (tHalHandle hHal, tANI_U32 sessionId)
 }
 
 eHalStatus sme_PsOffloadEnableDeferredPowerSave (tHalHandle hHal,
-                                                 tANI_U32 sessionId)
+                                                 tANI_U32 sessionId,
+                                                 tANI_BOOLEAN isReassoc)
 {
    eHalStatus status = eHAL_STATUS_FAILURE;
    tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
@@ -11438,7 +11437,8 @@ eHalStatus sme_PsOffloadEnableDeferredPowerSave (tHalHandle hHal,
    status = sme_AcquireGlobalLock(&pMac->sme);
    if (HAL_STATUS_SUCCESS( status ))
    {
-       status =  PmcOffloadEnableDeferredStaModePowerSave(hHal, sessionId);
+       status =  PmcOffloadEnableDeferredStaModePowerSave(hHal, sessionId,
+                                                          isReassoc);
        sme_ReleaseGlobalLock( &pMac->sme );
    }
    return (status);
@@ -12173,6 +12173,26 @@ tANI_BOOLEAN sme_staInMiddleOfRoaming(tHalHandle hHal)
 
     if (eHAL_STATUS_SUCCESS == (status = sme_AcquireGlobalLock(&pMac->sme))) {
         ret = csrNeighborMiddleOfRoaming(hHal);
+        sme_ReleaseGlobalLock(&pMac->sme);
+    }
+    return ret;
+}
+
+/* ---------------------------------------------------------------------------
+    \fn sme_PsOffloadIsStaInPowerSave
+    \brief  This function returns TRUE if STA is in power save
+    \param  hHal - HAL handle for device
+    \param  sessionId - Session Identifier
+    \return TRUE or FALSE
+    -------------------------------------------------------------------------*/
+tANI_BOOLEAN sme_PsOffloadIsStaInPowerSave(tHalHandle hHal, tANI_U8 sessionId)
+{
+    tpAniSirGlobal pMac   = PMAC_STRUCT( hHal );
+    eHalStatus     status = eHAL_STATUS_SUCCESS;
+    tANI_BOOLEAN   ret    = FALSE;
+
+    if (eHAL_STATUS_SUCCESS == (status = sme_AcquireGlobalLock(&pMac->sme))) {
+        ret = pmcOffloadIsStaInPowerSave(pMac, sessionId);
         sme_ReleaseGlobalLock(&pMac->sme);
     }
     return ret;
