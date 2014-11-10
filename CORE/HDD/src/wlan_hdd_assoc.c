@@ -1297,13 +1297,18 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
 #if  defined (FEATURE_WLAN_ESE) || defined(FEATURE_WLAN_LFR) || defined (WLAN_FEATURE_VOWIFI_11R)
     int ft_carrier_on = FALSE;
 #endif
-    int status;
+    unsigned long rc;
 
     if ( eCSR_ROAM_RESULT_ASSOCIATED == roamResult )
     {
         VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                    "%s: Set HDD connState to eConnectionState_Associated",
                    __func__);
+        if (NULL == pRoamInfo) {
+            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                      FL("pRoamInfo is NULL"));
+            return eHAL_STATUS_FAILURE;
+        }
         hdd_connSetConnectionState( pHddStaCtx, eConnectionState_Associated );
 
         // Save the connection info from CSR...
@@ -1347,10 +1352,9 @@ static eHalStatus hdd_AssociationCompletionHandler( hdd_adapter_t *pAdapter, tCs
             netif_carrier_on(dev);
 
             // Wait for the Link to up to ensure all the queues are set properly by the kernel
-            status = wait_for_completion_interruptible_timeout(&pAdapter->linkup_event_var,
+            rc = wait_for_completion_timeout(&pAdapter->linkup_event_var,
                                                    msecs_to_jiffies(ASSOC_LINKUP_TIMEOUT));
-            if(!status)
-            {
+            if (!rc) {
                 hddLog(VOS_TRACE_LEVEL_WARN, "%s: Warning:ASSOC_LINKUP_TIMEOUT", __func__);
             }
 
@@ -2037,7 +2041,8 @@ static eHalStatus hdd_RoamSetKeyCompleteHandler( hdd_adapter_t *pAdapter, tCsrRo
             {
                sme_PsOffloadEnableDeferredPowerSave(
                                   WLAN_HDD_GET_HAL_CTX(pAdapter),
-                                  pAdapter->sessionId);
+                                  pAdapter->sessionId,
+                                  pHddStaCtx->hdd_ReassocScenario);
             }
          }
          else
@@ -2808,6 +2813,7 @@ eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U3
                     (WLAN_HDD_GET_CTX(pAdapter))->hdd_mcastbcast_filter_set = FALSE;
             }
             pHddStaCtx->ft_carrier_on = FALSE;
+            pHddStaCtx->hdd_ReassocScenario = FALSE;
             break;
 
         case eCSR_ROAM_FT_START:
@@ -2988,7 +2994,6 @@ eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U3
                        before the ENTER_BMPS_REQ ensures Listen Interval is
                        regained back to LI * Modulated DTIM */
                     hdd_set_pwrparams(pHddCtx);
-                    pHddStaCtx->hdd_ReassocScenario = VOS_FALSE;
 
                     /* At this point, device should not be in BMPS;
                        if due to unexpected scenario, if we are in BMPS,
@@ -3006,6 +3011,8 @@ eHalStatus hdd_smeRoamCallback( void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U3
                     }
                 }
                 halStatus = hdd_RoamSetKeyCompleteHandler( pAdapter, pRoamInfo, roamId, roamStatus, roamResult );
+                if (eCSR_ROAM_RESULT_AUTHENTICATED == roamResult)
+                    pHddStaCtx->hdd_ReassocScenario = VOS_FALSE;
             }
             break;
 #ifdef WLAN_FEATURE_VOWIFI_11R
@@ -3612,6 +3619,7 @@ int iw_set_essid(struct net_device *dev,
                         struct iw_request_info *info,
                         union iwreq_data *wrqu, char *extra)
 {
+    unsigned long rc;
     v_U32_t status = 0;
     hdd_wext_state_t *pWextState;
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
@@ -3650,9 +3658,13 @@ int iw_set_essid(struct net_device *dev,
             INIT_COMPLETION(pAdapter->disconnect_comp_var);
             vosStatus = sme_RoamDisconnect( hHal, pAdapter->sessionId, eCSR_DISCONNECT_REASON_UNSPECIFIED );
 
-            if(VOS_STATUS_SUCCESS == vosStatus)
-               wait_for_completion_interruptible_timeout(&pAdapter->disconnect_comp_var,
-                     msecs_to_jiffies(WLAN_WAIT_TIME_DISCONNECT));
+            if (VOS_STATUS_SUCCESS == vosStatus) {
+                rc = wait_for_completion_timeout(&pAdapter->disconnect_comp_var,
+                          msecs_to_jiffies(WLAN_WAIT_TIME_DISCONNECT));
+                if (!rc) {
+                    hddLog( LOGE, FL("Disconnect event timed out"));
+                }
+             }
         }
     }
     /** wpa_supplicant 0.8.x, wext driver uses */
