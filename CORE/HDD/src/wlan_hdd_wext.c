@@ -4563,8 +4563,8 @@ int wlan_hdd_update_phymode(struct net_device *net, tHalHandle hal,
                     return -EIO;
                 }
             }
-        }
 #endif
+        }
         smeconfig.csrConfig.eBand = curr_band;
         smeconfig.csrConfig.bandCapability = curr_band;
         if (curr_band == eCSR_BAND_24)
