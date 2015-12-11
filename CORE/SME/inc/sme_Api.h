@@ -4242,6 +4242,9 @@ eHalStatus sme_set_mas(tANI_U32 val);
  */
 eHalStatus sme_set_miracast(tHalHandle hal, uint8_t filter_type);
 
+eHalStatus sme_register_mgmt_frame_ind_callback(tHalHandle hal,
+      sir_mgmt_frame_ind_callback callback);
+
 void sme_enable_phy_error_logs(tHalHandle hal, bool enable_log);
 
 eHalStatus sme_roam_set_default_key_index(tHalHandle hal, uint8_t session_id,

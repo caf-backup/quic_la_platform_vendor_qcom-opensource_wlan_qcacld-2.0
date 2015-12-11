@@ -222,6 +222,9 @@
 
 #define HDD_MAC_ADDR_LEN    6
 #define HDD_SESSION_ID_ANY  50 //This should be same as CSR_SESSION_ID_ANY
+/* This should be same as CSR_ROAM_SESSION_MAX */
+#define HDD_SESSION_MAX  5
+
 
 #define HDD_MIN_TX_POWER (-100) // minimum tx power
 #define HDD_MAX_TX_POWER (+100)  // maximum tx power
@@ -1760,5 +1763,8 @@ int hdd_wlan_set_mcc_p2p_quota(hdd_adapter_t *hostapd_adapter,
 					uint32_t set_value);
 int hdd_set_mas(hdd_adapter_t *hostapd_adapter, uint8_t filter_type);
 uint8_t hdd_is_mcc_in_24G(hdd_context_t *hdd_ctx);
+void hdd_indicate_mgmt_frame(tSirSmeMgmtFrameInd *frame_ind);
+hdd_adapter_t *hdd_get_adapter_by_sme_session_id(hdd_context_t *hdd_ctx,
+						uint32_t sme_session_id);
 
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )
