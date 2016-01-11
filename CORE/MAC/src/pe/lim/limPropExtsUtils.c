@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -201,6 +201,9 @@ limExtractApCapability(tpAniSirGlobal pMac, tANI_U8 *pIE, tANI_U16 ieLen,
         if (pBeaconStruct->countryInfoPresent)
            psessionEntry->countryInfoPresent = TRUE;
     }
+    /* Check if Extended caps are present in probe resp or not */
+    if (pBeaconStruct->ExtCap.present)
+        psessionEntry->is_ext_caps_present = true;
     vos_mem_free(pBeaconStruct);
     return;
 } /****** end limExtractApCapability() ******/
