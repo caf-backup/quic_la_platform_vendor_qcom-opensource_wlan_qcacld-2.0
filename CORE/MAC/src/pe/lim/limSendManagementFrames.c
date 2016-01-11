@@ -2019,22 +2019,40 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
 
     vos_mem_set( ( tANI_U8* )pFrm, sizeof( tDot11fAssocRequest ), 0 );
 
-    vos_mem_set(( tANI_U8* )&extractedExtCap, sizeof( tDot11fIEExtCap ), 0);
-    nSirStatus = lim_strip_extcap_update_struct(pMac, pAddIE,
-                                  &nAddIELen,
-                                  &extractedExtCap );
-    if(eSIR_SUCCESS != nSirStatus )
-    {
+    if (nAddIELen && psessionEntry->is_ext_caps_present) {
+        vos_mem_set(( tANI_U8* )&extractedExtCap, sizeof( tDot11fIEExtCap ), 0);
+        nSirStatus = lim_strip_extcap_update_struct(pMac, pAddIE,
+                                                    &nAddIELen,
+                                                    &extractedExtCap );
+        if(eSIR_SUCCESS != nSirStatus )
+        {
+            extractedExtCapFlag = eANI_BOOLEAN_FALSE;
+            limLog(pMac, LOG1,
+                 FL("Unable to Stripoff ExtCap IE from Assoc Req"));
+        }
+        else
+        {
+            struct s_ext_cap *p_ext_cap = (struct s_ext_cap *)
+                                          extractedExtCap.bytes;
+            if (p_ext_cap->interworkingService)
+                p_ext_cap->qosMap = 1;
+            else {
+                /* No need to merge the EXT Cap from Supplicant
+                 * if interworkingService is not set, as currently
+                 * driver is only interested in interworkingService
+                 * capability from supplicant. if in
+                 * future any other EXT Cap info is required from
+                 * supplicant it needs to be handled here.
+                 */
+                 extractedExtCapFlag = eANI_BOOLEAN_FALSE;
+            }
+        }
+    } else {
+        limLog(pMac, LOG1,
+                FL("No addn IE or peer dosen't support addnIE for Assoc Req"));
         extractedExtCapFlag = eANI_BOOLEAN_FALSE;
         limLog(pMac, LOG1,
              FL("Unable to Stripoff ExtCap IE from Assoc Req"));
-    }
-    else
-    {
-        struct s_ext_cap *p_ext_cap = (struct s_ext_cap *)
-                                      extractedExtCap.bytes;
-        if (p_ext_cap->interworkingService)
-            p_ext_cap->qosMap = 1;
     }
 
     caps = pMlmAssocReq->capabilityInfo;
@@ -2167,8 +2185,8 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
         isVHTEnabled = eANI_BOOLEAN_TRUE;
     }
 #endif
-
-    PopulateDot11fExtCap( pMac, isVHTEnabled, &pFrm->ExtCap, psessionEntry);
+    if (psessionEntry->is_ext_caps_present)
+        PopulateDot11fExtCap( pMac, isVHTEnabled, &pFrm->ExtCap, psessionEntry);
 
 #if defined WLAN_FEATURE_VOWIFI_11R
     if (psessionEntry->pLimJoinReq->is11Rconnection)
@@ -2629,8 +2647,9 @@ limSendReassocReqWithFTIEsMgmtFrame(tpAniSirGlobal     pMac,
         limLog( pMac, LOG1, FL("Populate VHT IEs in Re-Assoc Request"));
         PopulateDot11fVHTCaps( pMac, psessionEntry, &frm.VHTCaps );
         isVHTEnabled = eANI_BOOLEAN_TRUE;
-        PopulateDot11fExtCap(pMac, isVHTEnabled, &frm.ExtCap, psessionEntry);
     }
+    if (psessionEntry->is_ext_caps_present)
+        PopulateDot11fExtCap(pMac, isVHTEnabled, &frm.ExtCap, psessionEntry);
 #endif
 
     nStatus = dot11fGetPackedReAssocRequestSize( pMac, &frm, &nPayload );
@@ -3049,7 +3068,8 @@ limSendReassocReqMgmtFrame(tpAniSirGlobal     pMac,
     }
 #endif
 
-    PopulateDot11fExtCap(pMac, isVHTEnabled, &frm.ExtCap, psessionEntry);
+    if (psessionEntry->is_ext_caps_present)
+        PopulateDot11fExtCap(pMac, isVHTEnabled, &frm.ExtCap, psessionEntry);
 
     nStatus = dot11fGetPackedReAssocRequestSize( pMac, &frm, &nPayload );
     if ( DOT11F_FAILED( nStatus ) )
