@@ -153,4 +153,7 @@ void *wma_get_beacon_buffer_by_vdev_id(u_int8_t vdev_id,
 int process_wma_set_command(int sessid, int paramid,
                                    int sval, int vpdev);
 tANI_U8 wma_getFwWlanFeatCaps(tANI_U8 featEnumValue);
+
+extern int wma_scpc_event_handler(void *handle, u_int8_t *event, u_int32_t len);
+
 #endif

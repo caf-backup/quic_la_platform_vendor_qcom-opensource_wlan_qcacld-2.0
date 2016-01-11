@@ -49,9 +49,7 @@
 #include "bin_sig.h"
 #include "ar6320v2_dbg_regtable.h"
 #include "epping_main.h"
-#if  defined(CONFIG_CNSS)
-#include <net/cnss.h>
-#endif
+#include "vos_cnss.h"
 
 #ifndef REMOVE_PKT_LOG
 #include "ol_txrx_types.h"
@@ -752,6 +750,13 @@ static int __ol_transfer_bin_file(struct ol_softc *scn, ATH_BIN_FILE file,
 		}
 
 		OS_MEMCPY(tempEeprom, (u_int8_t *)fw_entry->data, fw_entry_size);
+
+		status = vos_update_boarddata(tempEeprom, fw_entry_size);
+		if (EOK != status) {
+			AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
+				("wlan: update boarddata failed, status=%d.\n",
+				 status));
+		}
 
 		switch (scn->target_type) {
 		default:
