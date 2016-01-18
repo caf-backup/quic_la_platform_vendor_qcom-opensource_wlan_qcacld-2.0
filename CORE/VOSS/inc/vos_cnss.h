@@ -30,6 +30,27 @@
 #ifdef CONFIG_CNSS_SDIO
 #include <net/cnss.h>
 
+static inline bool vos_oob_enabled(void)
+{
+	bool enabled = true;
+
+	if (-ENOSYS == cnss_wlan_query_oob_status())
+		enabled = false;
+
+	return enabled;
+}
+
+static inline int vos_register_oob_irq_handler(oob_irq_handler_t handler,
+		void *pm_oob)
+{
+	return cnss_wlan_register_oob_irq_handler(handler, pm_oob);
+}
+
+static inline int vos_unregister_oob_irq_handler(void *pm_oob)
+{
+	return cnss_wlan_unregister_oob_irq_handler(pm_oob);
+}
+
 #ifdef WLAN_SCPC_FEATURE
 static inline int vos_update_boarddata(unsigned char *buf, unsigned int len)
 {
@@ -55,6 +76,23 @@ static inline int vos_cache_boarddata(unsigned int offset,
 #endif
 
 #else
+typedef int (*oob_irq_handler_t) (void *dev_para);
+static inline bool vos_oob_enabled(void)
+{
+	return false;
+}
+
+static inline int vos_register_oob_irq_handler(oob_irq_handler_t handler,
+		void *pm_oob)
+{
+	return -ENOSYS;
+}
+
+static inline int vos_unregister_oob_irq_handler(void *pm_oob)
+{
+	return -ENOSYS;
+}
+
 static inline int vos_update_boarddata(unsigned char *buf, unsigned int len)
 {
 	return 0;
@@ -66,4 +104,5 @@ static inline int vos_cache_boarddata(unsigned int offset,
 	return 0;
 }
 #endif
+
 #endif/* _VOS_CNSS_H */
