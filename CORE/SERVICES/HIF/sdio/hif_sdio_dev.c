@@ -234,6 +234,9 @@ A_STATUS HIFDevDisableInterrupts(HIF_SDIO_DEVICE *pDev)
     A_STATUS    status = A_OK;
     ENTER();
 
+    /* mask the host controller interrupts */
+    HIFMaskInterrupt(pDev->HIFDevice);
+
     LOCK_HIF_DEV(pDev);
     /* Disable all interrupts */
     pDev->IrqEnableRegisters.int_status_enable = 0;
@@ -260,8 +263,6 @@ A_STATUS HIFDevDisableInterrupts(HIF_SDIO_DEVICE *pDev)
         AR_DEBUG_PRINTF(ATH_DEBUG_ERR,("Failed to update interrupt control registers err: %d", status));
     }
 
-    /* mask the host controller interrupts */
-    HIFMaskInterrupt(pDev->HIFDevice);
     EXIT("status :%d",status);
     return status;
 }
@@ -280,9 +281,6 @@ A_STATUS HIFDevEnableInterrupts(HIF_SDIO_DEVICE *pDev)
      * The AR6K interrupt enables reset back to an "enabled" state when this happens.
      *  */
     HIFDevDisableInterrupts(pDev);
-
-    /* Unmask the host controller interrupts */
-    HIFUnMaskInterrupt(pDev->HIFDevice);
 
     LOCK_HIF_DEV(pDev);
 
@@ -316,6 +314,8 @@ A_STATUS HIFDevEnableInterrupts(HIF_SDIO_DEVICE *pDev)
 
     UNLOCK_HIF_DEV(pDev);
 
+    /* Unmask the host controller interrupts */
+    HIFUnMaskInterrupt(pDev->HIFDevice);
 
     /* always synchronous */
     status = HIFReadWrite(pDev->HIFDevice,

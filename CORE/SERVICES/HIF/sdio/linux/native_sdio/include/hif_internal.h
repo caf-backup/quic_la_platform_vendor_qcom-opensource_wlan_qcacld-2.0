@@ -119,6 +119,7 @@ struct hif_device {
     void *htcContext;
     /* mailbox swapping for control and data svc*/
     A_BOOL swap_mailbox;
+    A_BOOL wow_maskInt;
 };
 
 #define HIF_DMA_BUFFER_SIZE (4 * 1024)
