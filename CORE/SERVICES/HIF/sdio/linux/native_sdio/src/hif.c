@@ -1352,13 +1352,15 @@ static int hif_oob_irq_handler(void *dev_para)
 	HIF_DEVICE *device;
 
 	AR_DEBUG_PRINTF(ATH_DEBUG_TRACE, ("AR6000: +hif_oob_irq_handler\n"));
-	device = getHifDevice(dev_para);
+        device = getHifDevice(dev_para);
+        if (device->wow_maskInt == TRUE)
+            return -1;
 	atomic_set(&device->irqHandling, 1);
 	status = device->htcCallbacks.dsrHandler(device->htcCallbacks.context);
 	atomic_set(&device->irqHandling, 0);
 	AR_DEBUG_ASSERT(status == A_OK || status == A_ECANCELED);
 	AR_DEBUG_PRINTF(ATH_DEBUG_TRACE, ("AR6000: -hif_oob_irq_handler\n"));
-	return 0;
+        return status;
 }
 
 #ifdef HIF_MBOX_SLEEP_WAR
@@ -2230,6 +2232,7 @@ static int hifDeviceSuspend(struct device *dev)
                     AR_DEBUG_PRINTF(ATH_DEBUG_ERROR, ("AR6000: set sdio pm flags MMC_PM_WAKE_SDIO_IRQ failed: %d\n",ret));
                     return ret;
                 }
+                device->wow_maskInt = TRUE;
                 HIFMaskInterrupt(device);
                 device->DeviceState = HIF_DEVICE_STATE_WOW;
                 AR_DEBUG_PRINTF(ATH_DEBUG_INFO, ("hifDeviceSuspend: wow success\n"));
@@ -2247,6 +2250,7 @@ static int hifDeviceSuspend(struct device *dev)
                  * But before adding finishe callback function to these handler, sleep wait is a simple method.
                  */
                 msleep(100);
+                device->wow_maskInt = TRUE;
                 HIFMaskInterrupt(device);
                 device->DeviceState = HIF_DEVICE_STATE_DEEPSLEEP;
                 AR_DEBUG_PRINTF(ATH_DEBUG_INFO, ("hifDeviceSuspend: deep sleep success\n"));
@@ -2319,6 +2323,7 @@ static int hifDeviceResume(struct device *dev)
         }
     }
     else if(device->DeviceState == HIF_DEVICE_STATE_DEEPSLEEP){
+        device->wow_maskInt = FALSE;
         HIFUnMaskInterrupt(device);
 //        hifRestartAllVap((struct ol_ath_softc_net80211 *)device->claimedContext);
     }
@@ -2334,6 +2339,7 @@ static int hifDeviceResume(struct device *dev)
           return status;
         }
         /*TODO:WOW support*/
+        device->wow_maskInt = FALSE;
         HIFUnMaskInterrupt(device);
     }
 
@@ -2468,6 +2474,7 @@ addHifDevice(struct sdio_func *func)
     hifdevice->func = func;
     hifdevice->powerConfig = HIF_DEVICE_POWER_UP;
     hifdevice->DeviceState = HIF_DEVICE_STATE_ON;
+    hifdevice->wow_maskInt = FALSE;
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0)) && !defined(WITH_BACKPORTS)
     ret = sdio_set_drvdata(func, hifdevice);
     EXIT("status %d", ret);
