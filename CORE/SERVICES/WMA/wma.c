@@ -5346,6 +5346,7 @@ static int wma_tdls_event_handler(void *handle, u_int8_t *event, u_int32_t len)
 	default:
 	 WMA_LOGE("%s: Discarding unknown tdls event(%d) from target",
 	          __func__, peer_event->peer_status);
+	 vos_mem_free(tdls_event);
 	 return -1;
 	}
 
@@ -12099,6 +12100,7 @@ static int32_t wmi_unified_send_txbf(tp_wma_handle wma,
 	txbf_en.mutxbfee = params->vhtTxMUBformeeCapable;
 	txbf_en.sutxbfer = 0;
 	txbf_en.mutxbfer = 0;
+	txbf_en.reserved = 0;
 
 	/* When MU TxBfee is set, SU TxBfee must be set by default */
 	if (txbf_en.mutxbfee)

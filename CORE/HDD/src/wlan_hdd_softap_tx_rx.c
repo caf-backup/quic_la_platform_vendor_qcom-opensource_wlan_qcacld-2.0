@@ -839,7 +839,7 @@ VOS_STATUS hdd_softap_tx_fetch_packet_cbk( v_VOID_t *vosContext,
    *ppVosPacket = NULL;
 
    //Make sure the AC being asked for is sane
-   if( ac > WLANTL_MAX_AC || ac < 0)
+   if (ac >= WLANTL_MAX_AC || ac < 0)
    {
       VOS_TRACE( VOS_MODULE_ID_HDD_SAP_DATA, VOS_TRACE_LEVEL_ERROR,
                  "%s: Invalid AC %d passed by TL", __func__, ac);

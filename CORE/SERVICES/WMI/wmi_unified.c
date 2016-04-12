@@ -1078,23 +1078,23 @@ wmi_unified_attach(ol_scn_t scn_handle, wma_wow_tx_complete_cbk func)
     return wmi_handle;
 }
 
-void
-wmi_unified_detach(struct wmi_unified* wmi_handle)
+void wmi_unified_detach(struct wmi_unified* wmi_handle)
 {
-    wmi_buf_t buf;
+	wmi_buf_t buf;
 
-    vos_flush_work(&wmi_handle->rx_event_work);
-    adf_os_spin_lock_bh(&wmi_handle->eventq_lock);
-    buf = adf_nbuf_queue_remove(&wmi_handle->event_queue);
-    while (buf) {
-	adf_nbuf_free(buf);
-	buf = adf_nbuf_queue_remove(&wmi_handle->event_queue);
-    }
-    adf_os_spin_unlock_bh(&wmi_handle->eventq_lock);
-    if (wmi_handle != NULL) {
-        OS_FREE(wmi_handle);
-        wmi_handle = NULL;
-    }
+	if (wmi_handle != NULL) {
+		vos_flush_work(&wmi_handle->rx_event_work);
+		adf_os_spin_lock_bh(&wmi_handle->eventq_lock);
+		buf = adf_nbuf_queue_remove(&wmi_handle->event_queue);
+
+		while (buf) {
+			adf_nbuf_free(buf);
+			buf = adf_nbuf_queue_remove(&wmi_handle->event_queue);
+		}
+		adf_os_spin_unlock_bh(&wmi_handle->eventq_lock);
+		OS_FREE(wmi_handle);
+		wmi_handle = NULL;
+	}
 }
 
 /**
