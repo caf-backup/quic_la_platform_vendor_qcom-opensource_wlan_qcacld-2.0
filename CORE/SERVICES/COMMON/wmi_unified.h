@@ -1005,6 +1005,9 @@ typedef enum {
     /** Event indicating the DIAG logs/events supported by FW */
     WMI_DIAG_EVENT_LOG_SUPPORTED_EVENTID,
 
+    /** FW update tx power levels event */
+    WMI_RADIO_TX_POWER_LEVEL_STATS_EVENTID,
+
     /* NLO specific events */
     /** NLO match event after the first match */
     WMI_NLO_MATCH_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_NLO_OFL),
@@ -3531,6 +3534,35 @@ typedef struct {
     /** number of channels */
     A_UINT32 num_channels;
 } wmi_radio_link_stats;
+
+/** tx time per power level statistics */
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_tx_power_level_stats_evt_fixed_param */
+    /** total number of tx power levels */
+    A_UINT32 total_num_tx_power_levels;
+    /** number of tx power levels that are carried in this event */
+    A_UINT32 num_tx_power_levels;
+    /** offset of current stats
+     * If ((num_tx_power_levels + power_level_offset)) ==
+     *     total_num_tx_power_levels)
+     * this message completes the report of tx time per power levels.
+     * Otherwise, additional WMI_RADIO_TX_POWER_LEVEL_STATS_EVENTID messages
+     * will be sent by the target to deliver the remainder of the tx time
+     * per power level stats.
+     */
+    A_UINT32 power_level_offset;
+/*
+ * This TLV will be followed by a TLV containing a variable-length array of
+ * A_UINT32 with tx time per power level data
+ *  A_UINT32 tx_time_per_power_level[num_tx_power_levels]
+ * The tx time is in units of milliseconds.
+ * The power levels are board-specific values; a board-specific translation
+ * has to be applied to determine what actual power corresponds to each
+ * power level.
+ * Just as the host has a BDF file available, the host should also have
+ * a data file available that provides the power level to power translations.
+ */
+} wmi_tx_power_level_stats_evt_fixed_param;
 
 /** Radio statistics (once started) do not stop or get reset unless wifi_clear_link_stats is invoked */
 typedef struct {

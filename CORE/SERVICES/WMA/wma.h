@@ -854,6 +854,7 @@ typedef struct wma_handle {
 
 	struct wma_runtime_pm_context runtime_context;
 	uint32_t fine_time_measurement_cap;
+	tSirLLStatsResults *link_stats_results;
 }t_wma_handle, *tp_wma_handle;
 
 struct wma_target_cap {
