@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -510,6 +510,7 @@ typedef struct sDphHashNode
      */
 
     tANI_U8 isDisassocDeauthInProgress;
+    bool sta_deletion_in_progress;
     struct sDphHashNode  *next;
 
 
