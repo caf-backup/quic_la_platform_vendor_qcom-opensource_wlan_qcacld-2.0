@@ -21794,6 +21794,7 @@ int wlan_hdd_cfg80211_connect_start( hdd_adapter_t  *pAdapter,
     int status = 0;
     hdd_wext_state_t *pWextState;
     hdd_context_t *pHddCtx;
+    hdd_station_ctx_t *hdd_sta_ctx;
     v_U32_t roamId;
     tCsrRoamProfile *pRoamProfile;
     eCsrAuthType RSNAuthType;
@@ -21803,6 +21804,7 @@ int wlan_hdd_cfg80211_connect_start( hdd_adapter_t  *pAdapter,
 
     pWextState = WLAN_HDD_GET_WEXT_STATE_PTR(pAdapter);
     pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
+    hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
 
     status = wlan_hdd_validate_context(pHddCtx);
     if (status)
@@ -21820,6 +21822,9 @@ int wlan_hdd_cfg80211_connect_start( hdd_adapter_t  *pAdapter,
     }
 
     pRoamProfile = &pWextState->roamProfile;
+
+    adf_os_mem_zero(&hdd_sta_ctx->conn_info.conn_flag,
+                    sizeof(hdd_sta_ctx->conn_info.conn_flag));
 
     if (pRoamProfile)
     {
@@ -25025,6 +25030,7 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
     tANI_U32 MCSLeng = SIZE_OF_BASIC_MCS_SET;
     tANI_U16 maxRate = 0;
     tANI_U16 myRate;
+    int8_t   snr = 0;
     tANI_U16 currentRate = 0;
     tANI_U8  maxSpeedMCS = 0;
     tANI_U8  maxMCSIdx = 0;
@@ -25079,6 +25085,10 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
         return status;
 
     wlan_hdd_get_rssi(pAdapter, &sinfo->signal);
+    wlan_hdd_get_snr(pAdapter, &snr);
+    pHddStaCtx->conn_info.signal = sinfo->signal;
+    pHddStaCtx->conn_info.noise =
+        pHddStaCtx->conn_info.signal - snr;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0))
     sinfo->filled |= STATION_INFO_SIGNAL;
 #else
@@ -25540,6 +25550,11 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
     sinfo->rx_bytes = pAdapter->stats.rx_bytes;
 
     sinfo->rx_packets = pAdapter->stats.rx_packets;
+
+    pHddStaCtx->conn_info.txrate.flags = sinfo->txrate.flags;
+    pHddStaCtx->conn_info.txrate.mcs = sinfo->txrate.mcs;
+    pHddStaCtx->conn_info.txrate.legacy = sinfo->txrate.legacy;
+    pHddStaCtx->conn_info.txrate.nss = sinfo->txrate.nss;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0))
     sinfo->filled |= STATION_INFO_TX_BITRATE |
