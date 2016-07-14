@@ -26,38 +26,6 @@
 #define _VOS_CNSS_H
 
 #include "vos_status.h"
-#include <linux/device.h>
-#include <linux/pm_wakeup.h>
-#include <linux/jiffies.h>
-#include <linux/workqueue.h>
-#include <linux/sched.h>
-
-static inline void vos_pm_wake_lock_init(struct wakeup_source *ws,
-					const char *name)
-{
-	wakeup_source_init(ws, name);
-}
-
-static inline void vos_pm_wake_lock(struct wakeup_source *ws)
-{
-	__pm_stay_awake(ws);
-}
-
-static inline void vos_pm_wake_lock_timeout(struct wakeup_source *ws,
-					ulong msec)
-{
-	 __pm_wakeup_event(ws, msec);
-}
-
-static inline void vos_pm_wake_lock_release(struct wakeup_source *ws)
-{
-	__pm_relax(ws);
-}
-
-static inline void vos_pm_wake_lock_destroy(struct wakeup_source *ws)
-{
-	wakeup_source_trash(ws);
-}
 
 #ifdef CONFIG_CNSS_SDIO
 #include <net/cnss.h>
