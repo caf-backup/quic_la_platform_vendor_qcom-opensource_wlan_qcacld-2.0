@@ -23683,6 +23683,116 @@ static VOS_STATUS wma_apfind_set_cmd(void *wda_handle,
 }
 #endif /* WLAN_FEATURE_APFIND */
 
+/**
+ * wma_enable_monitor_cmd() - enable monitor mode to firmware
+ * @wda_handle: pointer to wma handle.
+ * @enable_monitor_req: pointer to enable/disable monitor mode request.
+ *
+ * This is called to enable monitor mode to firmware via WMI command.
+ *
+ * Return: VOS_STATUS.
+ */
+	VOS_STATUS wma_enable_monitor_cmd(tp_wma_handle wma_handle,
+					struct hal_enable_monitor_request *enable_monitor_req)
+	{
+		wmi_enable_monitor_cmd_param *cmd;
+		//int status = 0;
+		wmi_buf_t buf;
+		u_int8_t *buf_ptr;
+		int32_t len = sizeof(wmi_enable_monitor_cmd_param);
+
+		if (!wma_handle || !wma_handle->wmi_handle) {
+			WMA_LOGE(FL("WMA is closed, can not issue cmd"));
+			return VOS_STATUS_E_INVAL;
+		}
+
+		buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+		if (!buf) {
+			WMA_LOGP(FL("wmi_buf_alloc failed"));
+			return -ENOMEM;
+		}
+		buf_ptr = (u_int8_t *) wmi_buf_data(buf);
+		cmd = (wmi_enable_monitor_cmd_param *) buf_ptr;
+		cmd->data_len = enable_monitor_req->request_data_len;
+		WMA_LOGD("%s: The data len value is %u",__func__, enable_monitor_req->request_data_len);
+		if (cmd->data_len) {
+			vos_mem_copy(cmd->data,
+                enable_monitor_req->request_data, cmd->data_len);
+		}
+
+		WMA_LOGE("%s:wda process enable/disable=0x%x monitor request.",__func__,cmd->data[0]);
+		if (cmd->data[0] == 0){
+			WMA_LOGE("%s:prepare to suspend monitor mode.",__func__);
+			if (wma_suspend_target(wma_handle, 0)){
+				WMA_LOGE("%s:fail to suspend monitor mode.",__func__);
+				return VOS_STATUS_E_FAILURE;
+			}
+		}
+		else{
+			WMA_LOGE("%s:prepare to resume monitor mode.",__func__);
+			if(wma_resume_target( wma_handle,0)){
+				WMA_LOGE("%s:fail to resume monitor mode.",__func__);
+				return VOS_STATUS_E_FAILURE;
+			}
+		}
+		return VOS_STATUS_SUCCESS;
+	}
+
+/**
+ * wma_filter_type_cmd() - set filter packet type to firmware in monitor mode.
+ * @wda_handle: pointer to wma handle.
+ * @enable_monitor_req: pointer to filter type request.
+ *
+ * This is called to filter type to firmware via WMI command.
+ *
+ * Return: VOS_STATUS.
+ */
+	VOS_STATUS wma_filter_type_cmd(tp_wma_handle wma_handle,
+					struct hal_filter_type_request *filter_type_req)
+	{
+		wmi_filter_type_cmd_param *cmd;
+		int status = 0;
+		wmi_buf_t buf;
+		u_int8_t *buf_ptr;
+		int32_t len = sizeof(wmi_filter_type_cmd_param);
+	
+		if (!wma_handle || !wma_handle->wmi_handle) {
+			WMA_LOGE(FL("WMA is closed, can not issue cmd"));
+			return VOS_STATUS_E_INVAL;
+		}
+
+		buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+		if (!buf) {
+			WMA_LOGP(FL("wmi_buf_alloc failed"));
+			return -ENOMEM;
+		}
+		buf_ptr = (u_int8_t *) wmi_buf_data(buf);
+		cmd = (wmi_filter_type_cmd_param *) buf_ptr;
+		WMITLV_SET_HDR(&cmd->tlv_header,
+				WMITLV_TAG_STRUC_wmi_mnt_filter_cmd_fixed_param,
+				WMITLV_GET_STRUCT_TLVLEN(
+				wmi_filter_type_cmd_param));
+		cmd->vdev_id = filter_type_req->vdev_id;
+		WMA_LOGD("%s: The vdev_id %u",__func__, filter_type_req->vdev_id);
+		WMA_LOGD("%s: The data len value is %u",__func__, filter_type_req->request_data_len);
+		if (filter_type_req->request_data_len) {
+			vos_mem_copy(&(cmd->configure_type),
+                filter_type_req->request_data, filter_type_req->request_data_len);
+		}
+		WMA_LOGE("%s: The filter type=0x%x request.",__func__,cmd->configure_type);
+		WMA_LOGE("%s: WMITLV_TAG_STRUC_wmi_filter_type_cmd_param=%d .",__func__,WMITLV_TAG_STRUC_wmi_mnt_filter_cmd_fixed_param);
+		WMA_LOGE("%s: WMI_FILTER_TYPE_CMDID=%d .",__func__,WMI_FILTER_TYPE_CMDID);
+		status = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
+						WMI_FILTER_TYPE_CMDID);
+		if (status != EOK) {
+			WMA_LOGE("%s: wmi_unified_cmd_send WMI_FILTER_TYPE_CMDID"
+				" returned Error %d",
+				__func__, status);
+			return VOS_STATUS_E_FAILURE;
+		}
+		return VOS_STATUS_SUCCESS;
+	}
+
 tAniGetPEStatsRsp * wma_get_stats_rsp_buf(tAniGetPEStatsReq *get_stats_param)
 {
 	tAniGetPEStatsRsp *stats_rsp_params;
@@ -31193,6 +31303,16 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
 		case WDA_UPDATE_STA_INACTIVITY_TIMEOUT:
 			wma_update_sta_inactivity_timeout(wma_handle,
 					msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
+			break;
+		case WDA_ENABLE_MONITOR_CMD:
+			wma_enable_monitor_cmd(wma_handle,
+				(struct hal_enable_monitor_request*)msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
+			break;
+		case WDA_FILTER_TYPE_CMD:
+			wma_filter_type_cmd(wma_handle,
+				(struct hal_filter_type_request*)msg->bodyptr);
 			vos_mem_free(msg->bodyptr);
 			break;
 		default:

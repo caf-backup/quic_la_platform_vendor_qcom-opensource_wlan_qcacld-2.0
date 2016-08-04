@@ -236,6 +236,7 @@ typedef enum {
     WMI_GRP_BPF_OFFLOAD,         /* 0x36 Berkeley Packet  Filter */
     WMI_GRP_NAN_DATA,            /* 0x37 */
     WMI_GRP_PROTOTYPE,           /* 0x38 */
+    WMI_GRP_MONITOR,             /* 0x39 */
 } WMI_GRP_ID;
 
 #define WMI_CMD_GRP_START_ID(grp_id) (((grp_id) << 12) | 0x1)
@@ -971,6 +972,8 @@ typedef enum {
     WMI_NDP_INITIATOR_REQ_CMDID,
     WMI_NDP_RESPONDER_REQ_CMDID,
     WMI_NDP_END_REQ_CMDID,
+    /* WMI commands set filter type in monitor mode*/
+    WMI_FILTER_TYPE_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_MONITOR),
 } WMI_CMD_ID;
 
 typedef enum {
@@ -15502,6 +15505,24 @@ typedef struct {
     A_UINT32 status;
 } wmi_ocb_set_sched_event_fixed_param;
 
+typedef struct {
+    A_UINT32 tlv_header; /** TLV tag and len */
+    A_UINT32 data_len; /** length in byte of data[]. */
+    /** This structure is used to send REQ binary blobs
+     * from application/service to firmware where Host drv is pass through .
+     * Following this structure is the TLV:
+     *     A_UINT8 data[];    // length in byte given by field data_len.
+     */
+     A_UINT8 data[]; 
+} wmi_enable_monitor_cmd_param;
+
+typedef struct {
+    A_UINT32 tlv_header;
+    A_UINT32 vdev_id;
+    A_UINT32 clear_or_set;
+    A_UINT32 configure_type;
+    A_UINT8  reserved[6];
+} wmi_filter_type_cmd_param;
 /*****************************************************************************
  * END DEPRECATED
  */

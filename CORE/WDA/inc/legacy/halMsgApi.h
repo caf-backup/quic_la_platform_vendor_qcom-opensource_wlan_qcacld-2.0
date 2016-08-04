@@ -1640,4 +1640,17 @@ struct hal_apfind_request
 };
 #endif
 
+struct hal_enable_monitor_request
+{
+    u_int16_t request_data_len;
+    u_int8_t  request_data[];
+};
+
+struct hal_filter_type_request
+{
+	u_int32_t vdev_id;
+    u_int16_t request_data_len;
+    u_int8_t  request_data[];
+};
+
 #endif /* _HALMSGAPI_H_ */

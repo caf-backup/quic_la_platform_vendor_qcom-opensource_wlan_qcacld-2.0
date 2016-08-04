@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -28,11 +28,95 @@
 #ifdef WLAN_OPEN_SOURCE
 #include <wlan_hdd_includes.h>
 #include <wlan_hdd_wowl.h>
+#include "sme_Api.h"
+#include <net/cfg80211.h>
 #include <vos_sched.h>
 
 #define MAX_USER_COMMAND_SIZE_WOWL_ENABLE 8
 #define MAX_USER_COMMAND_SIZE_WOWL_PATTERN 512
 #define MAX_USER_COMMAND_SIZE_FRAME 4096
+
+typedef enum eFilterType{
+	MANAGEMENT_PACKET,
+	CONTROL_PACKET,
+	DATA_PACKET,
+	ALL_PACKET,
+} tFilterType;
+
+/**
+ * wlan_hdd_enable_monitor_cmd() - set monitor mode to firmware
+ * @data: pointer to enable/disable monitor configuration data.
+ * @data_len: the length in byte of enable/disable monitor data.
+ *
+ * This is called when wlan driver needs to send command to firmware to enable monitor mode.
+ *
+ * Return: An error code or 0 on success.
+ */
+static int wlan_hdd_enable_monitor_cmd(v_U8_t *data, int data_len)
+{
+    struct sme_enable_monitor_req  enable_req;
+    VOS_STATUS      status;
+    int ret_val = -EIO;
+
+    enable_req.request_data_len = data_len;
+    enable_req.request_data = data;
+
+    status = sme_enable_monitor_cmd(&enable_req);
+    if (VOS_STATUS_SUCCESS == status) {
+        ret_val = 0;
+    }
+    return ret_val;
+}
+
+/**
+ * wlan_hdd_filter_type_cmd() - set filter packet type configuration to firmware
+ * @data: pointer to filter type configuration data.
+ * @data_len: the length in byte of filter type data.
+ *
+ * This is called when wlan driver needs to set filter packet type to firmware in monitor mode.
+ *
+ * Return: An error code or 0 on success.
+ */
+static int wlan_hdd_filter_type_cmd(v_U8_t *data, int data_len)
+{
+	hdd_context_t *pHddCtx         = NULL;
+	v_CONTEXT_t pVosContext        = NULL;
+	hdd_adapter_t* pAdapter = NULL;
+    struct sme_filter_type_req  filter_type;
+    VOS_STATUS      status;
+    int ret_val = -EIO;
+
+	/* Get the Global VOSS Context */
+	pVosContext = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
+	if(!pVosContext) {
+		hddLog(VOS_TRACE_LEVEL_FATAL,"%s: Global VOS context is Null", __func__);
+		return ret_val;
+	}
+
+	/* Get the HDD context */
+	pHddCtx = (hdd_context_t *)vos_get_context(VOS_MODULE_ID_HDD, pVosContext );
+	if(!pHddCtx) {
+		hddLog(VOS_TRACE_LEVEL_FATAL,"%s: HDD context is Null",__func__);
+		return ret_val;
+	}
+
+	pAdapter = hdd_get_adapter(pHddCtx, WLAN_HDD_SNIFFER);
+	if(!pAdapter){
+		hddLog(VOS_TRACE_LEVEL_FATAL,"%s: pAdapter is Null",__func__);
+		return ret_val;
+	}
+
+	filter_type.vdev_id = pAdapter->sessionId;
+	hddLog(VOS_TRACE_LEVEL_FATAL,"%s: vdev_id=%u",__func__,filter_type.vdev_id);
+    filter_type.request_data_len = data_len;
+    filter_type.request_data = data;
+
+    status = sme_filter_type_cmd(&filter_type);
+    if (VOS_STATUS_SUCCESS == status) {
+        ret_val = 0;
+    }
+    return ret_val;
+}
 
 /**
  * __wcnss_wowenable_write() - write wow enable
@@ -512,6 +596,119 @@ failure:
     return -EINVAL;
 }
 
+
+static ssize_t wcnss_enable_monitor_write(struct file *file,
+               const char __user *buf, size_t count, loff_t *ppos)
+{
+    hdd_adapter_t *pAdapter = (hdd_adapter_t *)file->private_data;
+
+    char cmd[MAX_USER_COMMAND_SIZE_WOWL_ENABLE + 1];
+    v_U8_t enable_mon = 0;
+
+    if ((NULL == pAdapter) || (WLAN_HDD_ADAPTER_MAGIC != pAdapter->magic))
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+                  "%s: Invalid adapter or adapter has invalid magic.",
+                  __func__);
+
+        return -EINVAL;
+    }
+
+    if (count > MAX_USER_COMMAND_SIZE_WOWL_ENABLE)
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: Command length is larger than %d bytes.",
+                  __func__, MAX_USER_COMMAND_SIZE_WOWL_ENABLE);
+
+        return -EINVAL;
+    }
+
+    /* Get command from user */
+    if (copy_from_user(cmd, buf, count))
+        return -EFAULT;
+    cmd[count] = '\0';
+    if (kstrtou8(cmd, 0, &enable_mon))
+        return -EINVAL;
+
+    /* enable monitor */
+    if (enable_mon == 1){
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+                  "%s: enable monitor mode.",__func__);
+	}
+	else if(enable_mon == 0){
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+                  "%s: disable monitor mode.",__func__);
+	}
+	else{
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: valid command=0x%x.",__func__,enable_mon);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: usage:",__func__);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: 	1:enable monitor:",__func__);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: 	0:disable monitor:",__func__);
+		return -EFAULT;
+	}
+	wlan_hdd_enable_monitor_cmd(&enable_mon,sizeof(v_U8_t));
+
+    return count;
+}
+
+static ssize_t wcnss_filter_packet_write(struct file *file,
+               const char __user *buf, size_t count, loff_t *ppos)
+{
+	hdd_adapter_t *pAdapter = (hdd_adapter_t *)file->private_data;
+
+	char cmd[MAX_USER_COMMAND_SIZE_WOWL_ENABLE + 1];
+	v_U8_t filter_type = 0;
+
+	if ((NULL == pAdapter) || (WLAN_HDD_ADAPTER_MAGIC != pAdapter->magic))
+	{
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
+				  "%s: Invalid adapter or adapter has invalid magic.",
+				  __func__);
+
+		return -EINVAL;
+	}
+
+	if (count > MAX_USER_COMMAND_SIZE_WOWL_ENABLE)
+	{
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+				  "%s: Command length is larger than %d bytes.",
+				  __func__, MAX_USER_COMMAND_SIZE_WOWL_ENABLE);
+
+		return -EINVAL;
+	}
+
+	/* Get command from user */
+	if (copy_from_user(cmd, buf, count))
+		return -EFAULT;
+	cmd[count] = '\0';
+	if (kstrtou8(cmd, 0, &filter_type))
+		return -EINVAL;
+
+	/* filter packetin monitor mode. */
+	if (filter_type < MANAGEMENT_PACKET || filter_type > ALL_PACKET){
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: valid command=0x%x.",__func__,filter_type);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: usage:",__func__);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: 	0: filter management packet.",__func__);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: 	1: filter control packet.",__func__);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: 	2: filter data packet.",__func__);
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s: 	3: All packets.:",__func__);
+			return -EINVAL;
+	}	
+	wlan_hdd_filter_type_cmd(&filter_type,sizeof(v_U8_t));
+
+	return count;
+}
+
 /**
  * wcnss_patterngen_write() - SSR wrapper for __wcnss_patterngen_write
  * @file: file pointer
@@ -608,6 +805,20 @@ static const struct file_operations fops_patterngen = {
     .llseek = default_llseek,
 };
 
+static const struct file_operations fops_enable_monitor = {
+    .write = wcnss_enable_monitor_write,
+    .open = wcnss_debugfs_open,
+    .owner = THIS_MODULE,
+    .llseek = default_llseek,
+};
+
+static const struct file_operations fops_filter_packet = {
+    .write = wcnss_filter_packet_write,
+    .open = wcnss_debugfs_open,
+    .owner = THIS_MODULE,
+    .llseek = default_llseek,
+};
+
 VOS_STATUS hdd_debugfs_init(hdd_adapter_t *pAdapter)
 {
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
@@ -626,6 +837,12 @@ VOS_STATUS hdd_debugfs_init(hdd_adapter_t *pAdapter)
 
     if (NULL == debugfs_create_file("pattern_gen", S_IRUSR | S_IWUSR,
         pHddCtx->debugfs_phy, pAdapter, &fops_patterngen))
+        return VOS_STATUS_E_FAILURE;
+	if (NULL == debugfs_create_file("enable_monitor", S_IRUSR | S_IWUSR,
+        pHddCtx->debugfs_phy, pAdapter, &fops_enable_monitor))
+        return VOS_STATUS_E_FAILURE;
+	if (NULL == debugfs_create_file("filter_packet", S_IRUSR | S_IWUSR,
+        pHddCtx->debugfs_phy, pAdapter, &fops_filter_packet))
         return VOS_STATUS_E_FAILURE;
 
     return VOS_STATUS_SUCCESS;

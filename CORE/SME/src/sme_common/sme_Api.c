@@ -19454,3 +19454,88 @@ eHalStatus sme_update_sta_inactivity_timeout(tHalHandle hal_handle,
 
 	return eHAL_STATUS_FAILURE;
 }
+
+/**
+ * sme_enable_monitor_cmd() - set monitor mode to firmware
+ * @input: pointer to enable monitor request data.
+ *
+ * Return: VOS_STATUS.
+ */
+VOS_STATUS sme_enable_monitor_cmd(struct sme_enable_monitor_req *input)
+{
+     vos_msg_t msg;
+     struct hal_enable_monitor_request *data;
+     size_t data_len;
+
+     data_len = sizeof(struct hal_enable_monitor_request) + input->request_data_len;
+     data = vos_mem_malloc(data_len);
+
+     if (data == NULL) {
+         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                FL("Memory allocation failure"));
+         return VOS_STATUS_E_FAULT;
+     }
+
+     vos_mem_zero(data, data_len);
+     data->request_data_len = input->request_data_len;
+     if (input->request_data_len) {
+         vos_mem_copy(data->request_data,
+                input->request_data, input->request_data_len);
+     }
+     msg.type = WDA_ENABLE_MONITOR_CMD;
+     msg.reserved = 0;
+     msg.bodyptr = data;
+
+    if (VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA, &msg)) {
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+            FL("Not able to post WDA_ENABLE_MONITOR_CMD message to WDA"));
+        vos_mem_free(data);
+        return VOS_STATUS_SUCCESS;
+    }
+
+     return VOS_STATUS_SUCCESS;
+}
+
+
+/**
+ * sme_filter_type_cmd() - set filter packet type to firmware
+ * @input: pointer to filter type request data.
+ *
+ * Return: VOS_STATUS.
+ */
+VOS_STATUS sme_filter_type_cmd(struct sme_filter_type_req *input)
+{
+     vos_msg_t msg;
+     struct hal_filter_type_request *data;
+     size_t data_len;
+
+     data_len = sizeof(struct hal_filter_type_request) + input->request_data_len;
+     data = vos_mem_malloc(data_len);
+
+     if (data == NULL) {
+         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+                FL("Memory allocation failure"));
+         return VOS_STATUS_E_FAULT;
+     }
+
+     vos_mem_zero(data, data_len);
+     data->request_data_len = input->request_data_len;
+	 data->vdev_id = input->vdev_id;
+     if (input->request_data_len) {
+         vos_mem_copy(data->request_data,
+                input->request_data, input->request_data_len);
+     }
+
+     msg.type = WDA_FILTER_TYPE_CMD;
+     msg.reserved = 0;
+     msg.bodyptr = data;
+
+    if (VOS_STATUS_SUCCESS != vos_mq_post_message(VOS_MODULE_ID_WDA, &msg)) {
+        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR,
+            FL("Not able to post WDA_FILTER_TYPE_CMD message to WDA"));
+        vos_mem_free(data);
+        return VOS_STATUS_SUCCESS;
+    }
+
+     return VOS_STATUS_SUCCESS;
+}

@@ -266,6 +266,16 @@ struct sme_oem_capability {
 	uint32_t reserved2;
 };
 
+struct sme_enable_monitor_req{
+    u_int16_t request_data_len;
+    u_int8_t* request_data;
+};
+
+struct sme_filter_type_req{
+	u_int32_t vdev_id;
+    u_int16_t request_data_len;
+    u_int8_t* request_data;
+};
 /*-------------------------------------------------------------------------
   Function declarations and documentation
   ------------------------------------------------------------------------*/
@@ -4599,4 +4609,6 @@ eHalStatus sme_update_long_retry_limit_threshold(tHalHandle hal_handle,
 		uint8_t session_id, uint8_t long_limit_count_th);
 eHalStatus sme_update_sta_inactivity_timeout(tHalHandle hal_handle,
 		uint8_t session_id, uint32_t sta_inactivity_timeout);
+VOS_STATUS sme_enable_monitor_cmd(struct sme_enable_monitor_req *input);
+VOS_STATUS sme_filter_type_cmd(struct sme_filter_type_req *input);
 #endif //#if !defined( __SME_API_H )
