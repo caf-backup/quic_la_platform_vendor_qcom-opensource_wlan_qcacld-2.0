@@ -59,8 +59,7 @@
 #include "sirMacProtDef.h"
 #include "regdomain_common.h"
 #include "rrmApi.h"
-
-
+#include "wma.h"
 #include "sapApi.h"
 
 #if defined(FEATURE_WLAN_ESE) && !defined(FEATURE_WLAN_ESE_UPLOAD)
@@ -5108,6 +5107,11 @@ static void __limProcessSmeSetHT2040Mode(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
             vos_mem_copy(pHtOpMode->peer_mac, &pStaDs->staAddr,
                  sizeof(tSirMacAddr));
             pHtOpMode->smesessionId = sessionId;
+            pHtOpMode->chanMode = wma_chan_to_mode(
+                                     psessionEntry->currentOperChannel,
+                                     psessionEntry->htSecondaryChannelOffset,
+                                     psessionEntry->vhtCapability,
+                                     psessionEntry->dot11mode);
 
             msg.type     = WDA_UPDATE_OP_MODE;
             msg.reserved = 0;
