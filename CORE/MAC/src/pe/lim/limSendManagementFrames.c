@@ -2071,7 +2071,10 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
                                           extractedExtCap.bytes;
             if (p_ext_cap->interworkingService)
                 p_ext_cap->qosMap = 1;
-            extractedExtCapFlag = lim_is_ext_cap_ie_present(p_ext_cap);
+
+            extractedExtCap.num_bytes =
+                    lim_compute_ext_cap_ie_length(&extractedExtCap);
+            extractedExtCapFlag = (extractedExtCap.num_bytes > 0);
         }
     } else {
         limLog(pMac, LOG1,
