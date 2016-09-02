@@ -2564,8 +2564,7 @@ void PopulateDot11fTdlsExtCapability(tpAniSirGlobal pMac,
     p_ext_cap->TDLSProhibited = TDLS_PROHIBITED ;
     p_ext_cap->TDLSChanSwitProhibited = TDLS_CH_SWITCH_PROHIBITED ;
     extCapability->present = 1 ;
-    /* For STA cases we alwasy support 11mc - Allow MAX length */
-    extCapability->num_bytes = DOT11F_IE_EXTCAP_MAX_LEN;
+    extCapability->num_bytes = lim_compute_ext_cap_ie_length(extCapability);
 
     return ;
 }
