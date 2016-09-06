@@ -2261,6 +2261,9 @@ sapGotoChannelSel
             /* Set BSSType to default type */
             scanRequest.BSSType = eCSR_BSS_TYPE_ANY;
 
+            if (ACS_FW_REPORT_PARAM_CONFIGURED)
+                scanRequest.BSSType = eCSR_BSS_TYPE_INFRA_AP;
+
 #ifndef SOFTAP_CHANNEL_RANGE
             /*Scan all the channels */
             scanRequest.ChannelInfo.numOfChannels = 0;
