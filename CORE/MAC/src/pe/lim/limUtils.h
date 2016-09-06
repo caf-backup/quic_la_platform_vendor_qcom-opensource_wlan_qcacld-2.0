@@ -610,6 +610,9 @@ void lim_update_extcap_struct(tpAniSirGlobal mac_ctx, uint8_t *buf,
 			       tDot11fIEExtCap *ext_cap);
 tSirRetStatus lim_strip_extcap_update_struct(tpAniSirGlobal mac_ctx,
 		uint8_t* addn_ie, uint16_t *addn_ielen, tDot11fIEExtCap *dst);
-void lim_merge_extcap_struct(tDot11fIEExtCap *dst, tDot11fIEExtCap *src);
 
+void lim_merge_extcap_struct(tDot11fIEExtCap *dst, tDot11fIEExtCap *src,
+			bool add);
+
+tANI_U8 lim_compute_ext_cap_ie_length(tDot11fIEExtCap *ext_cap);
 #endif /* __LIM_UTILS_H */
