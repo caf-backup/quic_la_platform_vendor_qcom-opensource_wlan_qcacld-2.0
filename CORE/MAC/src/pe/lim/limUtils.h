@@ -599,4 +599,18 @@ void lim_set_vht_caps(tpAniSirGlobal p_mac,
 			tANI_U8 *p_ie_start,
 			tANI_U32 num_bytes);
 #endif /* WLAN_FEATURE_11AC */
+
+eHalStatus lim_send_ext_cap_ie(tpAniSirGlobal mac_ctx,
+			       uint32_t session_id,
+			       tDot11fIEExtCap *extracted_extcap, bool merge);
+
+tSirRetStatus lim_strip_extcap_ie(tpAniSirGlobal mac_ctx, uint8_t *addn_ie,
+			uint16_t *addn_ielen, uint8_t *extracted_extcap);
+void lim_update_extcap_struct(tpAniSirGlobal mac_ctx, uint8_t *buf,
+			       tDot11fIEExtCap *ext_cap);
+tSirRetStatus lim_strip_extcap_update_struct(tpAniSirGlobal mac_ctx,
+		uint8_t* addn_ie, uint16_t *addn_ielen, tDot11fIEExtCap *dst);
+void lim_merge_extcap_struct(tDot11fIEExtCap *dst, tDot11fIEExtCap *src,
+			bool add);
+tANI_U8 lim_compute_ext_cap_ie_length (tDot11fIEExtCap *ext_cap);
 #endif /* __LIM_UTILS_H */

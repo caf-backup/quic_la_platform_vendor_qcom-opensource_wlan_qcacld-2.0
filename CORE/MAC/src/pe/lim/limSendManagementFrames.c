@@ -70,149 +70,6 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-
-tSirRetStatus limStripOffExtCapIE(tpAniSirGlobal pMac,
-                                  tANI_U8 *addIE,
-                                  tANI_U16 *addnIELen,
-                                  tANI_U8 *pExtractedExtCapIEBuf )
-{
-    tANI_U8* tempbuf = NULL;
-    tANI_U16 tempLen = 0;
-    int left = *addnIELen;
-    tANI_U8 *ptr = addIE;
-    tANI_U8 elem_id, elem_len;
-
-    if (NULL == addIE)
-    {
-        PELOGE(limLog(pMac, LOG1, FL("NULL addIE pointer"));)
-        return eSIR_IGNORE_IE ;
-    }
-
-    tempbuf = vos_mem_malloc(left);
-    if ( NULL == tempbuf )
-    {
-        PELOGE(limLog(pMac, LOGE,
-             FL("Unable to allocate memory to store addn IE"));)
-        return eSIR_MEM_ALLOC_FAILED;
-    }
-
-    while(left >= 2)
-    {
-        elem_id  = ptr[0];
-        elem_len = ptr[1];
-        left -= 2;
-        if (elem_len > left)
-        {
-            limLog( pMac, LOGE,
-               FL("Invalid IEs eid = %d elem_len=%d left=%d"),
-                                               elem_id,elem_len,left);
-            vos_mem_free(tempbuf);
-            return eSIR_FAILURE;
-        }
-        if ( !(DOT11F_EID_EXTCAP == elem_id) )
-        {
-            vos_mem_copy (tempbuf + tempLen, &ptr[0], elem_len + 2);
-            tempLen += (elem_len + 2);
-        }
-        else
-        { /*Est Cap present size is 8 + 2 byte at present*/
-            if ( NULL != pExtractedExtCapIEBuf )
-            {
-                vos_mem_set(pExtractedExtCapIEBuf,
-                    DOT11F_IE_EXTCAP_MAX_LEN + 2, 0);
-                if (elem_len <= DOT11F_IE_EXTCAP_MAX_LEN )
-                {
-                    vos_mem_copy (pExtractedExtCapIEBuf, &ptr[0],
-                        elem_len + 2);
-                }
-            }
-        }
-        left -= elem_len;
-        ptr += (elem_len + 2);
-    }
-    vos_mem_copy (addIE, tempbuf, tempLen);
-    *addnIELen = tempLen;
-    vos_mem_free(tempbuf);
-    return eSIR_SUCCESS;
-}
-
-void limUpdateExtCapIEtoStruct(tpAniSirGlobal pMac,
-                            tANI_U8 *pBuf,
-                            tDot11fIEExtCap *pDst)
-{
-    tANI_U8 pOut[DOT11F_IE_EXTCAP_MAX_LEN];
-
-    if ( NULL == pBuf )
-    {
-        limLog( pMac, LOGE,
-               FL("Invalid Buffer Address"));
-        return;
-    }
-    if(NULL == pDst)
-    {
-        PELOGE(limLog(pMac, LOGE,
-             FL("NULL pDst pointer"));)
-        return ;
-    }
-
-    if ( DOT11F_EID_EXTCAP != pBuf[0] ||
-         pBuf[1] > DOT11F_IE_EXTCAP_MAX_LEN )
-    {
-        limLog( pMac, LOG1,
-               FL("Invalid IEs eid = %d elem_len=%d "),
-                                               pBuf[0],pBuf[1]);
-        return;
-    }
-    vos_mem_set(( tANI_U8* )&pOut[0], DOT11F_IE_EXTCAP_MAX_LEN, 0);
-    vos_mem_copy(&pOut[0], &pBuf[2], DOT11F_IE_EXTCAP_MAX_LEN);
-
-    if ( DOT11F_PARSE_SUCCESS != dot11fUnpackIeExtCap( pMac,
-                &pOut[0], DOT11F_IE_EXTCAP_MAX_LEN, pDst) )
-    {
-        limLog( pMac, LOGE,
-               FL("dot11fUnpackIeExtCap Parse Error "));
-    }
-}
-
-tSirRetStatus limStripOffExtCapIEAndUpdateStruct(tpAniSirGlobal pMac,
-                                  tANI_U8* addIE,
-                                  tANI_U16 *addnIELen,
-                                  tDot11fIEExtCap * pDst )
-{
-    tANI_U8 pExtractedExtCapIEBuf[DOT11F_IE_EXTCAP_MAX_LEN + 2];
-    tSirRetStatus       nSirStatus;
-
-    vos_mem_set(( tANI_U8* )&pExtractedExtCapIEBuf[0],
-        DOT11F_IE_EXTCAP_MAX_LEN + 2, 0);
-    nSirStatus = limStripOffExtCapIE(pMac, addIE, addnIELen,
-                                         pExtractedExtCapIEBuf);
-    if ( eSIR_SUCCESS != nSirStatus )
-    {
-        limLog( pMac, LOG1, FL("Failed to strip off in"
-                        "limStripOffExtCapIE status = (%d)."),
-                        nSirStatus );
-        return nSirStatus;
-    }
-    /* update the extracted ExtCap to struct*/
-    limUpdateExtCapIEtoStruct(pMac, pExtractedExtCapIEBuf, pDst);
-    return nSirStatus;
-}
-
-void limMergeExtCapIEStruct(tDot11fIEExtCap *pDst,
-                            tDot11fIEExtCap *pSrc)
-{
-    tANI_U8 *tempDst = (tANI_U8 *)pDst->bytes;
-    tANI_U8 *tempSrc = (tANI_U8 *)pSrc->bytes;
-    tANI_U8 structlen = member_size(tDot11fIEExtCap, bytes);
-
-    while(tempDst && tempSrc && structlen--)
-    {
-        *tempDst |= *tempSrc;
-        tempDst++;
-        tempSrc++;
-    }
-}
-
 /**
  *
  * \brief This function is called to add the sequence number to the
@@ -920,7 +777,7 @@ limSendProbeRspMgmtFrame(tpAniSirGlobal pMac,
 
        vos_mem_set(( tANI_U8* )&extractedExtCap,
             sizeof( tDot11fIEExtCap ), 0);
-       nSirStatus = limStripOffExtCapIEAndUpdateStruct(pMac,
+       nSirStatus = lim_strip_extcap_update_struct(pMac,
                                   addIE,
                                   &totalAddnIeLen,
                                   &extractedExtCap );
@@ -993,7 +850,7 @@ limSendProbeRspMgmtFrame(tpAniSirGlobal pMac,
     /*merge ExtCap IE*/
     if (extractedExtCapFlag)
     {
-        limMergeExtCapIEStruct(&pFrm->ExtCap, &extractedExtCap);
+        lim_merge_extcap_struct(&pFrm->ExtCap, &extractedExtCap, true);
     }
     // That done, pack the Probe Response:
     nStatus = dot11fPackProbeResponse( pMac, pFrm, pFrame + sizeof(tSirMacMgmtHdr),
@@ -1535,7 +1392,7 @@ limSendAssocRspMgmtFrame(tpAniSirGlobal pMac,
                         sizeof( tDot11fIEExtCap ), 0);
 
                     addStripoffIELen = addnIELen;
-                    nSirStatus = limStripOffExtCapIEAndUpdateStruct(pMac,
+                    nSirStatus = lim_strip_extcap_update_struct(pMac,
                                       &addIE[0],
                                       &addStripoffIELen,
                                       &extractedExtCap );
@@ -1596,7 +1453,7 @@ limSendAssocRspMgmtFrame(tpAniSirGlobal pMac,
     /* merge the ExtCap struct*/
     if (extractedExtCapFlag)
     {
-        limMergeExtCapIEStruct(&(frm.ExtCap), &extractedExtCap);
+        lim_merge_extcap_struct(&(frm.ExtCap), &extractedExtCap, true);
     }
     nStatus = dot11fPackAssocResponse( pMac, &frm,
                                        pFrame + sizeof( tSirMacMgmtHdr ),
@@ -2141,6 +1998,11 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
     tDot11fIEExtCap     extractedExtCap;
     tANI_BOOLEAN        extractedExtCapFlag = eANI_BOOLEAN_TRUE;
     tpSirMacMgmtHdr     pMacHdr;
+    tDot11fIEExtCap     ap_extcap;
+    tANI_U8            *ap_extcap_ptr = NULL;
+    tANI_U8            *pIe = NULL;
+    tANI_U32            ieLen = 0;
+    tANI_U32            fixed_param_len = 0;
 
     if(NULL == psessionEntry)
     {
@@ -2171,7 +2033,7 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
 
     if (nAddIELen && psessionEntry->is_ext_caps_present) {
         vos_mem_set(( tANI_U8* )&extractedExtCap, sizeof( tDot11fIEExtCap ), 0);
-        nSirStatus = limStripOffExtCapIEAndUpdateStruct(pMac, pAddIE,
+        nSirStatus = lim_strip_extcap_update_struct(pMac, pAddIE,
                       &nAddIELen,
                       &extractedExtCap );
         if(eSIR_SUCCESS != nSirStatus )
@@ -2442,7 +2304,28 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
     /* merge the ExtCap struct*/
     if (extractedExtCapFlag)
     {
-        limMergeExtCapIEStruct(&pFrm->ExtCap, &extractedExtCap);
+        lim_merge_extcap_struct(&pFrm->ExtCap, &extractedExtCap, true);
+    }
+
+    /* Clear the bits in EXTCAP IE if AP not advertise it in beacon */
+    if (pFrm->ExtCap.present && psessionEntry->is_ext_caps_present)
+    {
+        fixed_param_len = DOT11F_FF_TIMESTAMP_LEN +
+                          DOT11F_FF_BEACONINTERVAL_LEN +
+                          DOT11F_FF_CAPABILITIES_LEN;
+        vos_mem_zero((tANI_U8*)&ap_extcap, sizeof(tDot11fIEExtCap));
+        if (psessionEntry->beacon && psessionEntry->bcnLen > fixed_param_len)
+        {
+            pIe = psessionEntry->beacon + fixed_param_len;
+            ieLen = psessionEntry->bcnLen - fixed_param_len;
+
+            /* Extract EXTCAP IE from beacon frame */
+            ap_extcap_ptr = lim_get_ie_ptr(pIe, ieLen, DOT11F_EID_EXTCAP);
+            lim_update_extcap_struct(pMac, ap_extcap_ptr, &ap_extcap);
+
+            /* Clear the bits if AP not advertise it in beacon */
+            lim_merge_extcap_struct(&pFrm->ExtCap, &ap_extcap, false);
+        }
     }
 
     // That done, pack the Assoc Request:

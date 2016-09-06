@@ -8179,3 +8179,206 @@ void lim_set_vht_caps(tpAniSirGlobal p_mac, tpPESession p_session_entry,
 }
 #endif /* WLAN_FEATURE_11AC */
 
+/**
+ * lim_strip_extcap_ie() - strip extended capability IE from IE buffer
+ * @mac_ctx: global MAC context
+ * @addn_ie: Additional IE buffer
+ * @addn_ielen: Length of additional IE
+ * @extracted_ie: if not NULL, copy the stripped IE to this buffer
+ *
+ * This utility function is used to strip of the extended capability IE present
+ * in additional IE buffer.
+ *
+ * Return: tSirRetStatus
+ */
+tSirRetStatus lim_strip_extcap_ie(tpAniSirGlobal mac_ctx,
+		uint8_t *addn_ie, uint16_t *addn_ielen, uint8_t *extracted_ie)
+{
+	uint8_t* tempbuf = NULL;
+	uint16_t templen = 0;
+	int left = *addn_ielen;
+	uint8_t *ptr = addn_ie;
+	uint8_t elem_id, elem_len;
+
+	if (NULL == addn_ie) {
+		limLog(mac_ctx, LOG1, FL("NULL addn_ie pointer"));
+		return eSIR_IGNORE_IE ;
+	}
+
+	tempbuf = vos_mem_malloc(left);
+	if (NULL == tempbuf) {
+		limLog(mac_ctx, LOGE, FL("Unable to allocate memory"));
+		return eSIR_MEM_ALLOC_FAILED;
+	}
+
+	while(left >= 2) {
+		elem_id  = ptr[0];
+		elem_len = ptr[1];
+		left -= 2;
+		if (elem_len > left) {
+			limLog( mac_ctx, LOGE,
+				FL("Invalid IEs eid = %d elem_len=%d left=%d"),
+				elem_id, elem_len, left);
+			vos_mem_free(tempbuf);
+			return eSIR_FAILURE;
+		}
+		if (!(DOT11F_EID_EXTCAP == elem_id)) {
+			vos_mem_copy (tempbuf + templen, &ptr[0], elem_len + 2);
+			templen += (elem_len + 2);
+		} else {
+			if (NULL != extracted_ie) {
+				vos_mem_set(extracted_ie,
+					DOT11F_IE_EXTCAP_MAX_LEN + 2, 0);
+				if (elem_len <= DOT11F_IE_EXTCAP_MAX_LEN)
+					vos_mem_copy(extracted_ie, &ptr[0],
+						     elem_len + 2);
+			}
+		}
+		left -= elem_len;
+		ptr += (elem_len + 2);
+	}
+	vos_mem_copy (addn_ie, tempbuf, templen);
+
+	*addn_ielen = templen;
+	vos_mem_free(tempbuf);
+
+	return eSIR_SUCCESS;
+}
+
+/**
+ * lim_update_extcap_struct() - poputlate the dot11f structure
+ * @mac_ctx: global MAC context
+ * @buf: extracted IE buffer
+ * @dst: extended capability IE structure to be updated
+ *
+ * This function is used to update the extended capability structure
+ * with @buf.
+ *
+ * Return: None
+ */
+void lim_update_extcap_struct(tpAniSirGlobal mac_ctx,
+	uint8_t *buf, tDot11fIEExtCap *dst)
+{
+	uint8_t out[DOT11F_IE_EXTCAP_MAX_LEN];
+
+	if (NULL == buf) {
+		limLog( mac_ctx, LOGE, FL("Invalid Buffer Address"));
+		return;
+	}
+
+	if(NULL == dst) {
+		limLog(mac_ctx, LOGE, FL("NULL dst pointer"));
+		return ;
+	}
+
+	if (DOT11F_EID_EXTCAP != buf[0] || buf[1] > DOT11F_IE_EXTCAP_MAX_LEN) {
+		limLog(mac_ctx, LOG1, FL("Invalid IEs eid = %d elem_len=%d "),
+				buf[0],buf[1]);
+		return;
+	}
+
+	vos_mem_set((uint8_t *)&out[0], DOT11F_IE_EXTCAP_MAX_LEN, 0);
+	vos_mem_copy(&out[0], &buf[2], buf[1]);
+
+	if (DOT11F_PARSE_SUCCESS != dot11fUnpackIeExtCap(mac_ctx, &out[0],
+                                        buf[1], dst))
+		limLog(mac_ctx, LOGE, FL("dot11fUnpackIeExtCap Parse Error "));
+}
+
+/**
+ * lim_strip_extcap_update_struct - strip extended capability IE and populate
+ *                                  the dot11f structure
+ * @mac_ctx: global MAC context
+ * @addn_ie: Additional IE buffer
+ * @addn_ielen: Length of additional IE
+ * @dst: extended capability IE structure to be updated
+ *
+ * This function is used to strip extended capability IE from IE buffer and
+ * update the passed structure.
+ *
+ * Return: tSirRetStatus
+ */
+tSirRetStatus lim_strip_extcap_update_struct(tpAniSirGlobal mac_ctx,
+		uint8_t* addn_ie, uint16_t *addn_ielen, tDot11fIEExtCap *dst)
+{
+	uint8_t extracted_buff[DOT11F_IE_EXTCAP_MAX_LEN + 2];
+	tSirRetStatus status;
+
+	vos_mem_set((uint8_t* )&extracted_buff[0], DOT11F_IE_EXTCAP_MAX_LEN + 2,
+		     0);
+	status = lim_strip_extcap_ie(mac_ctx, addn_ie, addn_ielen,
+				     extracted_buff);
+	if (eSIR_SUCCESS != status) {
+		limLog(mac_ctx, LOG1,
+		       FL("Failed to strip extcap IE status = (%d)."), status);
+		return status;
+	}
+
+	/* update the extracted ExtCap to struct*/
+	lim_update_extcap_struct(mac_ctx, extracted_buff, dst);
+	return status;
+}
+
+/**
+ * lim_merge_extcap_struct() - merge extended capabilities info
+ * @dst: destination extended capabilities
+ * @src: source extended capabilities
+ * @add: true if add the capabilites, false if strip the capabilites.
+ *
+ * This function is used to take @src info and add/strip it to/from
+ * @dst extended capabilities info.
+ *
+ * Return: None
+ */
+void lim_merge_extcap_struct(tDot11fIEExtCap *dst,
+			     tDot11fIEExtCap *src,
+			     bool add)
+{
+	uint8_t *tempdst = (uint8_t *)dst->bytes;
+	uint8_t *tempsrc = (uint8_t *)src->bytes;
+	uint8_t structlen = member_size(tDot11fIEExtCap, bytes);
+
+	/* Return if @src not present */
+	if (!src->present)
+		return;
+
+	/* Return if strip the capabilites from @dst which not present */
+	if (!dst->present && !add)
+		return;
+
+	/* Merge the capabilites info in other cases */
+	while (tempdst && tempsrc && structlen--) {
+		if (add)
+			*tempdst |= *tempsrc;
+		else
+			*tempdst &= *tempsrc;
+		tempdst++;
+		tempsrc++;
+	}
+	dst->num_bytes = lim_compute_ext_cap_ie_length(dst);
+        if (dst->num_bytes == 0)
+		dst->present = 0;
+	else
+		dst->present = 1;
+}
+
+/**
+ * lim_compute_ext_cap_ie_length - compute the length of ext cap ie
+ * based on the bits set
+ * @ext_cap: extended IEs structure
+ *
+ * Return: length of the ext cap ie, 0 means should not present
+ */
+tANI_U8 lim_compute_ext_cap_ie_length (tDot11fIEExtCap *ext_cap) {
+	tANI_U8 i = DOT11F_IE_EXTCAP_MAX_LEN;
+
+	while (i) {
+		if (ext_cap->bytes[i-1]) {
+			break;
+		}
+		i --;
+	}
+
+	return i;
+}
+
