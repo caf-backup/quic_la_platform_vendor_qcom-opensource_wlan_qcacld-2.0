@@ -6765,6 +6765,7 @@ typedef struct sDot11fProbeRequest{
     tDot11fIEWFATPC        WFATPC;
     tDot11fIEP2PProbeReq   P2PProbeReq;
     tDot11fIEVHTCaps       VHTCaps;
+    tDot11fIEExtCap        ExtCap;
 } tDot11fProbeRequest;
 
 #define DOT11F_PROBEREQUEST ( 36 )
