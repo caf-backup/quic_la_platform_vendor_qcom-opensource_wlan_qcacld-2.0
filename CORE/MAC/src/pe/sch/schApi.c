@@ -415,7 +415,7 @@ tANI_U32 limSendProbeRspTemplateToHal(tpAniSirGlobal pMac,tpPESession psessionEn
     tANI_U8 *pFrame2Hal = psessionEntry->pSchProbeRspTemplate;
     tpSendProbeRespParams pprobeRespParams=NULL;
     tANI_U32  retCode = eSIR_FAILURE;
-    tANI_U32             nPayload,nBytes,nStatus;
+    tANI_U32             nPayload, nBytes = 0, nStatus;
     tpSirMacMgmtHdr      pMacHdr;
     tANI_U32             addnIEPresent = VOS_FALSE;
     tANI_U32             addnIELen=0;
@@ -425,23 +425,23 @@ tANI_U32 limSendProbeRspTemplateToHal(tpAniSirGlobal pMac,tpPESession psessionEn
     tANI_U32             addnIELenWoP2pIe = 0;
     tANI_U32             retStatus;
 
-    nStatus = dot11fGetPackedProbeResponseSize( pMac, &psessionEntry->probeRespFrame, &nPayload );
-    if ( DOT11F_FAILED( nStatus ) )
+    nStatus = dot11fGetPackedProbeResponseSize(pMac, &psessionEntry->probeRespFrame, &nPayload);
+    if (DOT11F_FAILED(nStatus))
     {
-        schLog( pMac, LOGE, FL("Failed to calculate the packed size f"
-                               "or a Probe Response (0x%08x)."),
-                nStatus );
-        // We'll fall back on the worst case scenario:
-        nPayload = sizeof( tDot11fProbeResponse );
+        schLog(pMac, LOGE,
+             FL("Failed to calculate the packed size for a Probe Response (0x%08x)."),
+             nStatus);
+        /* We'll fall back on the worst case scenario: */
+        nPayload = sizeof(tDot11fProbeResponse);
     }
-    else if ( DOT11F_WARNED( nStatus ) )
+    else if (DOT11F_WARNED(nStatus))
     {
-        schLog( pMac, LOGE, FL("There were warnings while calculating"
-                               "the packed size for a Probe Response "
-                               "(0x%08x)."), nStatus );
+        schLog(pMac, LOGE,
+             FL("There were warnings while calculating the packed size for a Probe Response (0x%08x)."),
+             nStatus);
     }
 
-    nBytes = nPayload + sizeof( tSirMacMgmtHdr );
+    nBytes += nPayload + sizeof(tSirMacMgmtHdr);
 
     //Check if probe response IE is present or not
     addnIEPresent = (psessionEntry->addIeParams.probeRespDataLen != 0);
