@@ -35,7 +35,7 @@ ifeq ($(KERNEL_BUILD), 0)
 	CONFIG_MOBILE_ROUTER := y
 	endif
 
-	ifeq ($(CONFIG_ARCH_MDMCALIFORNIUM), y)
+	ifeq ($(CONFIG_ARCH_MDM9650), y)
 	CONFIG_MOBILE_ROUTER := y
 	endif
 
@@ -1032,7 +1032,7 @@ CDEFINES +=     -DCONFIG_HL_SUPPORT \
                 -DHIF_MBOX_SLEEP_WAR
 endif
 
-ifeq ($(CONFIG_ARCH_MDMCALIFORNIUM), y)
+ifeq ($(CONFIG_ARCH_MDM9650), y)
 ifeq ($(CONFIG_QCA_WIFI_SDIO), 1)
 ifeq ($(CONFIG_WCNSS_SKB_PRE_ALLOC), y)
 CDEFINES += -DFEATURE_SKB_PRE_ALLOC
@@ -1347,7 +1347,7 @@ endif
 endif
 endif
 
-ifeq ($(CONFIG_ARCH_MDMCALIFORNIUM), y)
+ifeq ($(CONFIG_ARCH_MDM9650), y)
 CDEFINES += -DSYNC_IPA_READY
 endif
 
