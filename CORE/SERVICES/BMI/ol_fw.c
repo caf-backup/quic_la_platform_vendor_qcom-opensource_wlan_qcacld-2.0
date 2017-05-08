@@ -26,6 +26,7 @@
  */
 
 #include <linux/firmware.h>
+#include <linux/pm_qos.h>
 #include "ol_if_athvar.h"
 #include "ol_fw.h"
 #include "targaddrs.h"
@@ -1014,7 +1015,10 @@ int ol_copy_ramdump(struct ol_softc *scn)
 		goto out;
 	}
 
+	vos_request_pm_qos_type(PM_QOS_CPU_DMA_LATENCY,
+				DISABLE_KRAIT_IDLE_PS_VAL);
 	ret = ol_target_coredump(scn, scn->ramdump_base, scn->ramdump_size);
+	vos_remove_pm_qos();
 
 out:
 	return ret;
@@ -2821,6 +2825,10 @@ ol_sdio_extra_initialization(struct ol_softc *scn)
 		}
 
 		param |= SDIO_HI_ACS_FLAGS;
+
+		/* enable TX completion to collect tx_desc for pktlog */
+		if (vos_is_packet_log_enabled())
+			param &= ~HI_ACS_FLAGS_SDIO_REDUCE_TX_COMPL_SET;
 
 		BMIWriteMemory(scn->hif_hdl,
 				host_interest_item_address(scn->target_type,

@@ -166,7 +166,6 @@ extern int hdd_hostapd_stop (struct net_device *dev);
 #define MEMORY_DEBUG_STR ""
 #endif
 
-#define DISABLE_KRAIT_IDLE_PS_VAL   1
 #ifdef IPA_UC_OFFLOAD
 /* If IPA UC data path is enabled, target should reserve extra tx descriptors
  * for IPA WDI data path.
@@ -1154,6 +1153,7 @@ static int __hdd_netdev_notifier_call(struct notifier_block * nb,
         }
         else
         {
+           vos_flush_work(&pAdapter->scan_block_work);
            VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                "%s: Scan is not Pending from user" , __func__);
         }
@@ -10716,13 +10716,13 @@ void hdd_deinit_adapter(hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
       case WLAN_HDD_P2P_CLIENT:
       case WLAN_HDD_P2P_DEVICE:
       {
-         if(test_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags))
+         if (test_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags))
          {
             hdd_deinit_tx_rx( pAdapter );
             clear_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags);
          }
 
-         if(test_bit(WMM_INIT_DONE, &pAdapter->event_flags))
+         if (test_bit(WMM_INIT_DONE, &pAdapter->event_flags))
          {
             hdd_wmm_adapter_close( pAdapter );
             clear_bit(WMM_INIT_DONE, &pAdapter->event_flags);
@@ -10736,6 +10736,11 @@ void hdd_deinit_adapter(hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
       case WLAN_HDD_SOFTAP:
       case WLAN_HDD_P2P_GO:
       {
+         if (test_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags))
+         {
+            hdd_softap_deinit_tx_rx(pAdapter);
+            clear_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags);
+         }
 
          if (test_bit(WMM_INIT_DONE, &pAdapter->event_flags))
          {
@@ -11314,6 +11319,8 @@ hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
          return NULL;
       }
    }
+
+    vos_init_work(&pAdapter->scan_block_work, wlan_hdd_cfg80211_scan_block_cb);
 
     cfgState = WLAN_HDD_GET_CFG_STATE_PTR( pAdapter );
     mutex_init(&cfgState->remain_on_chan_ctx_lock);
@@ -12324,6 +12331,14 @@ VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
             }
 
 #ifdef QCA_LL_TX_FLOW_CT
+            if (pAdapter->tx_flow_timer_initialized == VOS_FALSE) {
+                vos_timer_init(&pAdapter->tx_flow_control_timer,
+                               VOS_TIMER_TYPE_SW,
+                               hdd_tx_resume_timer_expired_handler,
+                               pAdapter);
+                pAdapter->tx_flow_timer_initialized = VOS_TRUE;
+            }
+
             WLANTL_RegisterTXFlowControl(pHddCtx->pvosContext, hdd_tx_resume_cb,
                                          pAdapter->sessionId, (void *)pAdapter);
 #endif
@@ -12335,6 +12350,14 @@ VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
                 hdd_init_ap_mode(pAdapter, true);
 
 #ifdef QCA_LL_TX_FLOW_CT
+                if (pAdapter->tx_flow_timer_initialized == VOS_FALSE) {
+                    vos_timer_init(&pAdapter->tx_flow_control_timer,
+                                   VOS_TIMER_TYPE_SW,
+                                   hdd_softap_tx_resume_timer_expired_handler,
+                                   pAdapter);
+                    pAdapter->tx_flow_timer_initialized = VOS_TRUE;
+                }
+
                 WLANTL_RegisterTXFlowControl(pHddCtx->pvosContext,
                           hdd_softap_tx_resume_cb,
                           pAdapter->sessionId,
