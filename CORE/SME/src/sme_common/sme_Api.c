@@ -1874,6 +1874,9 @@ eHalStatus sme_UpdateConfig(tHalHandle hHal, tpSmeConfigParams pSmeConfigParams)
 
    pMac->snr_monitor_enabled = pSmeConfigParams->snr_monitor_enabled;
 
+   pMac->sta_auth_retries_for_code17 =
+         pSmeConfigParams->csrConfig.sta_auth_retries_for_code17;
+
    return status;
 }
 

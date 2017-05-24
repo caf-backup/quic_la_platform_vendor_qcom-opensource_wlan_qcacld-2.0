@@ -1276,6 +1276,7 @@ typedef struct sAniSirGlobal
     bool snr_monitor_enabled;
     /* channel information callback */
     void (*chan_info_cb)(struct scan_chan_info *chan_info);
+    uint32_t sta_auth_retries_for_code17;
 } tAniSirGlobal;
 
 typedef enum
