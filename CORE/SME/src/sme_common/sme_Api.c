@@ -1668,6 +1668,9 @@ eHalStatus sme_UpdateConfig(tHalHandle hHal, tpSmeConfigParams pSmeConfigParams)
    pMac->f_prefer_non_dfs_on_radar =
                        pSmeConfigParams->f_prefer_non_dfs_on_radar;
 
+   pMac->sta_auth_retries_for_code17 =
+         pSmeConfigParams->csrConfig.sta_auth_retries_for_code17;
+
    return status;
 }
 

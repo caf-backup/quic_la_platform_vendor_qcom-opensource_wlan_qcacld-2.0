@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -494,6 +494,7 @@ typedef struct sPESession           // Added to Support BT-AMP
     /* flag to indicate country code in beacon */
     tANI_U8 countryInfoPresent;
     bool is_ext_caps_present;
+    uint32_t sta_auth_retries_for_code17;
 } tPESession, *tpPESession;
 
 /*-------------------------------------------------------------------------

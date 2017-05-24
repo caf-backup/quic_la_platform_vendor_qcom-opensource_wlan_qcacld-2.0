@@ -682,6 +682,8 @@ void limSendNullDataFrame(tpAniSirGlobal, tpDphHashNode);
 void limSendDisassocMgmtFrame(tpAniSirGlobal, tANI_U16, tSirMacAddr, tpPESession, tANI_BOOLEAN waitForAck);
 void limSendDeauthMgmtFrame(tpAniSirGlobal, tANI_U16, tSirMacAddr, tpPESession, tANI_BOOLEAN waitForAck);
 
+void limDoSendAuthMgmtFrame(tpAniSirGlobal, tpPESession);
+
 void limContinueChannelScan(tpAniSirGlobal);
 tSirResultCodes limMlmAddBss(tpAniSirGlobal, tLimMlmStartReq *,tpPESession psessionEntry);
 

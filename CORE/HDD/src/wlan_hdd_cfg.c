@@ -3552,6 +3552,12 @@ REG_TABLE_ENTRY g_registry_table[] =
 		CFG_IS_SAE_ENABLED_MIN,
 		CFG_IS_SAE_ENABLED_MAX),
 #endif
+   REG_VARIABLE( CFG_STA_AUTH_RETRIES_FOR_CODE17_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, sta_auth_retries_for_code17,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_STA_AUTH_RETRIES_FOR_CODE17_DEFAULT,
+                CFG_STA_AUTH_RETRIES_FOR_CODE17_MIN,
+                CFG_STA_AUTH_RETRIES_FOR_CODE17_MAX ),
 };
 
 #ifdef WLAN_FEATURE_MBSSID
@@ -4190,6 +4196,11 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
            "Name = [gMDNSResponseTypeSRVTarget] Value = [%s]",
                    pHddCtx->cfg_ini->mdns_resp_type_srv_target);
 #endif
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+        "Name = [sta_auth_retries_for_code17] Value = [%u] ",
+         pHddCtx->cfg_ini->sta_auth_retries_for_code17);
+
   hddLog(LOG2, "Name = [gP2PListenDeferInterval] Value = [%u]",
                    pHddCtx->cfg_ini->p2p_listen_defer_interval);
 
@@ -4288,7 +4299,6 @@ static VOS_STATUS hdd_cfg_get_config(REG_TABLE_ENTRY *reg_table,
 #else
       printk(KERN_INFO "%s", configStr);
 #endif // RETURN_IN_BUFFER
-
 }
 
 #ifndef RETURN_IN_BUFFER
@@ -5998,6 +6008,9 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    smeConfig->f_prefer_non_dfs_on_radar =
                        pHddCtx->cfg_ini->prefer_non_dfs_on_radar;
 
+   smeConfig->csrConfig.sta_auth_retries_for_code17 =
+                        pHddCtx->cfg_ini->sta_auth_retries_for_code17;
+
    halStatus = sme_UpdateConfig( pHddCtx->hHal, smeConfig);
    if ( !HAL_STATUS_SUCCESS( halStatus ) )
    {
@@ -6008,7 +6021,6 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    vos_mem_free(smeConfig);
    return status;
 }
-
 
 /**---------------------------------------------------------------------------
 

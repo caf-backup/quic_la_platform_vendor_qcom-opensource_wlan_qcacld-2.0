@@ -760,8 +760,32 @@ void limSetDFSChannelList(tpAniSirGlobal pMac,tANI_U8 channelNum, tSirDFSChannel
     return;
 }
 
+void limDoSendAuthMgmtFrame(tpAniSirGlobal pMac, tpPESession psessionEntry)
+{
+        tSirMacAuthFrameBody    authFrameBody;
 
+        //Prepare & send Authentication frame
+        authFrameBody.authAlgoNumber =
+                        (tANI_U8) pMac->lim.gpLimMlmAuthReq->authType;
+        authFrameBody.authTransactionSeqNumber = SIR_MAC_AUTH_FRAME_1;
+        authFrameBody.authStatusCode = 0;
 
+        limSendAuthMgmtFrame(pMac,
+                        &authFrameBody,
+                        pMac->lim.gpLimMlmAuthReq->peerMacAddr,
+                        LIM_NO_WEP_IN_FC, psessionEntry);
+        if (tx_timer_activate(&pMac->lim.limTimers.gLimAuthFailureTimer)
+                        != TX_SUCCESS) {
+                //Could not start Auth failure timer.
+                //Log error
+                limLog(pMac, LOGP,
+                FL("could not start Auth failure timer"));
+                //Cleanup as if auth timer expired
+                limProcessAuthFailureTimeout(pMac);
+        }
+
+        return;
+}
 
 /*
 * Creates a Raw frame to be sent before every Scan, if required.
@@ -2411,7 +2435,6 @@ limProcessMlmAuthReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
 {
     tANI_U32                numPreAuthContexts;
     tSirMacAddr             currentBssId;
-    tSirMacAuthFrameBody    authFrameBody;
     tLimMlmAuthCnf          mlmAuthCnf;
     struct tLimPreAuthNode  *preAuthNode;
     tpDphHashNode           pStaDs;
@@ -2543,34 +2566,11 @@ limProcessMlmAuthReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
             psessionEntry->limMlmState = eLIM_MLM_WT_AUTH_FRAME2_STATE;
         }
         MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, psessionEntry->peSessionId, psessionEntry->limMlmState));
-
-        /// Prepare & send Authentication frame
-        authFrameBody.authAlgoNumber =
-                                  (tANI_U8) pMac->lim.gpLimMlmAuthReq->authType;
-        authFrameBody.authTransactionSeqNumber = SIR_MAC_AUTH_FRAME_1;
-        authFrameBody.authStatusCode = 0;
-        limSendAuthMgmtFrame(pMac,
-                             &authFrameBody,
-                             pMac->lim.gpLimMlmAuthReq->peerMacAddr,
-                             LIM_NO_WEP_IN_FC,psessionEntry);
-
         //assign appropriate sessionId to the timer object
         pMac->lim.limTimers.gLimAuthFailureTimer.sessionId = sessionId;
 
-        // Activate Auth failure timer
-        MTRACE(macTrace(pMac, TRACE_CODE_TIMER_ACTIVATE, psessionEntry->peSessionId, eLIM_AUTH_FAIL_TIMER));
-        if (tx_timer_activate(&pMac->lim.limTimers.gLimAuthFailureTimer)
-                                       != TX_SUCCESS)
-        {
-            /// Could not start Auth failure timer.
-            // Log error
-            limLog(pMac, LOGP,
-                   FL("could not start Auth failure timer"));
-            /* Clean up as if auth timer expired */
-            limProcessAuthFailureTimeout(pMac);
-        }
-
-        return;
+	limDoSendAuthMgmtFrame(pMac, psessionEntry);
+	return;
     }
     else
     {

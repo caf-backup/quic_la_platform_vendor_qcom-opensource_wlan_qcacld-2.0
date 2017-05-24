@@ -1050,6 +1050,7 @@ typedef struct sAniSirGlobal
     uint32_t f_sta_miracast_mcc_rest_time_val;
     uint8_t f_prefer_non_dfs_on_radar;
     sir_mgmt_frame_ind_callback mgmt_frame_ind_cb;
+    uint32_t sta_auth_retries_for_code17;
 } tAniSirGlobal;
 
 typedef enum

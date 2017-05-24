@@ -1249,6 +1249,7 @@ typedef struct tagCsrConfigParam
 
     /* 802.11p enable */
     bool       enable_dot11p;
+    uint32_t sta_auth_retries_for_code17;
 }tCsrConfigParam;
 
 //Tush
