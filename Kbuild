@@ -48,6 +48,12 @@ ifeq ($(KERNEL_BUILD), 0)
 	CONFIG_MOBILE_ROUTER := y
 	endif
 
+	ifeq ($(CONFIG_ARCH_MSM8917), y)
+		ifeq ($(CONFIG_ROME_IF), sdio)
+			CONFIG_WLAN_SYNC_TSF_PLUS := y
+		endif
+	endif
+
 	# As per target team, build is done as follows:
 	# Defconfig : build with default flags
 	# Slub      : defconfig  + CONFIG_SLUB_DEBUG=y +
@@ -447,6 +453,10 @@ endif
 
 ifeq ($(CONFIG_QCOM_TDLS),y)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_tdls.o
+endif
+
+ifeq ($(CONFIG_WLAN_SYNC_TSF_PLUS), y)
+CONFIG_WLAN_SYNC_TSF := y
 endif
 
 ifeq ($(CONFIG_WLAN_SYNC_TSF),y)
@@ -1553,6 +1563,10 @@ ifeq ($(CONFIG_WLAN_SYNC_TSF),y)
 CDEFINES += -DWLAN_FEATURE_TSF
 endif
 
+ifeq ($(CONFIG_WLAN_SYNC_TSF_PLUS), y)
+CDEFINES += -DWLAN_FEATURE_TSF_PLUS
+endif
+
 # Enable target dump for non-qualcomm platform
 ifeq ($(CONFIG_NON_QC_PLATFORM), y)
 CDEFINES += -DCONFIG_NON_QC_PLATFORM
@@ -1583,6 +1597,11 @@ CDEFINES += -DACS_FW_REPORT_PARAM
 CDEFINES += -DFEATURE_WLAN_SUB_20_MHZ
 CDEFINES += -DMAC_NOTIFICATION_FEATURE
 CDEFINES += -DCHANNEL_HOPPING_ALL_BANDS
+endif
+
+ifeq ($(CONFIG_ARCH_MSM8937), y)
+CDEFINES += -DTX_COMPLETION_THREAD
+CDEFINES += -DMSM8976_TCP_PERF
 endif
 
 ifdef CPTCFG_QCA_CLD_WLAN

@@ -666,7 +666,8 @@ limCheckMgmtRegisteredFrames(tpAniSirGlobal pMac, tANI_U8 *pBd,
         limSendSmeMgmtFrameInd( pMac, pHdr->fc.subType, (tANI_U8*)pHdr,
                      WDA_GET_RX_PAYLOAD_LEN(pBd) + sizeof(tSirMacMgmtHdr),
                      pLimMgmtRegistration->sessionId,
-                     WDA_GET_RX_CH(pBd), psessionEntry, 0);
+                     WDA_GET_RX_CH(pBd), psessionEntry,
+                     WDA_GET_RX_RSSI_NORMALIZED(pBd));
 
         if ( (type == SIR_MAC_MGMT_FRAME) && (fc.type == SIR_MAC_MGMT_FRAME)
               && (subType == SIR_MAC_MGMT_RESERVED15) )
@@ -739,13 +740,15 @@ limHandle80211Frames(tpAniSirGlobal pMac, tpSirMsgQ limMsg, tANI_U8 *pDeferMsg)
             (fc.subType != SIR_MAC_MGMT_BEACON))
     {
          limLog(pMac, LOG1, FL("RX MGMT - Type %hu, SubType %hu, "
-                "BSSID: "MAC_ADDRESS_STR " RSSI %d Seq.no %d"),
+                "BSSID: "MAC_ADDRESS_STR " RSSI %d Seq.no %d"
+		" Source-Addr: "MAC_ADDRESS_STR),
                 fc.type, fc.subType, MAC_ADDR_ARRAY(pHdr->bssId),
                 (uint8_t)abs(
                 (tANI_S8)WDA_GET_RX_RSSI_NORMALIZED(pRxPacketInfo)),
                 ((pHdr->seqControl.seqNumHi << 4) |
-                               (pHdr->seqControl.seqNumLo)));
-     }
+                               (pHdr->seqControl.seqNumLo)),
+                MAC_ADDR_ARRAY(pHdr->sa));
+    }
 
 #ifdef FEATURE_WLAN_EXTSCAN
     if (WMA_IS_EXTSCAN_SCAN_SRC(pRxPacketInfo) ||

@@ -1598,6 +1598,48 @@ typedef enum
 #define CFG_RATE_FOR_TX_MGMT_DEFAULT          (WNI_CFG_RATE_FOR_TX_MGMT_STADEF)
 
 /*
+ * <ini>
+ * gRateForTxMgmt2G - rate for tx mgmt frame on 2G
+ * @Min: 0x0
+ * @Max: 0xFF
+ * @Default: 0xFF
+ *
+ * This ini is used to configure the rate for tx
+ * mgmt frame on 2G Band. Default 0xFF means disable.
+ * It has higher priority and will overwrite gRateForTxMgmt
+ * setting.
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_RATE_FOR_TX_MGMT_2G            "gRateForTxMgmt2G"
+#define CFG_RATE_FOR_TX_MGMT_2G_MIN        (WNI_CFG_RATE_FOR_TX_MGMT_2G_STAMIN)
+#define CFG_RATE_FOR_TX_MGMT_2G_MAX        (WNI_CFG_RATE_FOR_TX_MGMT_2G_STAMAX)
+#define CFG_RATE_FOR_TX_MGMT_2G_DEFAULT    (WNI_CFG_RATE_FOR_TX_MGMT_2G_STADEF)
+
+/*
+ * <ini>
+ * gRateForTxMgmt5G - rate for tx mgmt frame on 5G
+ * @Min: 0x0
+ * @Max: 0xFF
+ * @Default: 0xFF
+ *
+ * This ini is used to configure the rate for tx
+ * mgmt frame on 5G Band. Default 0xFF means disable.
+ * It has higher priority and will overwrite gRateForTxMgmt
+ * setting.
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_RATE_FOR_TX_MGMT_5G            "gRateForTxMgmt5G"
+#define CFG_RATE_FOR_TX_MGMT_5G_MIN        (WNI_CFG_RATE_FOR_TX_MGMT_5G_STAMIN)
+#define CFG_RATE_FOR_TX_MGMT_5G_MAX        (WNI_CFG_RATE_FOR_TX_MGMT_5G_STAMAX)
+#define CFG_RATE_FOR_TX_MGMT_5G_DEFAULT    (WNI_CFG_RATE_FOR_TX_MGMT_5G_STADEF)
+
+/*
  * RSSI Thresholds
  * Used when eHDD_LINK_SPEED_REPORT_SCALED is selected
  */
@@ -4565,6 +4607,16 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_ARP_AC_CATEGORY_MAX            (3)
 #define CFG_ARP_AC_CATEGORY_DEFAULT        (3)
 
+/*
+ * gSapProbeRespOffload: when set in sap, offloads the
+ * probe response transmission to firmware
+ */
+#define CFG_SAP_PROBE_RESP_OFFLOAD_NAME    "gSapProbeRespOffload"
+#define CFG_SAP_PROBE_RESP_OFFLOAD_MIN     (0)
+#define CFG_SAP_PROBE_RESP_OFFLOAD_MAX     (1)
+#define CFG_SAP_PROBE_RESP_OFFLOAD_DEFAULT (1)
+
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -5074,6 +5126,8 @@ struct hdd_config {
    bool                        sap_get_peer_info;
    bool                        disable_abg_rate_txdata;
    uint8_t                     rate_for_tx_mgmt;
+   uint8_t                     rate_for_tx_mgmt_2g;
+   uint8_t                     rate_for_tx_mgmt_5g;
 #ifdef QCA_LL_TX_FLOW_CT
    v_U32_t                     TxFlowLowWaterMark;
    v_U32_t                     TxFlowHighWaterMarkOffset;
@@ -5409,6 +5463,8 @@ struct hdd_config {
    uint8_t                     dfs_beacon_tx_enhanced;
    uint16_t                    reduced_beacon_interval;
    uint32_t                    arp_ac_category;
+   /* parameter to control probe resp offloads */
+   bool                        sap_probe_resp_offload;
 };
 
 typedef struct hdd_config hdd_config_t;

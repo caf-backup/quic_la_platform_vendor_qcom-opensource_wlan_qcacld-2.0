@@ -8497,6 +8497,46 @@ wma_register_extscan_event_handler(tp_wma_handle wma_handle)
 
 }
 
+static int wma_antenna_isolation_event_handler(void *handle,
+                   u_int8_t *param, u_int32_t len)
+{
+    tp_wma_handle wma = (tp_wma_handle)handle;
+    wmi_coex_report_isolation_event_fixed_param *event;
+    WMI_COEX_REPORT_ANTENNA_ISOLATION_EVENTID_param_tlvs *param_buf;
+    struct sir_isolation_resp isolation;
+    tpAniSirGlobal mac = NULL;
+    WMA_LOGE("%s: handle %p param %p len %d", __func__, handle, param, len);
+
+    if(wma != NULL && wma->vos_context != NULL) {
+        mac = (tpAniSirGlobal)vos_get_context(
+                VOS_MODULE_ID_PE, wma->vos_context);
+    }
+    if (!mac) {
+        WMA_LOGE("%s: Invalid mac context", __func__);
+        return -EINVAL;
+    }
+
+    param_buf =
+        (WMI_COEX_REPORT_ANTENNA_ISOLATION_EVENTID_param_tlvs *)param;
+    if (!param_buf) {
+        WMA_LOGE("%s: Invalid isolation event", __func__);
+        return -EINVAL;
+    }
+    event = param_buf->fixed_param;
+    isolation.isolation_chain0 = event->isolation_chain0;
+    isolation.isolation_chain1 = event->isolation_chain1;
+    isolation.isolation_chain2 = event->isolation_chain2;
+    isolation.isolation_chain3 = event->isolation_chain3;
+
+    printk("\n*********************ANTENNA ISOLATION********************\n");
+
+    WMA_LOGD("%s: chain1 %d chain2 %d chain3 %d chain4 %d", __func__,
+            isolation.isolation_chain0, isolation.isolation_chain1,
+            isolation.isolation_chain2, isolation.isolation_chain3);
+    mac->sme.get_isolation(&isolation, mac->sme.get_isolation_cb_context);
+    return 0;
+}
+
 void wma_wow_tx_complete(void *wma)
 {
 	tp_wma_handle wma_handle = (tp_wma_handle)wma;
@@ -8817,7 +8857,20 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 		vos_wake_lock_init(&wma_handle->extscan_wake_lock,
 					"wlan_extscan_wl");
 #endif
-		vos_wake_lock_init(&wma_handle->wow_wake_lock, "wlan_wow_wl");
+		vos_wake_lock_init(&wma_handle->wow_wake_lock,
+			"wlan_wow_wl");
+		vos_wake_lock_init(&wma_handle->wow_auth_req_wl,
+			"wlan_auth_req_wl");
+		vos_wake_lock_init(&wma_handle->wow_assoc_req_wl,
+			"wlan_assoc_req_wl");
+		vos_wake_lock_init(&wma_handle->wow_deauth_rec_wl,
+			"wlan_deauth_rec_wl");
+		vos_wake_lock_init(&wma_handle->wow_disassoc_rec_wl,
+			"wlan_disassoc_rec_wl");
+		vos_wake_lock_init(&wma_handle->wow_ap_assoc_lost_wl,
+			"wlan_ap_assoc_lost_wl");
+		vos_wake_lock_init(&wma_handle->wow_auto_shutdown_wl,
+			"wlan_auto_shutdown_wl");
 	}
 
 	/* attach the wmi */
@@ -9212,6 +9265,10 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 		WMI_PDEV_CHIP_POWER_SAVE_FAILURE_DETECTED_EVENTID,
 		wma_chip_power_save_failure_detected_handler);
 
+     wmi_unified_register_event_handler(wma_handle->wmi_handle,
+                WMI_COEX_REPORT_ANTENNA_ISOLATION_EVENTID,
+                wma_antenna_isolation_event_handler);
+
 	wma_register_debug_callback();
 	wma_ndp_register_all_event_handlers(wma_handle);
 
@@ -9247,6 +9304,12 @@ err_wma_handle:
 		vos_wake_lock_destroy(&wma_handle->extscan_wake_lock);
 #endif
 		vos_wake_lock_destroy(&wma_handle->wow_wake_lock);
+		vos_wake_lock_destroy(&wma_handle->wow_auth_req_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_assoc_req_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_deauth_rec_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_disassoc_rec_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_ap_assoc_lost_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_auto_shutdown_wl);
 	}
 
 	wma_runtime_context_deinit(wma_handle);
@@ -9820,6 +9883,49 @@ static inline void wma_get_link_probe_timeout(struct sAniSirGlobal *mac,
 }
 
 /**
+ * wma_verify_rate_code() - verify if rate code is valid.
+ * @rate_code:     rate code
+ *
+ * Return: verify result
+ */
+static bool wma_verify_rate_code(u_int32_t rate_code)
+{
+	uint8_t preamble, nss, rate;
+	bool valid = true;
+
+	preamble = (rate_code & 0xc0) >> 6;
+	nss = (rate_code & 0x30) >> 4;
+	rate = rate_code & 0xf;
+
+	switch (preamble) {
+	case WMI_RATE_PREAMBLE_CCK:
+		if (nss != 0 || rate > 3)
+			valid = false;
+		break;
+	case WMI_RATE_PREAMBLE_OFDM:
+		if (nss != 0 || rate > 7)
+			valid = false;
+		break;
+	case WMI_RATE_PREAMBLE_HT:
+		if (nss > 1 || rate > 7)
+			valid = false;
+		break;
+	case WMI_RATE_PREAMBLE_VHT:
+		if (nss > 1 || rate > 9)
+			valid = false;
+		break;
+	default:
+		break;
+	}
+	return valid;
+}
+
+#define TX_MGMT_RATE_2G_ENABLE_OFFSET 30
+#define TX_MGMT_RATE_5G_ENABLE_OFFSET 31
+#define TX_MGMT_RATE_2G_OFFSET 0
+#define TX_MGMT_RATE_5G_OFFSET 12
+
+/**
  * wma_set_mgmt_rate() - set vdev mgmt rate.
  * @wma:     wma handle
  * @vdev_id: vdev id
@@ -9830,6 +9936,7 @@ static void wma_set_vdev_mgmt_rate(tp_wma_handle wma, u_int8_t vdev_id)
 {
 	uint32_t cfg_val;
 	int ret;
+	uint32_t per_band_mgmt_tx_rate = 0;
 	struct sAniSirGlobal *mac =
 	    (struct sAniSirGlobal*)vos_get_context(VOS_MODULE_ID_PE,
 						       wma->vos_context);
@@ -9841,9 +9948,9 @@ static void wma_set_vdev_mgmt_rate(tp_wma_handle wma, u_int8_t vdev_id)
 
 	if (wlan_cfgGetInt(mac, WNI_CFG_RATE_FOR_TX_MGMT,
 			   &cfg_val) == eSIR_SUCCESS) {
-		if (cfg_val == WNI_CFG_RATE_FOR_TX_MGMT_STADEF) {
-			WMA_LOGD("WNI_CFG_RATE_FOR_TX_MGMT "
-				"is default, ignore");
+		if ((cfg_val == WNI_CFG_RATE_FOR_TX_MGMT_STADEF) ||
+		    !wma_verify_rate_code(cfg_val)) {
+			WMA_LOGE("invalid rate code, ignore.");
 		} else {
 			ret = wmi_unified_vdev_set_param_send(
 				wma->wmi_handle,
@@ -9858,6 +9965,46 @@ static void wma_set_vdev_mgmt_rate(tp_wma_handle wma, u_int8_t vdev_id)
 		WMA_LOGE("Failed to get value of "
 			"WNI_CFG_RATE_FOR_TX_MGMT");
 	}
+
+	if (wlan_cfgGetInt(mac, WNI_CFG_RATE_FOR_TX_MGMT_2G,
+			   &cfg_val) == eSIR_SUCCESS) {
+		if ((cfg_val == WNI_CFG_RATE_FOR_TX_MGMT_2G_STADEF) ||
+		    !wma_verify_rate_code(cfg_val)) {
+			per_band_mgmt_tx_rate &=
+			    ~(1 << TX_MGMT_RATE_2G_ENABLE_OFFSET);
+		} else {
+			per_band_mgmt_tx_rate |=
+			    (1 << TX_MGMT_RATE_2G_ENABLE_OFFSET);
+			per_band_mgmt_tx_rate |=
+			    ((cfg_val & 0x7FF) << TX_MGMT_RATE_2G_OFFSET);
+		}
+	} else {
+		WMA_LOGE("Failed to get value of WNI_CFG_RATE_FOR_TX_MGMT_2G");
+	}
+
+	if (wlan_cfgGetInt(mac, WNI_CFG_RATE_FOR_TX_MGMT_5G,
+			   &cfg_val) == eSIR_SUCCESS) {
+		if ((cfg_val == WNI_CFG_RATE_FOR_TX_MGMT_5G_STADEF) ||
+		    !wma_verify_rate_code(cfg_val)) {
+			per_band_mgmt_tx_rate &=
+			    ~(1 << TX_MGMT_RATE_5G_ENABLE_OFFSET);
+		} else {
+			per_band_mgmt_tx_rate |=
+			    (1 << TX_MGMT_RATE_5G_ENABLE_OFFSET);
+			per_band_mgmt_tx_rate |=
+			    ((cfg_val & 0x7FF) << TX_MGMT_RATE_5G_OFFSET);
+		}
+	} else {
+		WMA_LOGE("Failed to get value of WNI_CFG_RATE_FOR_TX_MGMT_5G");
+	}
+
+	ret = wmi_unified_vdev_set_param_send(
+		wma->wmi_handle,
+		vdev_id,
+		WMI_VDEV_PARAM_PER_BAND_MGMT_TX_RATE,
+		per_band_mgmt_tx_rate);
+	if (ret)
+		WMA_LOGE("Failed to set WMI_VDEV_PARAM_PER_BAND_MGMT_TX_RATE");
 }
 
 static void wma_set_sap_keepalive(tp_wma_handle wma, u_int8_t vdev_id)
@@ -18881,7 +19028,6 @@ static void wma_add_sta_req_sta_mode(tp_wma_handle wma, tpAddStaParams params)
 	}
 	else {
 		wma->interfaces[params->smesessionId].vdev_up = TRUE;
-		wma_set_vdev_mgmt_rate(wma, params->smesessionId);
 	}
 
 	adf_os_atomic_set(&iface->bss_status, WMA_BSS_STATUS_STARTED);
@@ -20706,7 +20852,6 @@ static void wma_send_beacon(tp_wma_handle wma, tpSendbeaconParams bcn_info)
 			}
 			wma->interfaces[vdev_id].vdev_up = TRUE;
 			wma_set_sap_keepalive(wma, vdev_id);
-			wma_set_vdev_mgmt_rate(wma, vdev_id);
 		}
 	}
 }
@@ -23369,11 +23514,51 @@ static uint32_t wma_wow_get_wakelock_duration(int wake_reason)
 	case WOW_REASON_DISASSOC_RECVD:
 		wake_lock_duration = WMA_DISASSOC_RECV_WAKE_LOCK_DURATION;
 		break;
+	case WOW_REASON_AP_ASSOC_LOST:
+		wake_lock_duration = WMA_BMISS_EVENT_WAKE_LOCK_DURATION;
+		break;
+	case WOW_REASON_HOST_AUTO_SHUTDOWN:
+		wake_lock_duration = WMA_AUTO_SHUTDOWN_WAKE_LOCK_DURATION;
+		break;
 	default:
 		break;
 	}
 
 	return wake_lock_duration;
+}
+
+/**
+ * wma_wow_get_wakelock() - return the wakelock
+ *        for some mgmt packets received.
+ * @wma_handle: wma handle
+ * @wake_reason: wow wakeup reason
+ *
+ * This function returns the wakelock for some mgmt packets
+ * received while in wow suspend.
+ *
+ * Return: wakelock
+ */
+static vos_wake_lock_t *wma_wow_get_wakelock(tp_wma_handle wma_handle,
+		int wake_reason)
+{
+
+	switch (wake_reason) {
+	case WOW_REASON_AUTH_REQ_RECV:
+		return &wma_handle->wow_auth_req_wl;
+	case WOW_REASON_ASSOC_REQ_RECV:
+		return &wma_handle->wow_assoc_req_wl;
+	case WOW_REASON_DEAUTH_RECVD:
+		return &wma_handle->wow_deauth_rec_wl;
+	case WOW_REASON_DISASSOC_RECVD:
+		return &wma_handle->wow_disassoc_rec_wl;
+	case WOW_REASON_AP_ASSOC_LOST:
+		return &wma_handle->wow_ap_assoc_lost_wl;
+	case WOW_REASON_HOST_AUTO_SHUTDOWN:
+		return &wma_handle->wow_auto_shutdown_wl;
+	default:
+		return NULL;
+	}
+
 }
 
 /*
@@ -23426,8 +23611,6 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 	case WOW_REASON_REASSOC_RES_RECV:
 	case WOW_REASON_BEACON_RECV:
 	case WOW_REASON_ACTION_FRAME_RECV:
-		wake_lock_duration =
-			wma_wow_get_wakelock_duration(wake_info->wake_reason);
 		if (param_buf->wow_packet_buffer) {
 			/* First 4-bytes of wow_packet_buffer is the length */
 			vos_mem_copy((uint8_t *) &wow_buf_pkt_len,
@@ -23444,7 +23627,6 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 		break;
 
 	case WOW_REASON_AP_ASSOC_LOST:
-		wake_lock_duration = WMA_BMISS_EVENT_WAKE_LOCK_DURATION;
 		wma_wow_ap_lost_helper(wma, param_buf);
 		break;
 #ifdef FEATURE_WLAN_RA_FILTERING
@@ -23454,7 +23636,6 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 #endif
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
 	case WOW_REASON_HOST_AUTO_SHUTDOWN:
-		wake_lock_duration = WMA_AUTO_SHUTDOWN_WAKE_LOCK_DURATION;
 		WMA_LOGA("Received WOW Auto Shutdown trigger in suspend");
 		if (wma_post_auto_shutdown_msg())
 			return -EINVAL;
@@ -23725,10 +23906,15 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 		break;
 	}
 
+	wake_lock_duration =
+		wma_wow_get_wakelock_duration(wake_info->wake_reason);
 	if (wake_lock_duration) {
-		vos_wake_lock_timeout_acquire(&wma->wow_wake_lock,
-					      wake_lock_duration,
-					      WIFI_POWER_EVENT_WAKELOCK_WOW);
+		vos_wake_lock_t *wake_lock = wma_wow_get_wakelock(wma,
+						wake_info->wake_reason);
+		if (wake_lock)
+			vos_wake_lock_timeout_acquire(wake_lock,
+						wake_lock_duration,
+						WIFI_POWER_EVENT_WAKELOCK_WOW);
 		WMA_LOGA("Holding %d msec wake_lock", wake_lock_duration);
 	}
 
@@ -32832,6 +33018,46 @@ wma_process_action_frame_random_mac(tp_wma_handle wma_handle,
 	return VOS_STATUS_SUCCESS;
 }
 
+static VOS_STATUS wma_get_isolation(tp_wma_handle wma)
+{
+    tp_wma_handle wma_handle = (tp_wma_handle)wma;
+    wmi_coex_get_antenna_isolation_cmd_fixed_param *cmd;
+    wmi_buf_t  wmi_buf;
+    uint32_t  len;
+    uint8_t *buf_ptr;
+
+    WMA_LOGE("%s: get isolation",
+            __func__);
+
+    if (!wma_handle || !wma_handle->wmi_handle) {
+        WMA_LOGE("%s: WMA is closed, can not issue get isolation",
+                __func__);
+        return VOS_STATUS_E_INVAL;
+    }
+
+    len  = sizeof(wmi_coex_get_antenna_isolation_cmd_fixed_param);
+    wmi_buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+    if (!wmi_buf) {
+        WMA_LOGE("%s: wmi_buf_alloc failed", __func__);
+        return VOS_STATUS_E_NOMEM;
+    }
+    buf_ptr = (uint8_t *)wmi_buf_data(wmi_buf);
+
+    cmd = (wmi_coex_get_antenna_isolation_cmd_fixed_param *)buf_ptr;
+    WMITLV_SET_HDR(&cmd->tlv_header,
+            WMITLV_TAG_STRUC_wmi_coex_get_antenna_isolation_cmd_fixed_param,
+            WMITLV_GET_STRUCT_TLVLEN(wmi_coex_get_antenna_isolation_cmd_fixed_param));
+
+    if (wmi_unified_cmd_send(wma_handle->wmi_handle, wmi_buf, len,
+                WMI_COEX_GET_ANTENNA_ISOLATION_CMDID)) {
+        WMA_LOGE("Failed to get isolation request from fw");
+        wmi_buf_free(wmi_buf);
+        return VOS_STATUS_E_FAILURE;
+    }
+
+    return VOS_STATUS_SUCCESS;
+}
+
 /*
  * function   : wma_mc_process_msg
  * Description :
@@ -33762,6 +33988,9 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
 			     (struct action_frame_random_filter *)msg->bodyptr);
 			vos_mem_free(msg->bodyptr);
 			break;
+        case WDA_GET_ISOLATION:
+            wma_get_isolation(wma_handle);
+            break;
 		default:
 			WMA_LOGD("unknow msg type %x", msg->type);
 			/* Do Nothing? MSG Body should be freed at here */
@@ -35771,7 +36000,14 @@ VOS_STATUS wma_close(v_VOID_t *vos_ctx)
 		vos_wake_lock_destroy(&wma_handle->extscan_wake_lock);
 #endif
 		vos_wake_lock_destroy(&wma_handle->wow_wake_lock);
+		vos_wake_lock_destroy(&wma_handle->wow_auth_req_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_assoc_req_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_deauth_rec_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_disassoc_rec_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_ap_assoc_lost_wl);
+		vos_wake_lock_destroy(&wma_handle->wow_auto_shutdown_wl);
 	}
+
 	vos_mem_zero(&wma_handle->wow, sizeof(struct wma_wow));
 	wma_runtime_context_deinit(wma_handle);
 

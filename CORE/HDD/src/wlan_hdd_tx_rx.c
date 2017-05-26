@@ -43,6 +43,8 @@
 #include <wlan_hdd_tx_rx.h>
 #include <wlan_hdd_softap_tx_rx.h>
 #include <wlan_hdd_dp_utils.h>
+#include <wlan_hdd_tsf.h>
+
 #include <wlan_qct_tl.h>
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
@@ -425,6 +427,8 @@ static void hdd_get_transmit_sta_id(hdd_adapter_t *adapter,
 		 */
 		if (mcbc_addr)
 			*station_id = IBSS_BROADCAST_STAID;
+	} else if (adapter->device_mode == WLAN_HDD_OCB) {
+		*station_id = sta_ctx->conn_info.staId[0];
 	} else if (adapter->device_mode == WLAN_HDD_NDI) {
 		/*
 		 * This check is necessary to make sure station id is not
@@ -1433,6 +1437,8 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
          else
             wake_lock = true;
       }
+
+      hdd_rx_timestamp(skb, ktime_to_us(skb->tstamp));
 
       /*
        * If this is not a last packet on the chain
