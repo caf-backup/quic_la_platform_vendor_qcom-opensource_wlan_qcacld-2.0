@@ -2866,7 +2866,7 @@ uint32_t vos_get_log_indicator(void)
 	if (vos_context->isLoadUnloadInProgress ||
 		vos_context->isLogpInProgress ||
 		vos_context->isReInitInProgress) {
-		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
 			  FL("In LoadUnload: %u LogP: %u ReInit: %u"),
 			     vos_context->isLoadUnloadInProgress,
 			     vos_context->isLogpInProgress,
@@ -3139,4 +3139,31 @@ VOS_STATUS vos_force_fw_dump(void)
 	ol_target_failure(scn, A_ERROR);
 
 	return VOS_STATUS_SUCCESS;
+}
+
+/**
+ * vos_is_probe_rsp_offload_enabled - API to check if probe response offload
+ *                                    feature is enabled from ini
+ *
+ * return - false: probe response offload is disabled/any-error
+ *          true: probe response offload is enabled
+ */
+bool vos_is_probe_rsp_offload_enabled(void)
+{
+	hdd_context_t *pHddCtx = NULL;
+
+	if (gpVosContext == NULL) {
+		pr_err("global voss context is NULL\n");
+		return false;
+	}
+
+	pHddCtx = (hdd_context_t *)vos_get_context(VOS_MODULE_ID_HDD,
+						   gpVosContext);
+	if (!pHddCtx) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+			  "%s: HDD context is Null", __func__);
+		return false;
+	}
+
+	return pHddCtx->cfg_ini->sap_probe_resp_offload;
 }

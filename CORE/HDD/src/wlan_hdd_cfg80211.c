@@ -822,6 +822,7 @@ wlan_hdd_extscan_config_policy[QCA_WLAN_VENDOR_ATTR_EXTSCAN_SUBCMD_CONFIG_PARAM_
 {
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_SUBCMD_CONFIG_PARAM_REQUEST_ID] = { .type = NLA_U32 },
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_GET_VALID_CHANNELS_CONFIG_PARAM_WIFI_BAND] = { .type = NLA_U32 },
+    [QCA_WLAN_VENDOR_ATTR_EXTSCAN_GET_VALID_CHANNELS_CONFIG_PARAM_MAX_CHANNELS] = { .type = NLA_U32 },
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_CHANNEL_SPEC_CHANNEL] = { .type = NLA_U32 },
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_CHANNEL_SPEC_DWELL_TIME] = { .type = NLA_U32 },
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_CHANNEL_SPEC_PASSIVE] = { .type = NLA_U8 },
@@ -857,6 +858,7 @@ wlan_hdd_extscan_config_policy[QCA_WLAN_VENDOR_ATTR_EXTSCAN_SUBCMD_CONFIG_PARAM_
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_SSID_THRESHOLD_PARAM_RSSI_LOW] = { .type = NLA_S32 },
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_SSID_THRESHOLD_PARAM_RSSI_HIGH] = { .type = NLA_S32 },
     [QCA_WLAN_VENDOR_ATTR_EXTSCAN_CONFIGURATION_FLAGS] = { .type = NLA_U32 },
+    [QCA_WLAN_VENDOR_ATTR_EXTSCAN_BSSID_HOTLIST_PARAMS_LOST_AP_SAMPLE_SIZE] = { .type = NLA_U32 },
 };
 
 static const struct nla_policy
@@ -4524,6 +4526,10 @@ static int hdd_extscan_epno_fill_network_list(
 
 	expected_networks = req_msg->num_networks;
 	index = 0;
+	if (!tb[QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORKS_LIST]) {
+		hddLog(LOGE, FL("attr networks list failed"));
+		return -EINVAL;
+	}
 	nla_for_each_nested(networks,
 			    tb[QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORKS_LIST],
 			    rem1) {
@@ -4820,6 +4826,11 @@ static int hdd_extscan_passpoint_fill_network_list(
 
 	expected_networks = req_msg->num_networks;
 	index = 0;
+
+	if (!tb[QCA_WLAN_VENDOR_ATTR_PNO_PASSPOINT_LIST_PARAM_NETWORK_ARRAY]) {
+		hddLog(LOGE, FL("attr network array failed"));
+		return -EINVAL;
+	}
 	nla_for_each_nested(networks,
 		tb[QCA_WLAN_VENDOR_ATTR_PNO_PASSPOINT_LIST_PARAM_NETWORK_ARRAY],
 		rem1) {
@@ -13858,18 +13869,29 @@ static int wlan_hdd_cfg80211_txpower_scale_decr_db(struct wiphy *wiphy,
 static int hdd_post_get_chain_rssi_rsp(hdd_context_t *hdd_ctx)
 {
 	struct sk_buff *skb = NULL;
-	int data_len = sizeof(hdd_ctx->chain_rssi_context.result);
+	struct chain_rssi_result *result =
+			&hdd_ctx->chain_rssi_context.result;
 
 	skb = cfg80211_vendor_cmd_alloc_reply_skb(hdd_ctx->wiphy,
-		data_len+NLMSG_HDRLEN);
+			(sizeof(result->chain_rssi) + NLA_HDRLEN) +
+			(sizeof(result->ant_id) + NLA_HDRLEN) +
+			NLMSG_HDRLEN);
 
 	if (!skb) {
 		hddLog(LOGE, FL("cfg80211_vendor_event_alloc failed"));
 		return -ENOMEM;
 	}
 
-	if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_CHAIN_RSSI, data_len,
-			&hdd_ctx->chain_rssi_context.result)) {
+	if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_CHAIN_RSSI,
+			sizeof(result->chain_rssi),
+			result->chain_rssi)) {
+		hddLog(LOGE, FL("put fail"));
+		goto nla_put_failure;
+	}
+
+	if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_ANTENNA_INFO,
+			sizeof(result->ant_id),
+			result->ant_id)) {
 		hddLog(LOGE, FL("put fail"));
 		goto nla_put_failure;
 	}
@@ -18790,9 +18812,15 @@ static int __wlan_hdd_change_station(struct wiphy *wiphy,
             StaParams.supported_oper_classes_len  =
                                              params->supported_oper_classes_len;
 
+            if (params->ext_capab_len > sizeof(StaParams.extn_capability)) {
+                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                          "received extn capabilities:%d, resetting it to max supported",
+                          params->ext_capab_len);
+                params->ext_capab_len = sizeof(StaParams.extn_capability);
+            }
             if (0 != params->ext_capab_len)
                 vos_mem_copy(StaParams.extn_capability, params->ext_capab,
-                             sizeof(StaParams.extn_capability));
+                             params->ext_capab_len);
 
             if (NULL != params->ht_capa) {
                 StaParams.htcap_present = 1;
@@ -22136,6 +22164,13 @@ int wlan_hdd_cfg80211_set_ie(hdd_adapter_t *pAdapter,
                 }
                 else if (0 == memcmp(&genie[0], "\x00\x50\xf2", 3))
                 {
+                    if (eLen > (MAX_WPA_RSN_IE_LEN - 2)) {
+                        hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Invalid WPA RSN IE length[%d], exceeds %d bytes",
+                                __func__, eLen, MAX_WPA_RSN_IE_LEN - 2);
+                        VOS_ASSERT(0);
+                        return -EINVAL;
+                    }
+
                     hddLog (VOS_TRACE_LEVEL_INFO, "%s Set WPA IE (len %d)",__func__, eLen + 2);
                     memset( pWextState->WPARSNIE, 0, MAX_WPA_RSN_IE_LEN );
                     memcpy( pWextState->WPARSNIE, genie - 2, (eLen + 2) /*ie_len*/);
@@ -30360,8 +30395,7 @@ void wlan_hdd_cfg80211_chainrssi_callback(void *ctx, void *pmsg)
 		return;
 	}
 
-	memcpy(&context->result, data->chain_rssi,
-		sizeof(data->chain_rssi));
+	memcpy(&context->result, data, sizeof(*data));
 
 	complete(&context->response_event);
 	spin_unlock(&hdd_context_lock);
