@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1580,15 +1580,21 @@ eHalStatus csrNeighborRoamPreauthRspHandler(tpAniSirGlobal pMac,
         tpCsrNeighborRoamBSSInfo    pNeighborBssNode = NULL;
         tListElem                   *pEntry;
         bool is_dis_pending = false;
+        uint32_t                    retries;
+
+        retries = pMac->sta_auth_retries_for_code17 >
+                  CSR_NEIGHBOR_ROAM_MAX_NUM_PREAUTH_RETRIES ?
+                        pMac->sta_auth_retries_for_code17 :
+                        CSR_NEIGHBOR_ROAM_MAX_NUM_PREAUTH_RETRIES;
 
         smsLog(pMac, LOGE, FL("Preauth failed retry number %d, status = 0x%x"),
                pNeighborRoamInfo->FTRoamInfo.numPreAuthRetries, limStatus);
 
         /* Preauth failed. Add the bssId to the preAuth failed list MAC Address.
            Also remove the AP from roam able AP list */
-        if ((pNeighborRoamInfo->FTRoamInfo.numPreAuthRetries >=
-             CSR_NEIGHBOR_ROAM_MAX_NUM_PREAUTH_RETRIES) ||
-            (eSIR_LIM_MAX_STA_REACHED_ERROR == limStatus))
+        if ((pNeighborRoamInfo->FTRoamInfo.numPreAuthRetries >= retries) ||
+            ((eSIR_LIM_MAX_STA_REACHED_ERROR == limStatus) &&
+            (pMac->sta_auth_retries_for_code17 == 0)))
         {
             /* We are going to remove the node as it fails for more than MAX tries. Reset this count to 0 */
             pNeighborRoamInfo->FTRoamInfo.numPreAuthRetries = 0;
@@ -1639,7 +1645,16 @@ eHalStatus csrNeighborRoamPreauthRspHandler(tpAniSirGlobal pMac,
            goto abort_preauth;
         }
 
-
+        if (pMac->roam.pending_roam_disable)
+        {
+            smsLog(pMac, LOG1, FL("process pending roam disable"));
+            pMac->roam.configParam.isFastRoamIniFeatureEnabled = FALSE;
+            pMac->roam.pending_roam_disable = FALSE;
+            csrNeighborRoamUpdateFastRoamingEnabled(pMac, sessionId, FALSE);
+            CSR_NEIGHBOR_ROAM_STATE_TRANSITION(
+                               eCSR_NEIGHBOR_ROAM_STATE_CONNECTED, sessionId);
+            goto DEQ_PREAUTH;
+        }
 
         /* Issue preauth request for the same/next entry */
         if (eHAL_STATUS_SUCCESS == csrNeighborRoamIssuePreauthReq(pMac,
@@ -2032,12 +2047,19 @@ csrNeighborRoamProcessScanResults(tpAniSirGlobal pMac,
         pScanResultListSaved = pScanResultList;
         while (NULL != (pScanResult = csrScanResultGetNext(pMac,
                                                       *pScanResultList))) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0))
             VOS_TRACE (VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
-                FL("Scan result: BSSID "MAC_ADDRESS_STR" (Rssi %ld, Ch:%d)"),
+                FL("Scan result: BSSID "MAC_ADDRESS_STR" (Rssi %d, Ch:%d)"),
                 MAC_ADDR_ARRAY(pScanResult->BssDescriptor.bssId),
                 abs(pScanResult->BssDescriptor.rssi),
                 pScanResult->BssDescriptor.channelId);
-
+#else
+            VOS_TRACE (VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
+                FL("Scan result: BSSID "MAC_ADDRESS_STR" (Rssi %ld, Ch:%d)"),
+                MAC_ADDR_ARRAY(pScanResult->BssDescriptor.bssId),
+                (long int)abs(pScanResult->BssDescriptor.rssi),
+                pScanResult->BssDescriptor.channelId);
+#endif
             if ((VOS_TRUE == vos_mem_compare(pScanResult->BssDescriptor.bssId,
                 pNeighborRoamInfo->currAPbssid, sizeof(tSirMacAddr))) ||
                 ((eSME_ROAM_TRIGGER_SCAN == pNeighborRoamInfo->cfgRoamEn) &&
@@ -2293,14 +2315,25 @@ csrNeighborRoamProcessScanResults(tpAniSirGlobal pMac,
                 && !csrRoamIsRoamOffloadScanEnabled(pMac)
 #endif
             ) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0))
                 VOS_TRACE (VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
                            "%s: [INFOLOG] potential candidate to roam "
-                           "immediately (diff=%ld, expected=%d)",
+                           "immediately (diff=%d, expected=%d)",
                            __func__,
                            abs(abs(CurrAPRssi) -
                                 abs(pScanResult->BssDescriptor.rssi)),
                            immediateRoamRssiDiff);
                 roamNow = eANI_BOOLEAN_TRUE;
+#else
+                VOS_TRACE (VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+                           "%s: [INFOLOG] potential candidate to roam "
+                           "immediately (diff=%ld, expected=%d)",
+                           __func__,
+                           (long int)abs(abs(CurrAPRssi) -
+                                         abs(pScanResult->BssDescriptor.rssi)),
+                           immediateRoamRssiDiff);
+                roamNow = eANI_BOOLEAN_TRUE;
+#endif
             }
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
             /*
@@ -3412,9 +3445,11 @@ void csrNeighborRoamNeighborScanTimerCallback(void *pv)
         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, FL("pMac is Null"));
         return;
     }
-    if (CSR_SESSION_ID_INVALID == sessionId)
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, FL("invalid sessionId"));
+    if ((CSR_SESSION_ID_INVALID == sessionId) ||
+        (CSR_ROAM_SESSION_MAX <= sessionId)) {
+        smsLog(pMac, LOGE,
+               FL("Invalid sessionId/Reached maximum no.of sessions %d"),
+               sessionId);
         return;
     }
 
@@ -3471,9 +3506,11 @@ void csrNeighborRoamEmptyScanRefreshTimerCallback(void *context)
         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, FL("pMac is Null"));
         return;
     }
-    if (CSR_SESSION_ID_INVALID == sessionId)
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, FL("invalid sessionId"));
+    if ((CSR_SESSION_ID_INVALID == sessionId) ||
+        (CSR_ROAM_SESSION_MAX <= sessionId)) {
+        smsLog(pMac, LOGE,
+               FL("Invalid sessionId/Reached maximum no.of sessions %d"),
+               sessionId);
         return;
     }
     pNeighborRoamInfo = &pMac->roam.neighborRoamInfo[sessionId];
@@ -3537,9 +3574,11 @@ void csrNeighborRoamResultsRefreshTimerCallback(void *context)
         VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, FL("pMac is Null"));
         return;
     }
-    if (CSR_SESSION_ID_INVALID == sessionId)
-    {
-        VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_ERROR, FL("invalid sessionId"));
+    if ((CSR_SESSION_ID_INVALID == sessionId) ||
+        (CSR_ROAM_SESSION_MAX <= sessionId)) {
+        smsLog(pMac, LOGE,
+               FL("Invalid sessionId/Reached maximum no.of sessions %d"),
+               sessionId);
         return;
     }
     pNeighborRoamInfo = &pMac->roam.neighborRoamInfo[sessionId];
@@ -4997,6 +5036,9 @@ eHalStatus csrNeighborRoamIndicateDisconnect(tpAniSirGlobal pMac,
                                                   eCSR_NEIGHBOR_ROAM_STATE_INIT,
                                                   sessionId);
                 pNeighborRoamInfo->roamChannelInfo.IAPPNeighborListReceived = eANI_BOOLEAN_FALSE;
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+                pNeighborRoamInfo->uOsRequestedHandoff = 0;
+#endif
             }
             break;
 
@@ -5033,6 +5075,7 @@ eHalStatus csrNeighborRoamIndicateDisconnect(tpAniSirGlobal pMac,
             pNeighborRoamInfo->roamChannelInfo.IAPPNeighborListReceived = eANI_BOOLEAN_FALSE;
             csrNeighborRoamResetCfgListChanScanControlInfo(pMac, sessionId);
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+            pNeighborRoamInfo->uOsRequestedHandoff = 0;
             if (!csrRoamIsRoamOffloadScanEnabled(pMac))
             {
 #endif
@@ -5070,6 +5113,9 @@ eHalStatus csrNeighborRoamIndicateDisconnect(tpAniSirGlobal pMac,
             CSR_NEIGHBOR_ROAM_STATE_TRANSITION(eCSR_NEIGHBOR_ROAM_STATE_INIT,
                                                sessionId)
             pNeighborRoamInfo->roamChannelInfo.IAPPNeighborListReceived = eANI_BOOLEAN_FALSE;
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+            pNeighborRoamInfo->uOsRequestedHandoff = 0;
+#endif
             break;
     }
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
@@ -5202,6 +5248,9 @@ eHalStatus csrNeighborRoamIndicateConnect(tpAniSirGlobal pMac,
                                                   eCSR_NEIGHBOR_ROAM_STATE_INIT,
                                                   sessionId)
                 pNeighborRoamInfo->roamChannelInfo.IAPPNeighborListReceived = eANI_BOOLEAN_FALSE;
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+                pNeighborRoamInfo->uOsRequestedHandoff = 0;
+#endif
                 break;
             }
             /* Fall through if the status is SUCCESS */
@@ -5279,6 +5328,13 @@ eHalStatus csrNeighborRoamIndicateConnect(tpAniSirGlobal pMac,
                                 pNeighborRoamInfo->isESEAssoc, init_ft_flag);
 
 #endif
+
+            if (pMac->roam.pending_roam_disable)
+            {
+                smsLog(pMac, LOG1, FL("process pending roam disable"));
+                pMac->roam.configParam.isFastRoamIniFeatureEnabled = FALSE;
+                pMac->roam.pending_roam_disable = FALSE;
+            }
 
 #ifdef FEATURE_WLAN_LFR
             // If "Legacy Fast Roaming" is enabled
@@ -5620,6 +5676,9 @@ eHalStatus csrNeighborRoamInit(tpAniSirGlobal pMac, tANI_U8 sessionId)
     pNeighborRoamInfo->roamChannelInfo.IAPPNeighborListReceived = eANI_BOOLEAN_FALSE;
     /* Set the Last Sent Cmd as RSO_STOP */
     pNeighborRoamInfo->lastSentCmd = ROAM_SCAN_OFFLOAD_STOP;
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+    pNeighborRoamInfo->uOsRequestedHandoff = 0;
+#endif
     return eHAL_STATUS_SUCCESS;
 }
 
@@ -5970,6 +6029,9 @@ void csrNeighborRoamTranistionPreauthDoneToDisconnected(tpAniSirGlobal pMac,
     // Transition to init state
     CSR_NEIGHBOR_ROAM_STATE_TRANSITION(eCSR_NEIGHBOR_ROAM_STATE_INIT, sessionId)
     pNeighborRoamInfo->roamChannelInfo.IAPPNeighborListReceived = eANI_BOOLEAN_FALSE;
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+    pNeighborRoamInfo->uOsRequestedHandoff = 0;
+#endif
 }
 
 /* ---------------------------------------------------------------------------

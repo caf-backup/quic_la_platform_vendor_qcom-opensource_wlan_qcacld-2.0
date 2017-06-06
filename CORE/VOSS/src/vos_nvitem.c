@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -52,6 +52,7 @@
 #include <net/cfg80211.h>
 #include "regdomain.h"
 #include "regdomain_common.h"
+#include "vos_cnss.h"
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)) && !defined(WITH_BACKPORTS)
 #define IEEE80211_CHAN_NO_80MHZ		1<<7
@@ -288,7 +289,7 @@ chan_to_ht_40_index_map chan_to_ht_40_index[NUM_20MHZ_RF_CHANNELS] =
 static CountryInfoTable_t countryInfoTable =
 {
     /* the first entry in the table is always the world domain */
-    138,
+    141,
     {
       {REGDOMAIN_WORLD, {'0', '0'}}, // WORLD DOMAIN
       {REGDOMAIN_FCC, {'A', 'D'}}, // ANDORRA
@@ -327,6 +328,7 @@ static CountryInfoTable_t countryInfoTable =
       {REGDOMAIN_ETSI, {'C', 'Z'}}, //CZECH REPUBLIC
       {REGDOMAIN_ETSI, {'D', 'E'}}, //GERMANY
       {REGDOMAIN_ETSI, {'D', 'K'}}, //DENMARK
+      {REGDOMAIN_FCC, {'D', 'M'}}, //DOMINICA
       {REGDOMAIN_FCC, {'D', 'O'}}, //DOMINICAN REPUBLIC
       {REGDOMAIN_ETSI, {'D', 'Z'}}, //ALGERIA
       {REGDOMAIN_ETSI, {'E', 'C'}}, //ECUADOR
@@ -379,6 +381,7 @@ static CountryInfoTable_t countryInfoTable =
       {REGDOMAIN_ETSI, {'M', 'W'}}, //MALAWI
       {REGDOMAIN_FCC, {'M', 'X'}}, //MEXICO
       {REGDOMAIN_ETSI, {'M', 'Y'}}, //MALAYSIA
+      {REGDOMAIN_ETSI, {'N', 'A'}}, //NAMIBIA
       {REGDOMAIN_ETSI, {'N', 'G'}}, //NIGERIA
       {REGDOMAIN_FCC, {'N', 'I'}}, //NICARAGUA
       {REGDOMAIN_ETSI, {'N', 'L'}}, //NETHERLANDS
@@ -696,6 +699,14 @@ static int reg_init_from_eeprom(hdd_context_t *pHddCtx, struct regulatory *reg,
 				struct wiphy *wiphy)
 {
 	int ret_val = 0;
+
+	if((pHddCtx->cfg_ini->overrideCountryCode[0] != '0' )&&
+	   (pHddCtx->cfg_ini->overrideCountryCode[1] != '0')) {
+		reg->alpha2[0] = pHddCtx->cfg_ini->overrideCountryCode[0];
+		reg->alpha2[1] = pHddCtx->cfg_ini->overrideCountryCode[1];
+		reg->reg_domain = COUNTRY_ERD_FLAG;
+		reg->reg_domain |= regdmn_find_ctry_by_name(reg->alpha2);
+	}
 
 	ret_val = regdmn_get_country_alpha2(reg);
 	if (ret_val) {
@@ -1601,6 +1612,11 @@ VOS_STATUS vos_nv_getRegDomainFromCountryCode( v_REGDOMAIN_t *pRegDomain,
         }
 
     } else if (COUNTRY_IE == source || COUNTRY_USER == source) {
+        if (COUNTRY_USER == source)
+            vos_set_cc_source(CNSS_SOURCE_USER);
+        else
+            vos_set_cc_source(CNSS_SOURCE_11D);
+
         INIT_COMPLETION(pHddCtx->reg_init);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0)) || defined(WITH_BACKPORTS)
         regulatory_hint_user(country_code, NL80211_USER_REG_HINT_USER);
@@ -1622,7 +1638,6 @@ VOS_STATUS vos_nv_getRegDomainFromCountryCode( v_REGDOMAIN_t *pRegDomain,
                         country_code[0], country_code[1]);
            *pRegDomain = temp_reg_domain;
         }
-
         else
         {
             VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_WARN,
@@ -2307,6 +2322,7 @@ int __wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
         }
         if (NL80211_REGDOM_SET_BY_CORE == request->initiator) {
             pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_CORE;
+            vos_set_cc_source(CNSS_SOURCE_CORE);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)) || defined(WITH_BACKPORTS)
             if (wiphy->regulatory_flags & REGULATORY_CUSTOM_REG)
 #else
@@ -2316,7 +2332,10 @@ int __wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
         } else if (NL80211_REGDOM_SET_BY_DRIVER == request->initiator) {
             pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_DRIVER;
         } else {
-            pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_USER;
+            if (vos_get_cc_source() == CNSS_SOURCE_11D)
+                pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_11D;
+            else
+                pHddCtx->reg.cc_src = COUNTRY_CODE_SET_BY_USER;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)) && !defined(WITH_BACKPORTS)
             if ((request->alpha2[0] == '0') &&
                 (request->alpha2[1] == '0') &&
@@ -2387,6 +2406,8 @@ int __wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
         vos_nv_set_dfs_region(request->dfs_region);
 
         regdmn_set_dfs_region(&pHddCtx->reg);
+
+        hdd_set_dfs_regdomain(pHddCtx,false);
 
         if ((NL80211_REGDOM_SET_BY_DRIVER == request->initiator) ||
             (NL80211_REGDOM_SET_BY_USER == request->initiator))

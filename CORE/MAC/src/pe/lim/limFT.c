@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -336,16 +336,22 @@ void limPerformFTPreAuth(tpAniSirGlobal pMac, eHalStatus status,
                          tANI_U32 *data, tpPESession psessionEntry)
 {
     tSirMacAuthFrameBody authFrame;
+    tANI_U32 session_id;
+    eCsrAuthType auth_type;
 
     if (NULL == psessionEntry) {
         PELOGE(limLog(pMac, LOGE, FL("psessionEntry is NULL"));)
         return;
     }
 
+    session_id = psessionEntry->smeSessionId;
+    auth_type = pMac->roam.roamSession[session_id].connectedProfile.AuthType;
+
     if (psessionEntry->is11Rconnection &&
         psessionEntry->ftPEContext.pFTPreAuthReq) {
         /* Only 11r assoc has FT IEs */
-        if (psessionEntry->ftPEContext.pFTPreAuthReq->ft_ies_length == 0) {
+        if ((auth_type != eCSR_AUTH_TYPE_OPEN_SYSTEM) &&
+            (psessionEntry->ftPEContext.pFTPreAuthReq->ft_ies_length == 0)) {
             PELOGE(limLog( pMac, LOGE,
                            "%s: FTIEs for Auth Req Seq 1 is absent",
                            __func__);)
@@ -828,7 +834,6 @@ void limFillFTSession(tpAniSirGlobal pMac,
    tPowerdBm         localPowerConstraint;
    tPowerdBm         regMax;
    tSchBeaconStruct  *pBeaconStruct;
-   tANI_U32          selfDot11Mode;
    ePhyChanBondState cbEnabledMode;
 #ifdef WLAN_FEATURE_11W
    VOS_STATUS vosStatus;
@@ -875,9 +880,10 @@ void limFillFTSession(tpAniSirGlobal pMac,
    vos_mem_copy(pftSessionEntry->ssId.ssId, pBeaconStruct->ssId.ssId,
          pftSessionEntry->ssId.length);
 
-   wlan_cfgGetInt(pMac, WNI_CFG_DOT11_MODE, &selfDot11Mode);
-   limLog(pMac, LOG1, FL("selfDot11Mode %d"),selfDot11Mode );
-   pftSessionEntry->dot11mode = selfDot11Mode;
+
+   pftSessionEntry->dot11mode =
+                  psessionEntry->ftPEContext.pFTPreAuthReq->dot11mode;
+   limLog(pMac, LOG1, FL("dot11mode %d"), pftSessionEntry->dot11mode);
    pftSessionEntry->vhtCapability =
          (IS_DOT11_MODE_VHT(pftSessionEntry->dot11mode)
          && IS_BSS_VHT_CAPABLE(pBeaconStruct->VHTCaps));
@@ -1705,29 +1711,6 @@ tANI_BOOLEAN limProcessFTUpdateKey(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf )
                        pKeyInfo->bssId);
 
         pAddBssParams->extSetStaKeyParam.sendRsp = FALSE;
-
-        if(pAddBssParams->extSetStaKeyParam.key[0].keyLength == 16)
-        {
-            PELOG1(limLog(pMac, LOG1,
-            FL("BSS key = %02X-%02X-%02X-%02X-%02X-%02X-%02X- "
-            "%02X-%02X-%02X-%02X-%02X-%02X-%02X-%02X-%02X"),
-            pAddBssParams->extSetStaKeyParam.key[0].key[0],
-            pAddBssParams->extSetStaKeyParam.key[0].key[1],
-            pAddBssParams->extSetStaKeyParam.key[0].key[2],
-            pAddBssParams->extSetStaKeyParam.key[0].key[3],
-            pAddBssParams->extSetStaKeyParam.key[0].key[4],
-            pAddBssParams->extSetStaKeyParam.key[0].key[5],
-            pAddBssParams->extSetStaKeyParam.key[0].key[6],
-            pAddBssParams->extSetStaKeyParam.key[0].key[7],
-            pAddBssParams->extSetStaKeyParam.key[0].key[8],
-            pAddBssParams->extSetStaKeyParam.key[0].key[9],
-            pAddBssParams->extSetStaKeyParam.key[0].key[10],
-            pAddBssParams->extSetStaKeyParam.key[0].key[11],
-            pAddBssParams->extSetStaKeyParam.key[0].key[12],
-            pAddBssParams->extSetStaKeyParam.key[0].key[13],
-            pAddBssParams->extSetStaKeyParam.key[0].key[14],
-            pAddBssParams->extSetStaKeyParam.key[0].key[15]);)
-        }
     }
     return TRUE;
 }
