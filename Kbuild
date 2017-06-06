@@ -1349,6 +1349,7 @@ endif
 
 ifeq ($(CONFIG_ARCH_MDM9650), y)
 CDEFINES += -DSYNC_IPA_READY
+CDEFINES += -DACS_FW_REPORT_PARAM
 endif
 
 #Enable GTK Offload
