@@ -1890,6 +1890,9 @@ eHalStatus sme_UpdateConfig(tHalHandle hHal, tpSmeConfigParams pSmeConfigParams)
    pMac->sub20_dynamic_channelwidth =
        pSmeConfigParams->sub20_dynamic_channelwidth;
 
+   pMac->sta_auth_retries_for_code17 =
+         pSmeConfigParams->csrConfig.sta_auth_retries_for_code17;
+
    return status;
 }
 
@@ -10638,6 +10641,17 @@ eHalStatus sme_UpdateIsFastRoamIniFeatureEnabled
              isFastRoamIniFeatureEnabled);
         return eHAL_STATUS_SUCCESS;
     }
+
+  if (smeNeighborMiddleOfRoaming(hHal, sessionId))
+  {
+      VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_INFO,
+                "%s: In middle of roaming isFastRoamIniFeatureEnabled %d",
+                __func__, isFastRoamIniFeatureEnabled);
+      if (!isFastRoamIniFeatureEnabled)
+          pMac->roam.pending_roam_disable = TRUE;
+
+      return eHAL_STATUS_SUCCESS;
+  }
 
   VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
                      "%s: FastRoamEnabled is changed from %d to %d", __func__,
