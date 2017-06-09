@@ -3224,6 +3224,48 @@ tANI_BOOLEAN csrIsRSNMatch( tHalHandle hHal, tCsrAuthList *pAuthType,
     return( fRSNMatch );
 }
 
+/**
+ * csr_lookup_pmkid_using_ssid() - lookup pmkid using ssid and cache_id
+ * @mac: pointer to mac
+ * @session: sme session pointer
+ * @pmk_cache: pointer to pmk cache
+ * @index: index value needs to be seached
+ *
+ * Return: true if pmkid is found else false
+ */
+static bool csr_lookup_pmkid_using_ssid(tpAniSirGlobal mac,
+                    tCsrRoamSession *session,
+                    tPmkidCacheInfo *pmk_cache,
+                    uint32_t *index)
+{
+    uint32_t i;
+    tPmkidCacheInfo *session_pmk;
+
+    for (i = 0; i < session->NumPmkidCache; i++) {
+        session_pmk = &session->PmkidCacheInfo[i];
+
+        if ((!adf_os_mem_cmp(pmk_cache->ssid, session_pmk->ssid,
+                  pmk_cache->ssid_len)) &&
+            (!adf_os_mem_cmp(session_pmk->cache_id,
+                  pmk_cache->cache_id, CACHE_ID_LEN))) {
+            /* match found */
+            *index = i;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * csr_lookup_pmkid_using_bssid() - lookup pmkid using bssid
+ * @mac: pointer to mac
+ * @session: sme session pointer
+ * @pmk_cache: pointer to pmk cache
+ * @index: index value needs to be seached
+ *
+ * Return: true if pmkid is found else false
+ */
 bool csr_lookup_pmkid_using_bssid(tpAniSirGlobal mac,
                     tCsrRoamSession *session,
                     tPmkidCacheInfo *pmk_cache,
@@ -3245,33 +3287,42 @@ bool csr_lookup_pmkid_using_bssid(tpAniSirGlobal mac,
     return false;
 }
 
-tANI_BOOLEAN csrLookupPMKID( tpAniSirGlobal pMac, tANI_U32 sessionId, tANI_U8 *pBSSId, tANI_U8 *pPMKId )
+tANI_BOOLEAN csrLookupPMKID( tpAniSirGlobal pMac, tANI_U32 sessionId, tPmkidCacheInfo *pmk_cache)
 {
     tANI_BOOLEAN fRC = FALSE, fMatchFound = FALSE;
     tANI_U32 Index;
     tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, sessionId );
-    tPmkidCacheInfo pmkid_cache;
 
     if(!pSession)
     {
         smsLog(pMac, LOGE, FL("  session %d not found "), sessionId);
         return FALSE;
     }
-    vos_mem_zero(&pmkid_cache, sizeof(pmkid_cache));
-    vos_mem_copy(pmkid_cache.BSSID, pBSSId, VOS_MAC_ADDR_SIZE);
-    do
-    {
-	if (!fMatchFound)
-		fMatchFound = csr_lookup_pmkid_using_bssid(pMac,
-						pSession, &pmkid_cache, &Index);
 
-        if( !fMatchFound ) break;
-
-        vos_mem_copy(pPMKId, pSession->PmkidCacheInfo[Index].PMKID, CSR_RSN_PMKID_SIZE);
-
-        fRC = TRUE;
+    if (pmk_cache->ssid_len) {
+        /* Try to find based on cache_id and ssid first */
+        fMatchFound = csr_lookup_pmkid_using_ssid(pMac, pSession,
+                                                  pmk_cache, &Index);
     }
-    while( 0 );
+
+    /* If not able to find using cache id or ssid_len is not present */
+    if (!fMatchFound)
+        fMatchFound = csr_lookup_pmkid_using_bssid(pMac,
+                                        pSession, pmk_cache, &Index);
+
+    if (!fMatchFound) {
+        smsLog(pMac, LOG2, "No PMKID Match Found");
+        return false;
+    }
+
+    vos_mem_copy(pmk_cache->PMKID, pSession->PmkidCacheInfo[Index].PMKID, CSR_RSN_PMKID_SIZE);
+    vos_mem_copy(pmk_cache->pmk,
+                 pSession->PmkidCacheInfo[Index].pmk,
+                 pSession->PmkidCacheInfo[Index].pmk_len);
+    pmk_cache->pmk_len = pSession->PmkidCacheInfo[Index].pmk_len;
+
+    fRC = TRUE;
+
     smsLog(pMac, LOG1, "csrLookupPMKID called return match = %d pMac->roam.NumPmkidCache = %d",
         fRC, pSession->NumPmkidCache);
 
@@ -3291,7 +3342,7 @@ tANI_U8 csrConstructRSNIe( tHalHandle hHal, tANI_U32 sessionId, tCsrRoamProfile 
     tCsrRSNAuthIe *pAuthSuite;
     tCsrRSNCapabilities RSNCapabilities;
     tCsrRSNPMKIe        *pPMK;
-    tANI_U8 PMKId[CSR_RSN_PMKID_SIZE];
+    tPmkidCacheInfo pmkid_cache;
 #ifdef WLAN_FEATURE_11W
     tANI_U8 *pGroupMgmtCipherSuite;
 #endif
@@ -3371,17 +3422,21 @@ tANI_U8 csrConstructRSNIe( tHalHandle hHal, tANI_U32 sessionId, tCsrRoamProfile 
         *(tANI_U16 *)( &pAuthSuite->AuthOui[ 1 ] ) = *((tANI_U16 *)(&RSNCapabilities));
 
         pPMK = (tCsrRSNPMKIe *)( ((tANI_U8 *)(&pAuthSuite->AuthOui[ 1 ])) + sizeof(tANI_U16) );
-
+        vos_mem_copy((v_MACADDR_t *)pmkid_cache.BSSID,
+                        (v_MACADDR_t *)pSirBssDesc->bssId,
+                         VOS_MAC_ADDR_SIZE);
         // Don't include the PMK SA IDs for CCKM associations.
         if (
 #ifdef FEATURE_WLAN_ESE
                 (eCSR_AUTH_TYPE_CCKM_RSN != negAuthType) &&
 #endif
-              csrLookupPMKID( pMac, sessionId, pSirBssDesc->bssId, &(PMKId[0])))
+              csrLookupPMKID( pMac, sessionId, &pmkid_cache))
         {
             pPMK->cPMKIDs = 1;
 
-            vos_mem_copy(pPMK->PMKIDList[0].PMKID, PMKId, CSR_RSN_PMKID_SIZE);
+            vos_mem_copy(pPMK->PMKIDList[0].PMKID, 
+                         pmkid_cache.PMKID,
+                         CSR_RSN_PMKID_SIZE);
         }
         else
         {
