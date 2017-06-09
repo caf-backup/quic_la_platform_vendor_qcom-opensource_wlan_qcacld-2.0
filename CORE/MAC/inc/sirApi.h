@@ -103,6 +103,9 @@ typedef tANI_U8 tSirVersionString[SIR_VERSION_STRING_LEN];
 
 #define WIFI_SCANNING_MAC_OUI_LENGTH 3
 
+/* Cache ID length */
+#define CACHE_ID_LEN 2
+
 /* Maximum peer station number query one time */
 #define MAX_PEER_STA 12
 
