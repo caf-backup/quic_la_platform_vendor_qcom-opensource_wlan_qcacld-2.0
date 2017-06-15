@@ -4364,6 +4364,15 @@ REG_TABLE_ENTRY g_registry_table[] =
                 CFG_SET_TSF_GPIO_PIN_DEFAULT,
                 CFG_SET_TSF_GPIO_PIN_MIN,
                 CFG_SET_TSF_GPIO_PIN_MAX),
+
+#ifdef WLAN_FEATURE_TSF_PLUS
+      REG_VARIABLE(CFG_SET_TSF_PTP_OPT_NAME, WLAN_PARAM_HexInteger,
+                hdd_config_t, tsf_ptp_options,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_SET_TSF_PTP_OPT_DEFAULT,
+                CFG_SET_TSF_PTP_OPT_MIN,
+                CFG_SET_TSF_PTP_OPT_MAX),
+#endif /* WLAN_FEATURE_TSF_PLUS */
 #endif
    REG_VARIABLE(CFG_FINE_TIME_MEAS_CAPABILITY, WLAN_PARAM_HexInteger,
                 hdd_config_t, fine_time_meas_cap,
@@ -6601,6 +6610,15 @@ uint8_t hdd_cfg_get_sub20_channel_config(hdd_context_t *hdd_ctx_ptr)
 	    config_ptr->sub_20_channel_width <= CFG_SUB_20_CHANNEL_WIDTH_MAX)
 		return config_ptr->sub_20_channel_width;
 	return 0;
+}
+#endif
+
+#ifdef WLAN_FEATURE_TSF_PLUS
+bool hdd_cfg_is_ptp_opt_enable(hdd_context_t *hdd_ctx_ptr)
+{
+	hdd_config_t *config_ptr = hdd_ctx_ptr->cfg_ini;
+
+	return (config_ptr->tsf_ptp_options != 0);
 }
 #endif
 

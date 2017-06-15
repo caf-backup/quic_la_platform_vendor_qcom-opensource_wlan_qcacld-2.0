@@ -3810,6 +3810,18 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define TSF_GPIO_PIN_INVALID                       (255)
 #define CFG_SET_TSF_GPIO_PIN_DEFAULT               (TSF_GPIO_PIN_INVALID)
 
+#ifdef WLAN_FEATURE_TSF_PLUS
+/* PTP options */
+#define CFG_SET_TSF_PTP_OPT_NAME                  "gtsf_ptp_options"
+#define CFG_SET_TSF_PTP_OPT_MIN                   (0)
+#define CFG_SET_TSF_PTP_OPT_MAX                   (0xff)
+#define CFG_SET_TSF_PTP_OPT_RX                    (0x1)
+#define CFG_SET_TSF_PTP_OPT_TX                    (0x2)
+#define CFG_SET_TSF_PTP_OPT_RAW                   (0x4)
+#define CFG_SET_TSF_DBG_FS                        (0x8)
+#define CFG_SET_TSF_PTP_OPT_DEFAULT               (0xf)
+#endif
+
 #define CFG_MULTICAST_HOST_FW_MSGS          "gMulticastHostFwMsgs"
 #define CFG_MULTICAST_HOST_FW_MSGS_MIN      (0)
 #define CFG_MULTICAST_HOST_FW_MSGS_MAX      (1)
@@ -5354,6 +5366,10 @@ struct hdd_config {
    uint8_t                     inform_bss_rssi_raw;
 #ifdef WLAN_FEATURE_TSF
    uint32_t                    tsf_gpio_pin;
+
+#ifdef WLAN_FEATURE_TSF_PLUS
+   uint8_t                     tsf_ptp_options;
+#endif /* WLAN_FEATURE_TSF_PLUS */
 #endif
    uint8_t                     multicast_host_fw_msgs;
    uint32_t                    fine_time_meas_cap;
@@ -5669,6 +5685,24 @@ VOS_STATUS hdd_update_nss(hdd_context_t *hdd_ctx, uint8_t nss);
  * Return: None
  */
 void hdd_set_dfs_regdomain(hdd_context_t *phddctx, bool restore);
+
+/**
+ * hdd_cfg_is_ptp_opt_enable - check if PTP Option is enabled
+ *
+ * @hdd_ctx_ptr: context for hdd
+ *
+ * This function returns true if PTP option is enabled, returns
+ * false if PTP option is disabled
+ */
+#ifdef WLAN_FEATURE_TSF_PLUS
+bool hdd_cfg_is_ptp_opt_enable(hdd_context_t *hdd_ctx_ptr);
+#else
+static inline
+bool hdd_cfg_is_ptp_opt_enable(hdd_context_t *hdd_ctx_ptr)
+{
+	return 0;
+}
+#endif
 
 #ifdef FEATURE_WLAN_SUB_20_MHZ
 uint8_t hdd_cfg_get_sub20_dyn_capabilities(hdd_context_t *hdd_ctx_ptr);
