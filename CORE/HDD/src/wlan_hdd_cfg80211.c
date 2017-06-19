@@ -869,19 +869,19 @@ wlan_hdd_extscan_config_policy[QCA_WLAN_VENDOR_ATTR_EXTSCAN_SUBCMD_CONFIG_PARAM_
 
 static const struct nla_policy
 wlan_hdd_pno_config_policy[QCA_WLAN_VENDOR_ATTR_PNO_MAX + 1] = {
-	[QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_NUM_NETWORKS] = {
-		.type = NLA_U32
-	},
-	[QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORK_SSID] = {
-		.type = NLA_BINARY,
-		.len = IEEE80211_MAX_SSID_LEN + 1
-	},
-	[QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORK_FLAGS] = {
-		.type = NLA_U8
-	},
-	[QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORK_AUTH_BIT] = {
-		.type = NLA_U8
-	},
+    [QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_NUM_NETWORKS] = {
+        .type = NLA_U32
+    },
+    [QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORK_SSID] = {
+        .type = NLA_BINARY,
+        .len = IEEE80211_MAX_SSID_LEN + 1
+    },
+    [QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORK_FLAGS] = {
+        .type = NLA_U8
+    },
+    [QCA_WLAN_VENDOR_ATTR_PNO_SET_LIST_PARAM_EPNO_NETWORK_AUTH_BIT] = {
+        .type = NLA_U8
+    },
 };
 
 static const struct nla_policy
@@ -4655,7 +4655,8 @@ static int hdd_extscan_passpoint_fill_network_list(
 
 		if (nla_parse(network,
 			QCA_WLAN_VENDOR_ATTR_PNO_MAX,
-			nla_data(networks), nla_len(networks), NULL)) {
+			nla_data(networks), nla_len(networks),
+			wlan_hdd_pno_config_policy)) {
 			hddLog(LOGE, FL("nla_parse failed"));
 			return -EINVAL;
 		}
@@ -4756,7 +4757,7 @@ static int __wlan_hdd_cfg80211_set_passpoint_list(struct wiphy *wiphy,
 	}
 
 	if (nla_parse(tb, QCA_WLAN_VENDOR_ATTR_PNO_MAX, data, data_len,
-		wlan_hdd_extscan_config_policy)) {
+		wlan_hdd_pno_config_policy)) {
 		hddLog(LOGE, FL("Invalid ATTR"));
 		return -EINVAL;
 	}
