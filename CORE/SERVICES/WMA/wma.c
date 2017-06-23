@@ -6986,6 +6986,126 @@ static int wma_stats_ext_event_handler(void *handle, u_int8_t *event_buf,
 }
 #endif
 
+/**
+ * wma_chan_info_event_handler() - chan info event handler
+ * @handle: wma handle
+ * @event_buf: event handler data
+ * @len: length of @event_buf
+ *
+ * this function will handle the WMI_CHAN_INFO_EVENTID
+ *
+ * Return: int
+ */
+static int
+wma_chan_info_event_handler(void *handle, u_int8_t *event_buf,
+						u_int32_t len)
+{
+	tp_wma_handle wma = (tp_wma_handle)handle;
+	WMI_CHAN_INFO_EVENTID_param_tlvs *param_buf;
+	wmi_chan_info_event_fixed_param *event;
+	struct scan_chan_info buf;
+	tpAniSirGlobal mac = NULL;
+	struct lim_channel_status *channel_status;
+
+	WMA_LOGD("%s: Enter", __func__);
+
+	if (wma != NULL && wma->vos_context != NULL) {
+		mac = (tpAniSirGlobal)vos_get_context(VOS_MODULE_ID_PE,
+							wma->vos_context);
+	}
+	if (!mac) {
+		WMA_LOGE("%s: Invalid mac context", __func__);
+		return -EINVAL;
+	}
+
+	WMA_LOGD("%s: monitor:%d", __func__, mac->snr_monitor_enabled);
+	if (mac->snr_monitor_enabled && mac->chan_info_cb) {
+		param_buf =
+			(WMI_CHAN_INFO_EVENTID_param_tlvs *)event_buf;
+		if (!param_buf) {
+			WMA_LOGA("%s: Invalid chan info event", __func__);
+			return -EINVAL;
+		}
+
+		event = param_buf->fixed_param;
+		if (!event) {
+			WMA_LOGA("%s: Invalid fixed param", __func__);
+			return -EINVAL;
+		}
+		buf.tx_frame_count = event->tx_frame_cnt;
+		buf.clock_freq = event->mac_clk_mhz;
+		buf.cmd_flag = event->cmd_flags;
+		buf.freq = event->freq;
+		buf.noise_floor = event->noise_floor;
+		buf.cycle_count = event->cycle_count;
+		buf.rx_clear_count = event->rx_clear_count;
+		mac->chan_info_cb(&buf);
+	}
+
+	if (ACS_FW_REPORT_PARAM_CONFIGURED &&
+		 mac->sme.currDeviceMode == VOS_STA_SAP_MODE) {
+		param_buf = (WMI_CHAN_INFO_EVENTID_param_tlvs *) event_buf;
+		if (!param_buf)  {
+			WMA_LOGE("Invalid chan info event buffer");
+			return -EINVAL;
+		}
+		event = param_buf->fixed_param;
+		channel_status =
+			vos_mem_malloc(sizeof(*channel_status));
+		if (!channel_status) {
+			WMA_LOGE(FL("Mem alloc fail"));
+			return -ENOMEM;
+		}
+		WMA_LOGI(FL("freq=%d nf=%d rx_cnt=%u cycle_count=%u "
+			    "tx_pwr_range=%d tx_pwr_tput=%d "
+			    "rx_frame_count=%u my_bss_rx_cycle_count=%u "
+			    "rx_11b_mode_data_duration=%d "
+			    "tx_frame_cnt=%d mac_clk_mhz=%d cmd_flags=%d"),
+			 event->freq,
+			 event->noise_floor,
+			 event->rx_clear_count,
+			 event->cycle_count,
+			 event->chan_tx_pwr_range,
+			 event->chan_tx_pwr_tp,
+			 event->rx_frame_count,
+			 event->my_bss_rx_cycle_count,
+			 event->rx_11b_mode_data_duration,
+			 event->tx_frame_cnt,
+			 event->mac_clk_mhz,
+			 event->cmd_flags
+			);
+
+		channel_status->channelfreq = event->freq;
+		channel_status->noise_floor = event->noise_floor;
+		channel_status->rx_clear_count =
+			 event->rx_clear_count;
+		channel_status->cycle_count = event->cycle_count;
+		channel_status->chan_tx_pwr_range =
+			 event->chan_tx_pwr_range;
+		channel_status->chan_tx_pwr_throughput =
+			 event->chan_tx_pwr_tp;
+		channel_status->rx_frame_count =
+			 event->rx_frame_count;
+		channel_status->bss_rx_cycle_count =
+			event->my_bss_rx_cycle_count;
+		channel_status->rx_11b_mode_data_duration =
+			event->rx_11b_mode_data_duration;
+		channel_status->tx_frame_count =
+			event->tx_frame_cnt;
+		channel_status->mac_clk_mhz =
+			event->mac_clk_mhz;
+		channel_status->channel_id =
+			vos_freq_to_chan(event->freq);
+		channel_status->cmd_flags =
+			event->cmd_flags;
+
+		wma_send_msg(handle,
+			WDA_RX_CHN_STATUS_EVENT,
+			 (void *) channel_status, 0);
+	}
+	return 0;
+}
+
 static void
 wma_register_extscan_event_handler(tp_wma_handle wma_handle)
 {
@@ -7658,6 +7778,10 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	wmi_unified_register_event_handler(wma_handle->wmi_handle,
 				WMI_RSSI_BREACH_EVENTID,
 				wma_rssi_breached_event_handler);
+
+	wmi_unified_register_event_handler(wma_handle->wmi_handle,
+				WMI_CHAN_INFO_EVENTID,
+				wma_chan_info_event_handler);
 
 	wma_register_debug_callback();
 	wma_ndp_register_all_event_handlers(wma_handle);
@@ -9167,6 +9291,10 @@ VOS_STATUS wma_get_buf_start_scan_cmd(tp_wma_handle wma_handle,
 	/* add DS param IE in probe req frame */
 	cmd->scan_ctrl_flags |= WMI_SCAN_ADD_DS_IE_IN_PROBE_REQ;
 
+	/* set flag to get chan stats */
+	if (pMac->snr_monitor_enabled)
+		cmd->scan_ctrl_flags |= WMI_SCAN_CHAN_STAT_EVENT;
+
 	/* do not add OFDM rates in 11B mode */
 	if (scan_req->dot11mode != WNI_CFG_DOT11_MODE_11B)
 		cmd->scan_ctrl_flags |= WMI_SCAN_ADD_OFDM_RATES;
@@ -9186,6 +9314,16 @@ VOS_STATUS wma_get_buf_start_scan_cmd(tp_wma_handle wma_handle,
                         cmd->scan_ctrl_flags |= WMI_SCAN_ADD_BCAST_PROBE_REQ;
 		if (scan_req->scanType == eSIR_PASSIVE_SCAN)
 			cmd->scan_ctrl_flags |= WMI_SCAN_FLAG_PASSIVE;
+
+		if (ACS_FW_REPORT_PARAM_CONFIGURED) {
+			/* add chan stat info report tag */
+			if (scan_req->bssType == eSIR_INFRA_AP_MODE) {
+				cmd->scan_ctrl_flags |=
+					WMI_SCAN_CHAN_STAT_EVENT;
+				WMA_LOGI("set ACS ctrl BIT");
+			}
+		}
+
 
 		cmd->scan_ctrl_flags |= WMI_SCAN_ADD_TPC_IE_IN_PROBE_REQ;
 		cmd->scan_ctrl_flags |= WMI_SCAN_FILTER_PROBE_REQ;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -100,6 +100,14 @@ typedef tANI_U8 tSirVersionString[SIR_VERSION_STRING_LEN];
 #define WLAN_EXTSCAN_MAX_SIGNIFICANT_CHANGE_APS   64
 
 #define NUM_CHAINS_MAX  2
+
+#ifdef ACS_FW_REPORT_PARAM
+#define SIR_MAX_SUPPORTED_ACS_CHANNEL_LIST SIR_MAX_SUPPORTED_CHANNEL_LIST
+#define ACS_FW_REPORT_PARAM_CONFIGURED true
+#else
+#define SIR_MAX_SUPPORTED_ACS_CHANNEL_LIST 1
+#define ACS_FW_REPORT_PARAM_CONFIGURED false
+#endif
 
 typedef enum
 {
@@ -2976,6 +2984,38 @@ typedef struct sLimScanChn
     tANI_U8 channelId;
 }tLimScanChn;
 
+/**
+ * struct lim_channel_status
+ * @channelfreq: Channel freq
+ * @noise_floor: Noise Floor value
+ * @rx_clear_count: rx clear count
+ * @cycle_count: cycle count
+ * @chan_tx_pwr_range: channel tx power per range in 0.5dBm steps
+ * @chan_tx_pwr_throughput: channel tx power per throughput
+ * @rx_frame_count: rx frame count (cumulative)
+ * @bss_rx_cycle_count: BSS rx cycle count
+ * @rx_11b_mode_data_duration: b-mode data rx time (units are microseconds)
+ * @tx_frame_count: BSS tx cycle count
+ * @mac_clk_mhz: sample frequency
+ * @channel_id: channel index
+ * @cmd_flags: indicate which stat event is this status coming from
+ */
+struct lim_channel_status {
+	uint32_t    channelfreq;
+	uint32_t    noise_floor;
+	uint32_t    rx_clear_count;
+	uint32_t    cycle_count;
+	uint32_t    chan_tx_pwr_range;
+	uint32_t    chan_tx_pwr_throughput;
+	uint32_t    rx_frame_count;
+	uint32_t    bss_rx_cycle_count;
+	uint32_t    rx_11b_mode_data_duration;
+	uint32_t    tx_frame_count;
+	uint32_t    mac_clk_mhz;
+	uint32_t    channel_id;
+	uint32_t    cmd_flags;
+};
+
 typedef struct sSmeGetScanChnRsp
 {
     // Message Type
@@ -2992,6 +3032,17 @@ typedef struct sLimScanChnInfo
     tANI_U8 numChnInfo;     //number of channels in scanChn
     tLimScanChn scanChn[SIR_MAX_SUPPORTED_CHANNEL_LIST];
 }tLimScanChnInfo;
+
+/**
+ * struct lim_scan_channel_status
+ * @total_channel: total number of be scanned channel
+ * @channel_status_list: channel status info store in this array
+ */
+struct lim_scan_channel_status {
+	uint8_t total_channel;
+	struct lim_channel_status
+	 channel_status_list[SIR_MAX_SUPPORTED_ACS_CHANNEL_LIST];
+};
 
 typedef struct sSirSmeGetAssocSTAsReq
 {
@@ -7505,5 +7556,25 @@ struct sme_long_retry_limit {
 struct sme_sta_inactivity_timeout {
 	uint8_t session_id;
 	uint32_t sta_inactivity_timeout;
+};
+
+/**
+ * struct scan_chan_info - channel info
+ * @freq: radio frequence
+ * @cmd flag: cmd flag
+ * @noise_floor: noise floor
+ * @cycle_count: cycle count
+ * @rx_clear_count: rx clear count
+ * @tx_frame_count: TX frame count
+ * @clock_freq: clock frequence MHZ
+ */
+struct scan_chan_info {
+	uint32_t freq;
+	uint32_t cmd_flag;
+	uint32_t noise_floor;
+	uint32_t cycle_count;
+	uint32_t rx_clear_count;
+	uint32_t tx_frame_count;
+	uint32_t clock_freq;
 };
 #endif /* __SIR_API_H */

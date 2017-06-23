@@ -126,7 +126,8 @@ typedef struct _smeConfigParams
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
     uint8_t       f_prefer_non_dfs_on_radar;
     uint32_t      fine_time_meas_cap;
-    int8_t       first_scan_bucket_threshold;
+    int8_t        first_scan_bucket_threshold;
+    bool          snr_monitor_enabled;
 } tSmeConfigParams, *tpSmeConfigParams;
 
 typedef enum
@@ -4596,4 +4597,8 @@ eHalStatus sme_update_long_retry_limit_threshold(tHalHandle hal_handle,
 		uint8_t session_id, uint8_t long_limit_count_th);
 eHalStatus sme_update_sta_inactivity_timeout(tHalHandle hal_handle,
 		uint8_t session_id, uint32_t sta_inactivity_timeout);
+
+void sme_set_chan_info_callback(tHalHandle hal_handle,
+                           void (*callback)(struct scan_chan_info *chan_info));
+
 #endif //#if !defined( __SME_API_H )

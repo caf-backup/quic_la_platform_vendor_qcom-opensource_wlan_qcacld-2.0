@@ -1486,6 +1486,32 @@ struct acs_dfs_policy {
 	uint8_t acs_channel;
 };
 
+/**
+ * struct hdd_scan_chan_info - channel info
+ * @freq: radio frequence
+ * @cmd flag: cmd flag
+ * @noise_floor: noise floor
+ * @cycle_count: cycle count
+ * @rx_clear_count: rx clear count
+ * @tx_frame_count: TX frame count
+ * @delta_cycle_count: delta of cc
+ * @delta_rx_clear_count: delta of rcc
+ * @delta_tx_frame_count: delta of tfc
+ * @clock_freq: clock frequence MHZ
+ */
+struct hdd_scan_chan_info {
+	uint32_t freq;
+	uint32_t cmd_flag;
+	uint32_t noise_floor;
+	uint32_t cycle_count;
+	uint32_t rx_clear_count;
+	uint32_t tx_frame_count;
+	uint32_t delta_cycle_count;
+	uint32_t delta_rx_clear_count;
+	uint32_t delta_tx_frame_count;
+	uint32_t clock_freq;
+};
+
 /** Adapter stucture definition */
 
 struct hdd_context_s
@@ -1852,6 +1878,8 @@ struct hdd_context_s
     uint8_t max_mc_addr_list;
     struct acs_dfs_policy acs_policy;
     uint8_t max_peers;
+    struct hdd_scan_chan_info *chan_info;
+    struct mutex chan_info_lock;
 };
 
 /*---------------------------------------------------------------------------
@@ -2261,4 +2289,6 @@ void hdd_sap_restart_handle(struct work_struct *work);
 
 void hdd_set_rps_cpu_mask(hdd_context_t *hdd_ctx);
 void hdd_svc_fw_shutdown_ind(struct device *dev);
+void wlan_hdd_init_chan_info(hdd_context_t *hdd_ctx);
+void wlan_hdd_deinit_chan_info(hdd_context_t *hdd_ctx);
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

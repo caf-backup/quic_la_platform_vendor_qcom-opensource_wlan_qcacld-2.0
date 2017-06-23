@@ -527,6 +527,8 @@ typedef struct sAniSirLim
     tANI_U8 abortScan;
     tLimScanChnInfo scanChnInfo;
 
+    struct lim_scan_channel_status scan_channel_status;
+
     //////////////////////////////////////     SCAN/LEARN RELATED START ///////////////////////////////////////////
     tSirMacAddr         gSelfMacAddr;   //added for BT-AMP Support
 
@@ -1268,6 +1270,9 @@ typedef struct sAniSirGlobal
     int8_t first_scan_bucket_threshold;
     sir_mgmt_frame_ind_callback mgmt_frame_ind_cb;
     sir_p2p_ack_ind_callback p2p_ack_ind_cb;
+    bool snr_monitor_enabled;
+    /* channel information callback */
+    void (*chan_info_cb)(struct scan_chan_info *chan_info);
 } tAniSirGlobal;
 
 typedef enum
