@@ -1867,6 +1867,8 @@ static void hdd_fill_station_info(hdd_station_info_t *stainfo,
 				stainfo->max_ext_idx,
 				stainfo->max_mcs_idx,
 				stainfo->rx_mcs_map);
+	/* expect max_phy_rate report in kbps */
+	stainfo->max_phy_rate *= 100;
 	hddLog(VOS_TRACE_LEVEL_INFO,
 			FL("cap %d %d %d %d %d %d %d %d %d %x %d"),
 			stainfo->ampdu,
@@ -7506,6 +7508,8 @@ VOS_STATUS hdd_init_ap_mode(hdd_adapter_t *pAdapter, bool reinit)
        hddLog(VOS_TRACE_LEVEL_FATAL, "%s: hdd_softap_init_tx_rx failed", __func__);
     }
 
+    set_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags);
+
     status = hdd_wmm_adapter_init( pAdapter );
     if (!VOS_IS_STATUS_SUCCESS(status))
     {
@@ -7538,6 +7542,7 @@ VOS_STATUS hdd_init_ap_mode(hdd_adapter_t *pAdapter, bool reinit)
 
 error_wmm_init:
     hdd_softap_deinit_tx_rx( pAdapter );
+    clear_bit(INIT_TX_RX_SUCCESS, &pAdapter->event_flags);
 #ifdef WLAN_FEATURE_MBSSID
     WLANSAP_Close(sapContext);
     pAdapter->sessionCtx.ap.sapContext = NULL;
@@ -7671,8 +7676,6 @@ VOS_STATUS hdd_unregister_hostapd(hdd_adapter_t *pAdapter, bool rtnl_held)
 #endif
 
    ENTER();
-
-   hdd_softap_deinit_tx_rx(pAdapter);
 
    /* if we are being called during driver unload, then the dev has already
       been invalidated.  if we are being called at other times, then we can

@@ -632,6 +632,8 @@ typedef enum device_mode
    WLAN_HDD_NDI
 } device_mode_t;
 
+#define WLAN_HDD_VDEV_STA_MAX 2
+
 typedef enum rem_on_channel_request_type
 {
    REMAIN_ON_CHANNEL_REQUEST,
@@ -990,8 +992,6 @@ struct hdd_rate_info {
  * @rx_bytes: bytes received from this station
  * @rx_retries: cumulative retry counts
  * @tx_failed: number of failed transmissions
- * @last_tx_rate: last used tx bitrate (kbps)
- * @last_rx_rate: last used rx bitrate (kbps)
  * @rssi: The signal strength (dbm)
  * @tx_rate: last used tx rate info
  * @rx_rate: last used rx rate info
@@ -1005,8 +1005,6 @@ struct hdd_fw_txrx_stats {
 	uint64_t rx_bytes;
 	uint32_t tx_retries;
 	uint32_t tx_failed;
-	uint32_t last_tx_rate;
-	uint32_t last_rx_rate;
 	int8_t rssi;
 	struct hdd_rate_info tx_rate;
 	struct hdd_rate_info rx_rate;
@@ -2130,6 +2128,16 @@ VOS_STATUS hdd_add_adapter_back( hdd_context_t *pHddCtx,
 
 VOS_STATUS hdd_add_adapter_front( hdd_context_t *pHddCtx,
                                   hdd_adapter_list_node_t* pAdapterNode);
+
+/**
+ * hdd_get_current_vdev_sta_count() - get currnet vdev sta count
+ * @hdd_ctx: hdd context
+ *
+ * Traverse the adapter list to get the vdev sta count
+ *
+ * Return: vdev sta count
+ */
+uint32_t hdd_get_current_vdev_sta_count(hdd_context_t *hdd_ctx);
 
 hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
                                  const char* name, tSirMacAddr macAddr,
