@@ -4036,9 +4036,9 @@ static int hdd_validate_avoid_freq_chanlist(hdd_context_t *hdd_ctx,
 					range_idx++) {
 		/* validate channel range */
 		if ((channel_list->avoidFreqRange[range_idx].startFreq <
-		     MIN_2_4GHZ_CHANNEL) ||
+		     VOS_24_GHZ_CHANNEL_1) ||
 		    (channel_list->avoidFreqRange[range_idx].endFreq >
-		     MAX_5GHZ_CHANNEL) ||
+		     VOS_5_GHZ_CHANNEL_165) ||
 		    (channel_list->avoidFreqRange[range_idx].startFreq >
 		     channel_list->avoidFreqRange[range_idx].endFreq))
 				continue;
@@ -4124,7 +4124,7 @@ __wlan_hdd_cfg80211_avoid_freq(struct wiphy *wiphy,
 
 #ifdef CONFIG_CNSS
 	if (cnss_set_wlan_unsafe_channel(hdd_ctx->unsafe_channel_list,
-		                                unsafe_channel_count)) {
+		                               hdd_ctx->unsafe_channel_count)) {
 		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
 					"%s: Failed to set unsafe channel",
 					__func__);
