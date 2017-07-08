@@ -67,6 +67,7 @@
 #include "vos_nvitem.h"
 #include "wlan_qct_wda.h"
 #include "wlan_hdd_main.h"
+#include "wlan_hdd_tsf.h"
 #include <linux/vmalloc.h>
 #include "wlan_hdd_cfg80211.h"
 #include "vos_cnss.h"
@@ -252,6 +253,27 @@ static inline void vos_fw_hash_check_config(struct ol_softc *scn,
 #else
 static inline void vos_fw_hash_check_config(struct ol_softc *scn,
 					hdd_context_t *pHddCtx) { }
+#endif
+
+#ifdef WLAN_FEATURE_TSF_PLUS
+/**
+ * vos_set_ptp_enable() - set ptp enable flag in mac open param
+ * @wma_handle: Pointer to mac open param
+ * @hdd_ctx: Pointer to hdd context
+ *
+ * Return: none
+ */
+static void vos_set_ptp_enable(tMacOpenParameters *param,
+					hdd_context_t *hdd_ctx)
+{
+	param->is_ptp_enabled =
+		(hdd_ctx->cfg_ini->tsf_ptp_options != 0);
+}
+#else
+static void vos_set_ptp_enable(tMacOpenParameters *param,
+					hdd_context_t *pHddCtx)
+{
+}
 #endif
 
 #ifdef WLAN_FEATURE_NAN
@@ -645,6 +667,7 @@ VOS_STATUS vos_open( v_CONTEXT_t *pVosContext, v_SIZE_t hddContextSize )
    vos_set_nan_enable(&macOpenParms, pHddCtx);
    vos_set_bundle_params(&macOpenParms, pHddCtx);
    vos_set_ac_specs_params(&macOpenParms, pHddCtx);
+   vos_set_ptp_enable(&macOpenParms, pHddCtx);
 
    vStatus = WDA_open( gpVosContext, gpVosContext->pHDDContext,
                        hdd_update_tgt_cfg,
@@ -2408,6 +2431,36 @@ v_BOOL_t vos_is_packet_log_enabled(void)
    return pHddCtx->cfg_ini->enablePacketLog;
 }
 
+#ifdef WLAN_FEATURE_TSF_PLUS
+bool vos_is_ptp_rx_opt_enabled(void)
+{
+	hdd_context_t *hdd_ctx;
+
+	hdd_ctx = (hdd_context_t *)(gpVosContext->pHDDContext);
+	if ((NULL == hdd_ctx) || (NULL == hdd_ctx->cfg_ini)) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+			  "%s: Hdd Context is Null", __func__);
+		return false;
+	}
+
+	return HDD_TSF_IS_RX_SET(hdd_ctx);
+}
+
+bool vos_is_ptp_tx_opt_enabled(void)
+{
+	hdd_context_t *hdd_ctx;
+
+	hdd_ctx = (hdd_context_t *)(gpVosContext->pHDDContext);
+	if ((NULL == hdd_ctx) || (NULL == hdd_ctx->cfg_ini)) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+			  "%s: Hdd Context is Null", __func__);
+		return false;
+	}
+
+	return HDD_TSF_IS_TX_SET(hdd_ctx);
+}
+#endif
+
 VOS_STATUS vos_config_silent_recovery(pVosContextType vos_context)
 {
 	struct ol_softc *scn;
@@ -3099,6 +3152,11 @@ v_U64_t vos_get_monotonic_boottime_ns(void)
 
 	ktime_get_ts(&ts);
 	return timespec_to_ns(&ts);
+}
+
+v_U64_t vos_get_bootbased_boottime_ns(void)
+{
+       return ktime_get_boot_ns();
 }
 
 /**

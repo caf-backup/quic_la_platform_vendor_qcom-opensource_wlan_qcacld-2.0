@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014, 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014, 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -89,6 +89,10 @@ struct txrx_pdev_cfg_t {
 	u8 rx_fwd_disabled;
 	u8 is_packet_log_enabled;
 	u8 is_full_reorder_offload;
+#ifdef WLAN_FEATURE_TSF_PLUS
+	u8 is_ptp_rx_opt_enabled;
+	a_bool_t is_ptp_enabled;
+#endif
 #ifdef IPA_UC_OFFLOAD
 	struct wlan_ipa_uc_rsc_t ipa_uc_rsc;
 #endif /* IPA_UC_OFFLOAD */
@@ -475,6 +479,38 @@ void ol_set_cfg_packet_log_enabled(ol_pdev_handle pdev, u_int8_t val);
  * @brief Get packet log config from HTT config
  */
 u_int8_t ol_cfg_is_packet_log_enabled(ol_pdev_handle pdev);
+
+#ifdef WLAN_FEATURE_TSF_PLUS
+void ol_set_cfg_ptp_rx_opt_enabled(ol_pdev_handle pdev, u_int8_t val);
+u_int8_t ol_cfg_is_ptp_rx_opt_enabled(ol_pdev_handle pdev);
+a_bool_t ol_cfg_is_ptp_enabled(ol_pdev_handle pdev);
+void ol_cfg_update_ptp_params(struct txrx_pdev_cfg_t *cfg_ctx,
+                             struct txrx_pdev_cfg_param_t cfg_param);
+#else
+static inline void
+ol_set_cfg_ptp_rx_opt_enabled(ol_pdev_handle pdev, u_int8_t val)
+{
+}
+
+static inline u_int8_t
+ol_cfg_is_ptp_rx_opt_enabled(ol_pdev_handle pdev)
+{
+	return 0;
+}
+
+static inline a_bool_t
+ol_cfg_is_ptp_enabled(ol_pdev_handle pdev)
+{
+	return 0;
+}
+
+static inline void
+ol_cfg_update_ptp_params(struct txrx_pdev_cfg_t *cfg_ctx,
+                             struct txrx_pdev_cfg_param_t cfg_param)
+{
+	return;
+}
+#endif
 
 #ifdef IPA_UC_OFFLOAD
 /**

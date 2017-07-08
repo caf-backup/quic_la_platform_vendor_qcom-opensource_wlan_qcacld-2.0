@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014,2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014,2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -111,6 +111,9 @@ ol_pdev_handle ol_pdev_cfg_attach(adf_os_device_t osdev,
 	cfg_ctx->dutycycle_level[3] = THROTTLE_DUTY_CYCLE_LEVEL3;
 	cfg_ctx->rx_fwd_disabled = 0;
 	cfg_ctx->is_packet_log_enabled = 0;
+#ifdef WLAN_FEATURE_TSF_PLUS
+	cfg_ctx->is_ptp_rx_opt_enabled = 0;
+#endif
 	cfg_ctx->is_full_reorder_offload = cfg_param.is_full_reorder_offload;
 #ifdef IPA_UC_OFFLOAD
 	cfg_ctx->ipa_uc_rsc.uc_offload_enabled = cfg_param.is_uc_offload_enabled;
@@ -121,6 +124,7 @@ ol_pdev_handle ol_pdev_cfg_attach(adf_os_device_t osdev,
 #endif /* IPA_UC_OFFLOAD */
 
 	ol_cfg_update_bundle_params(cfg_ctx, cfg_param);
+	ol_cfg_update_ptp_params(cfg_ctx, cfg_param);
 
 	for (i = 0; i < OL_TX_NUM_WMM_AC; i++) {
 		cfg_ctx->ac_specs[i].wrr_skip_weight =
@@ -215,6 +219,46 @@ u_int8_t ol_cfg_is_packet_log_enabled(ol_pdev_handle pdev)
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 	return cfg->is_packet_log_enabled;
 }
+
+#ifdef WLAN_FEATURE_TSF_PLUS
+void ol_set_cfg_ptp_rx_opt_enabled(ol_pdev_handle pdev, u_int8_t val)
+{
+	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
+
+	cfg->is_ptp_rx_opt_enabled = val;
+}
+
+u_int8_t ol_cfg_is_ptp_rx_opt_enabled(ol_pdev_handle pdev)
+{
+	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
+
+	return cfg->is_ptp_rx_opt_enabled;
+}
+/**
+ * ol_cfg_is_ptp_enabled() - check if ptp feature is enabled
+ * @pdev: cfg handle to PDEV
+ *
+ * Return: is_ptp_enabled
+ */
+a_bool_t ol_cfg_is_ptp_enabled(ol_pdev_handle pdev)
+{
+	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
+
+	return cfg->is_ptp_enabled;
+}
+/**
+ * ol_cfg_update_ptp_params() - update ptp params
+ * @cfg_ctx: cfg context
+ * @cfg_param: parameters
+ *
+ * Return: none
+ */
+void ol_cfg_update_ptp_params(struct txrx_pdev_cfg_t *cfg_ctx,
+				struct txrx_pdev_cfg_param_t cfg_param)
+{
+	cfg_ctx->is_ptp_enabled = cfg_param.is_ptp_enabled;
+}
+#endif
 
 int ol_cfg_rx_fwd_disabled(ol_pdev_handle pdev)
 {
