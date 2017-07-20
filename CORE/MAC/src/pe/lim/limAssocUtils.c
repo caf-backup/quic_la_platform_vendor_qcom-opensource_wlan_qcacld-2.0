@@ -3512,6 +3512,8 @@ limCheckAndAnnounceJoinSuccess(tpAniSirGlobal pMac,
                     "VHT caps are present in vendor specific IE"));
     }
 
+    /* Update HS 2.0 Information Element */
+    sir_copy_hs20_ie(&psessionEntry->hs20vendor_ie, &pBPR->hs20vendor_ie);
 }
 
 /**
