@@ -70,6 +70,12 @@ typedef enum
     eCSR_AUTH_TYPE_RSN_PSK_SHA256,
     eCSR_AUTH_TYPE_RSN_8021X_SHA256,
 #endif
+#ifdef WLAN_FEATURE_FILS_SK
+    eCSR_AUTH_TYPE_FILS_SHA256,
+    eCSR_AUTH_TYPE_FILS_SHA384,
+    eCSR_AUTH_TYPE_FT_FILS_SHA256,
+    eCSR_AUTH_TYPE_FT_FILS_SHA384,
+#endif
     eCSR_NUM_OF_SUPPORT_AUTH_TYPE,
     eCSR_AUTH_TYPE_FAILED = 0xff,
     eCSR_AUTH_TYPE_UNKNOWN = eCSR_AUTH_TYPE_FAILED,
@@ -224,6 +230,7 @@ typedef enum
 
 
 #define CSR_RSN_PMKID_SIZE          16
+#define CSR_RSN_MAX_PMK_LEN         48
 #define CSR_MAX_PMKID_ALLOWED       32
 #define CSR_WEP40_KEY_LEN       5
 #define CSR_WEP104_KEY_LEN      13
@@ -634,6 +641,7 @@ typedef enum
     eCSR_ROAM_RESULT_ADD_TDLS_PEER,
     eCSR_ROAM_RESULT_UPDATE_TDLS_PEER,
     eCSR_ROAM_RESULT_DELETE_TDLS_PEER,
+    eCSR_ROAM_TDLS_CHECK_BMPS,
     eCSR_ROAM_RESULT_TEARDOWN_TDLS_PEER_IND,
     eCSR_ROAM_RESULT_DELETE_ALL_TDLS_PEER_IND,
     eCSR_ROAM_RESULT_LINK_ESTABLISH_REQ_RSP,
@@ -905,6 +913,11 @@ typedef struct tagPmkidCacheInfo
 {
     tCsrBssid BSSID;
     tANI_U8 PMKID[CSR_RSN_PMKID_SIZE];
+    uint8_t pmk[CSR_RSN_MAX_PMK_LEN];
+    uint8_t pmk_len;
+    uint8_t ssid_len;
+    uint8_t ssid[SIR_MAC_MAX_SSID_LENGTH];
+    uint8_t cache_id[CACHE_ID_LEN];
 }tPmkidCacheInfo;
 
 #ifdef FEATURE_WLAN_WAPI
