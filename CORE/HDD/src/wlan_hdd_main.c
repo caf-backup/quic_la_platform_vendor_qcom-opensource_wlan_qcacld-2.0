@@ -5498,6 +5498,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            if (hdd_drv_cmd_validate(command, 7))
                goto exit;
 
+           if (hdd_drv_cmd_validate(command, 7))
+               goto exit;
+
            /* Change band request received */
 
            /* First 8 bytes will have "SETBAND " and
@@ -5795,6 +5798,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
 	   tANI_BOOLEAN roamMode = CFG_LFR_FEATURE_ENABLED_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, SIZE_OF_SETROAMMODE))
+               goto exit;
 
            if (hdd_drv_cmd_validate(command, SIZE_OF_SETROAMMODE))
                goto exit;
@@ -8225,6 +8231,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            ret = hdd_driver_rxfilter_comand_handler(command, pAdapter, false);
 
        } else if (strncmp(command, "RXFILTER-ADD", 12) == 0) {
+
+           if (hdd_drv_cmd_validate(command, 12))
+               goto exit;
 
            if (hdd_drv_cmd_validate(command, 12))
                goto exit;
