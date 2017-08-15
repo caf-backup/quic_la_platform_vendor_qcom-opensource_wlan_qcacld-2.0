@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014, 2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -339,6 +339,14 @@
 #define WNI_CFG_DFS_MASTER_ENABLED    298
 #define WNI_CFG_VHT_ENABLE_TXBF_20MHZ    299
 #define WNI_CFG_TDLS_WMM_MODE_ENABLED    300
+#define WNI_CFG_EDCA_ETSI_ACBK_LOCAL    301
+#define WNI_CFG_EDCA_ETSI_ACBE_LOCAL    302
+#define WNI_CFG_EDCA_ETSI_ACVI_LOCAL    303
+#define WNI_CFG_EDCA_ETSI_ACVO_LOCAL    304
+#define WNI_CFG_EDCA_ETSI_ACBK    305
+#define WNI_CFG_EDCA_ETSI_ACBE    306
+#define WNI_CFG_EDCA_ETSI_ACVI    307
+#define WNI_CFG_EDCA_ETSI_ACVO    308
 
 /*
  * String parameter lengths
@@ -395,6 +403,14 @@
 #define WNI_CFG_PROBE_REQ_ADDNP2PIE_DATA_LEN    255
 #define WNI_CFG_PROBE_RSP_BCN_ADDNIE_DATA_LEN    255
 #define WNI_CFG_WPS_UUID_LEN    16
+#define WNI_CFG_EDCA_ETSI_ACBK_LOCAL_LEN    20
+#define WNI_CFG_EDCA_ETSI_ACBE_LOCAL_LEN    20
+#define WNI_CFG_EDCA_ETSI_ACVI_LOCAL_LEN    20
+#define WNI_CFG_EDCA_ETSI_ACVO_LOCAL_LEN    20
+#define WNI_CFG_EDCA_ETSI_ACBK_LEN    20
+#define WNI_CFG_EDCA_ETSI_ACBE_LEN    20
+#define WNI_CFG_EDCA_ETSI_ACVI_LEN    20
+#define WNI_CFG_EDCA_ETSI_ACVO_LEN    20
 
 /*
  * Integer parameter min/max/default values
@@ -847,7 +863,8 @@
 #define WNI_CFG_EDCA_PROFILE_ANI    0
 #define WNI_CFG_EDCA_PROFILE_WMM    1
 #define WNI_CFG_EDCA_PROFILE_TIT_DEMO    2
-#define WNI_CFG_EDCA_PROFILE_MAX    3
+#define WNI_CFG_EDCA_PROFILE_ETSI_EUROPE    3
+#define WNI_CFG_EDCA_PROFILE_MAX    4
 #define WNI_CFG_EDCA_PROFILE_ACM_IDX    0
 #define WNI_CFG_EDCA_PROFILE_AIFSN_IDX    1
 #define WNI_CFG_EDCA_PROFILE_CWMINA_IDX    2
@@ -1619,9 +1636,9 @@
 #define WNI_CFG_TDLS_WMM_MODE_ENABLED_STAMAX    1
 #define WNI_CFG_TDLS_WMM_MODE_ENABLED_STADEF    0
 
-#define CFG_PARAM_MAX_NUM        301
+#define CFG_PARAM_MAX_NUM        309
 #define CFG_STA_IBUF_MAX_SIZE    244
-#define CFG_STA_SBUF_MAX_SIZE    3199
+#define CFG_STA_SBUF_MAX_SIZE    3375
 #define CFG_SEM_MAX_NUM          19
 
 #define CFG_STA_MAGIC_DWORD    0xbeefbeef

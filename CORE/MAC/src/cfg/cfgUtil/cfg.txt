@@ -1345,10 +1345,10 @@ NONE
 
 WNI_CFG_COUNTRY_CODE    S    3    8
 V    RW    NP
-NONE
+SCH
 0
 V    RW    NP
-NONE
+SCH
 3 0x11 0x22 0x33
 
 *
@@ -1698,7 +1698,8 @@ SCH
 #ENUM ANI      0
 #ENUM WMM      1
 #ENUM TIT_DEMO 2
-#ENUM MAX      3
+#ENUM ETSI_EUROPE 3
+#ENUM MAX      4
 
 #ENUM ACM_IDX    0
 #ENUM AIFSN_IDX  1
@@ -4452,3 +4453,108 @@ LIM
 V    RW    NP
 LIM
 0    1    0
+
+* ****************************************
+* Profile 3 (ETSI) parameters - AC_BK Local
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACBK_LOCAL   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 7   0 15  3 255  187   0 31  3 255  0   0 15  3 255  0
+V   RW  NP RESTART
+NONE
+17   0 7   0 15  3 255  187   0 15  3 255  0   0 15  3 255  0
+
+*
+* Profile 3 (ETSI) parameters AC_BE Local
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACBE_LOCAL   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 3   0 15  0 63  187   0 31  3 255  0   0 15  0 63  0
+V   RW  NP RESTART
+NONE
+17   0 3   0 15  0 63  187   0 15  0 63  0   0 15  0 63  0
+
+*
+* Profile 3 (ETSI) parameters AC_VI Local
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACVI_LOCAL   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 1  0 7  0 15  125  0 7  0 15  188   0 7  0 15  94
+V   RW  NP RESTART
+NONE
+17   0 1  0 7  0 15  125  0 7  0 15  188   0 7  0 15  94
+
+*
+* Profile 3 (ETSI) parameters AC_VO Local
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACVO_LOCAL   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 1   0 3  0 7  62   0 3  0 7  102   0 3  0 7  47
+V   RW  NP RESTART
+NONE
+17   0 1   0 3  0 7  62   0 3  0 7  102   0 3  0 7  47
+
+*
+* Profile 3 (ETSI) parameters - AC_BK Broadcast
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACBK   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 7   0 15  3 255  187   0 15  3 255  0   0 15  3 255  0
+V   RW  NP RESTART
+NONE
+17   0 7   0 15  3 255  187   0 15  3 255  0   0 15  3 255  0
+
+*
+* Profile 3 (ETSI) parameters AC_BE Broadcast
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACBE   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 3   0 15  3 255  187   0 15  3 255  0   0 15  3 255  0
+V   RW  NP RESTART
+NONE
+17   0 3   0 15  3 255  187   0 15  3 255  0   0 15  3 255  0
+
+*
+* Profile 3 (ETSI) parameters AC_VI Broadcast
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACVI   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 2   0 7  0 15  125   0 7  0 15  188   0 7  0 15  94
+V   RW  NP RESTART
+NONE
+17   0 2   0 7  0 15  125   0 7  0 15  188   0 7  0 15  94
+
+*
+* Profile 3 (ETSI) parameters AC_VO Broadcast
+* ACM, AIFSN, [CWmin, CWmax, TxOp]-11A/11B/11G
+*
+
+WNI_CFG_EDCA_ETSI_ACVO   S   20  8
+V   RW  NP RESTART
+NONE
+17   0 2   0 3  0 7  62   0 3  0 7  102   0 3  0 7  47
+V   RW  NP RESTART
+NONE
+17   0 2   0 3  0 7  62   0 3  0 7  102   0 3  0 7  47
+
