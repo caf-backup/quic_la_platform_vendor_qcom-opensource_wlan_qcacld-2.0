@@ -10346,7 +10346,36 @@ int wlan_hdd_cfg80211_init(struct device *dev,
 void wlan_hdd_update_wiphy(struct wiphy *wiphy,
                            hdd_config_t *pCfg)
 {
-    wiphy->max_ap_assoc_sta = pCfg->maxNumberOfPeers;
+	hdd_context_t *pHddCtx = wiphy_priv(wiphy);
+	uint32_t val32;
+	uint16_t val16;
+	tSirMacHTCapabilityInfo *ht_cap_info;
+	eHalStatus status;
+
+	if (!pHddCtx) {
+		VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+			"%s: HDD context is null", __func__);
+		return;
+	}
+
+	wiphy->max_ap_assoc_sta = pCfg->maxNumberOfPeers;
+
+	status = ccmCfgGetInt(pHddCtx->hHal, WNI_CFG_HT_CAP_INFO, &val32);
+	if (eHAL_STATUS_SUCCESS != status) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+			"%s: could not get HT capability info",
+			__func__);
+		val32 = 0;
+	}
+	val16 = (uint16_t)val32;
+	ht_cap_info = (tSirMacHTCapabilityInfo *)&val16;
+
+	if (ht_cap_info->txSTBC == TRUE) {
+		wiphy->bands[IEEE80211_BAND_2GHZ]->ht_cap.cap |=
+						IEEE80211_HT_CAP_TX_STBC;
+		wiphy->bands[IEEE80211_BAND_5GHZ]->ht_cap.cap |=
+						IEEE80211_HT_CAP_TX_STBC;
+	}
 }
 
 /* In this function we are registering wiphy. */
