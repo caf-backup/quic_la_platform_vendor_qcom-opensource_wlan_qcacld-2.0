@@ -130,9 +130,12 @@ static void hdd_sendMgmtFrameOverMonitorIface( hdd_adapter_t *pMonAdapter,
                                                tANI_U8* pbFrames,
                                                tANI_U8 frameType );
 
-static bool wlan_hdd_is_type_p2p_action( const u8 *buf )
+static bool wlan_hdd_is_type_p2p_action( const u8 *buf, uint32_t len)
 {
     const u8 *ouiPtr;
+
+    if (len < WLAN_HDD_PUBLIC_ACTION_FRAME_SUB_TYPE_OFFSET + 1)
+        return FALSE;
 
     if ( buf[WLAN_HDD_PUBLIC_ACTION_FRAME_CATEGORY_OFFSET] !=
                WLAN_HDD_PUBLIC_ACTION_FRAME ) {
@@ -158,11 +161,11 @@ static bool wlan_hdd_is_type_p2p_action( const u8 *buf )
     return TRUE;
 }
 
-static bool hdd_p2p_is_action_type_rsp( const u8 *buf )
+static bool hdd_p2p_is_action_type_rsp( const u8 *buf, uint32_t len )
 {
     tActionFrmType actionFrmType;
 
-    if ( wlan_hdd_is_type_p2p_action(buf) )
+    if ( wlan_hdd_is_type_p2p_action(buf, len) )
     {
         actionFrmType = buf[WLAN_HDD_PUBLIC_ACTION_FRAME_SUB_TYPE_OFFSET];
         if ( actionFrmType != WLAN_HDD_INVITATION_REQ &&
@@ -834,14 +837,25 @@ int wlan_hdd_mgmt_tx( struct wiphy *wiphy, struct net_device *dev,
     hdd_cfg80211_state_t *cfgState = WLAN_HDD_GET_CFG_STATE_PTR( pAdapter );
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX( pAdapter );
     tANI_U16 extendedWait = 0;
-    tANI_U8 type = WLAN_HDD_GET_TYPE_FRM_FC(buf[0]);
-    tANI_U8 subType = WLAN_HDD_GET_SUBTYPE_FRM_FC(buf[0]);
+    tANI_U8 type;
+    tANI_U8 subType;
     tActionFrmType actionFrmType;
     bool noack = 0;
     int status;
     hdd_adapter_t *goAdapter;
+    uint32_t mgmt_hdr_len = sizeof(struct ieee80211_hdr_3addr);
 
-     MTRACE(vos_trace(VOS_MODULE_ID_HDD,
+    ENTER();
+
+    if (len < mgmt_hdr_len + 1) {
+        hddLog(LOGE, FL("Invalid Length"));
+        return -EINVAL;
+    }
+
+    type = WLAN_HDD_GET_TYPE_FRM_FC(buf[0]);
+    subType = WLAN_HDD_GET_SUBTYPE_FRM_FC(buf[0]);
+
+    MTRACE(vos_trace(VOS_MODULE_ID_HDD,
                       TRACE_CODE_HDD_ACTION, pAdapter->sessionId,
                       pAdapter->device_mode ));
     status = wlan_hdd_validate_context(pHddCtx);
@@ -859,7 +873,9 @@ int wlan_hdd_mgmt_tx( struct wiphy *wiphy, struct net_device *dev,
 #ifdef WLAN_FEATURE_P2P_DEBUG
     if ((type == SIR_MAC_MGMT_FRAME) &&
             (subType == SIR_MAC_MGMT_ACTION) &&
-            wlan_hdd_is_type_p2p_action(&buf[WLAN_HDD_PUBLIC_ACTION_FRAME_BODY_OFFSET]))
+            wlan_hdd_is_type_p2p_action(
+             &buf[WLAN_HDD_PUBLIC_ACTION_FRAME_BODY_OFFSET],
+             len - mgmt_hdr_len))
     {
         actionFrmType = buf[WLAN_HDD_PUBLIC_ACTION_FRAME_TYPE_OFFSET];
         if(actionFrmType >= MAX_P2P_ACTION_FRAME_TYPE)
@@ -978,7 +994,9 @@ int wlan_hdd_mgmt_tx( struct wiphy *wiphy, struct net_device *dev,
         mutex_lock(&cfgState->remain_on_chan_ctx_lock);
         if ((type == SIR_MAC_MGMT_FRAME) &&
               (subType == SIR_MAC_MGMT_ACTION) &&
-               hdd_p2p_is_action_type_rsp(&buf[WLAN_HDD_PUBLIC_ACTION_FRAME_BODY_OFFSET]) &&
+               hdd_p2p_is_action_type_rsp(
+                &buf[WLAN_HDD_PUBLIC_ACTION_FRAME_BODY_OFFSET],
+                len - mgmt_hdr_len) &&
                cfgState->remain_on_chan_ctx &&
                cfgState->current_freq == chan->center_freq )
          {
@@ -1085,7 +1103,9 @@ int wlan_hdd_mgmt_tx( struct wiphy *wiphy, struct net_device *dev,
 
         if ((type == SIR_MAC_MGMT_FRAME) &&
                 (subType == SIR_MAC_MGMT_ACTION) &&
-                (buf[WLAN_HDD_PUBLIC_ACTION_FRAME_OFFSET] == WLAN_HDD_PUBLIC_ACTION_FRAME))
+                wlan_hdd_is_type_p2p_action(
+                 &buf[WLAN_HDD_PUBLIC_ACTION_FRAME_BODY_OFFSET],
+                 len - mgmt_hdr_len))
         {
             actionFrmType = buf[WLAN_HDD_PUBLIC_ACTION_FRAME_TYPE_OFFSET];
             hddLog(LOG1, "Tx Action Frame %u", actionFrmType);
@@ -1145,6 +1165,7 @@ err_rem_channel:
                             pAdapter->dev,
 #endif
                             *cookie, buf, len, FALSE, GFP_KERNEL );
+    EXIT();
     return 0;
 }
 
