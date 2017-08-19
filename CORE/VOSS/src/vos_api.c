@@ -296,6 +296,22 @@ static void vos_set_nan_enable(tMacOpenParameters *param,
 }
 #endif
 
+#ifdef QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK
+static void vos_set_del_ack_params(tMacOpenParameters *param,
+					hdd_context_t *hdd_ctx)
+{
+	param->del_ack_enable =
+		hdd_ctx->cfg_ini->del_ack_enable;
+	param->del_ack_timer_value = hdd_ctx->cfg_ini->del_ack_timer_value;
+	param->del_ack_pkt_count = hdd_ctx->cfg_ini->del_ack_pkt_count;
+}
+#else
+static void vos_set_del_ack_params(tMacOpenParameters *param,
+					hdd_context_t *hdd_ctx)
+{
+}
+#endif
+
 #ifdef QCA_SUPPORT_TXRX_HL_BUNDLE
 /**
  * vos_set_bundle_params() - set bundle params in mac open param
@@ -545,7 +561,6 @@ VOS_STATUS vos_open( v_CONTEXT_t *pVosContext, v_SIZE_t hddContextSize )
         VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
                   "%s: Failed to Create HTC", __func__);
            goto err_bmi_close;
-           goto err_sched_close;
    }
 
    if (bmi_done(scn)) {
@@ -666,6 +681,7 @@ VOS_STATUS vos_open( v_CONTEXT_t *pVosContext, v_SIZE_t hddContextSize )
 
    vos_set_nan_enable(&macOpenParms, pHddCtx);
    vos_set_bundle_params(&macOpenParms, pHddCtx);
+   vos_set_del_ack_params(&macOpenParms, pHddCtx);
    vos_set_ac_specs_params(&macOpenParms, pHddCtx);
    vos_set_ptp_enable(&macOpenParms, pHddCtx);
 
@@ -2430,6 +2446,22 @@ v_BOOL_t vos_is_packet_log_enabled(void)
    return pHddCtx->cfg_ini->enablePacketLog;
 }
 
+v_BOOL_t vos_config_is_no_ack(void)
+{
+   hdd_context_t *pHddCtx;
+
+   pHddCtx = (hdd_context_t*)(gpVosContext->pHDDContext);
+   if((NULL == pHddCtx) ||
+      (NULL == pHddCtx->cfg_ini))
+   {
+     VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_FATAL,
+               "%s: Hdd Context is Null", __func__);
+     return FALSE;
+   }
+
+   return pHddCtx->cfg_ini->gEnableNoAck;
+}
+
 #ifdef WLAN_FEATURE_TSF_PLUS
 bool vos_is_ptp_rx_opt_enabled(void)
 {
@@ -3153,10 +3185,18 @@ v_U64_t vos_get_monotonic_boottime_ns(void)
 	return timespec_to_ns(&ts);
 }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 10, 0))
 v_U64_t vos_get_bootbased_boottime_ns(void)
 {
-       return ktime_get_boot_ns();
+	return ktime_get_boot_ns();
 }
+
+#else
+v_U64_t vos_get_bootbased_boottime_ns(void)
+{
+	return ktime_to_ns(ktime_get_boottime());
+}
+#endif
 
 /**
  * vos_do_div() - wrapper function for kernel macro(do_div).
@@ -3171,6 +3211,24 @@ uint64_t vos_do_div(uint64_t dividend, uint32_t divisor)
 	do_div(dividend, divisor);
 	/*do_div macro updates dividend with Quotient of dividend/divisor */
 	return dividend;
+}
+
+uint64_t vos_do_div64(uint64_t dividend, uint64_t divisor)
+{
+	uint64_t n = dividend;
+	uint64_t base = divisor;
+	if ((base & 0xffffffff00000000ULL) != 0) {
+		n >>= 16;
+		base >>= 16;
+
+		if ((base & 0xffff00000000ULL) != 0) {
+			n >>= 16;
+			base >>= 16;
+		}
+		return vos_do_div(n, (uint32_t)base);
+	} else {
+		return vos_do_div(n, base);
+	}
 }
 
 /**

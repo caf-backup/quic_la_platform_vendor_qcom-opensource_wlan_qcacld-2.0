@@ -323,6 +323,10 @@ struct init_comp {
 };
 static struct init_comp wlan_comp;
 
+/* Keep track unload status */
+static uint32_t g_current_unload_state;
+#define TRACK_UNLOAD_STATUS(state) (g_current_unload_state =  state)
+
 #ifdef QCA_WIFI_FTM
 extern int hdd_ftm_stop(hdd_context_t *pHddCtx);
 #endif
@@ -1086,6 +1090,7 @@ static int __hdd_netdev_notifier_call(struct notifier_block * nb,
 
    //Make sure that this callback corresponds to our device.
    if ((strncmp(dev->name, "wlan", 4)) &&
+      (strncmp(dev->name, "softAP", 6)) &&
       (strncmp(dev->name, "p2p", 3)))
       return NOTIFY_DONE;
 
@@ -1270,6 +1275,13 @@ int wlan_hdd_validate_context(hdd_context_t *pHddCtx)
 
     if ((pHddCtx->isLoadInProgress) ||
         (pHddCtx->isUnloadInProgress)) {
+        hddLog(LOG1,
+             FL("%pS loading: %d unloading:%d in Progress. Ignore!!!"),
+             (void *)_RET_IP_,
+             pHddCtx->isLoadInProgress,
+             pHddCtx->isUnloadInProgress);
+        if (pHddCtx->isUnloadInProgress)
+             hddLog(LOG1, "current unload state: %d", g_current_unload_state);
         return -EAGAIN;
     }
     return 0;
@@ -1416,7 +1428,7 @@ static int hdd_parse_setrmcenable_command(tANI_U8 *pValue, tANI_U8 *pRmcEnable)
         return 0;
     }
 
-    sscanf(inPtr, "%32s ", buf);
+    sscanf(inPtr, "%31s ", buf);
     v = kstrtos32(buf, 10, &tempInt);
     if ( v < 0)
     {
@@ -1460,7 +1472,7 @@ static int hdd_parse_setrmcactionperiod_command(tANI_U8 *pValue,
         return 0;
     }
 
-    sscanf(inPtr, "%32s ", buf);
+    sscanf(inPtr, "%31s ", buf);
     v = kstrtos32(buf, 10, &tempInt);
     if ( v < 0)
     {
@@ -2073,17 +2085,24 @@ hdd_parse_reassoc_v1(hdd_adapter_t *pAdapter, const char *command)
   \param - pAdapter - Adapter upon which the command was received
   \param - command - command that was received, ASCII command followed
                      by binary data
+  \param - total_len - total length of the command received
 
   \return - 0 for success non-zero for failure
 
   --------------------------------------------------------------------------*/
 static int
 hdd_parse_reassoc_v2(hdd_adapter_t *pAdapter,
-                     const char *command)
+                     const char *command,
+                     int total_len)
 {
    struct android_wifi_reassoc_params params;
    tSirMacAddr bssid;
    int ret;
+
+   if (total_len < sizeof(params) + 8) {
+      hddLog(LOGE, FL("Invalid command length"));
+      return -EINVAL;
+   }
 
    /* The params are located after "REASSOC " */
    memcpy(&params, command + 8, sizeof(params));
@@ -2109,12 +2128,13 @@ hdd_parse_reassoc_v2(hdd_adapter_t *pAdapter,
 
   \param - pAdapter - Adapter upon which the command was received
   \param - command - command that was received
+  \param - total_len - total length of the command received
 
   \return - 0 for success non-zero for failure
 
   --------------------------------------------------------------------------*/
 static int
-hdd_parse_reassoc(hdd_adapter_t *pAdapter, const char *command)
+hdd_parse_reassoc(hdd_adapter_t *pAdapter, const char *command, int total_len)
 {
    int ret;
 
@@ -2131,10 +2151,16 @@ hdd_parse_reassoc(hdd_adapter_t *pAdapter, const char *command)
     *           1111111111222222
     * 01234567890123456789012345
     */
+
+   if (total_len < 26) {
+      hddLog(LOGE, FL("Invalid command (total_len=%d)"), total_len);
+      return -EINVAL;
+   }
+
    if (command[25]) {
       ret = hdd_parse_reassoc_v1(pAdapter, command);
    } else {
-      ret = hdd_parse_reassoc_v2(pAdapter, command);
+      ret = hdd_parse_reassoc_v2(pAdapter, command, total_len);
    }
 
    return ret;
@@ -2504,13 +2530,20 @@ hdd_parse_sendactionframe_v2(hdd_adapter_t *pAdapter,
 	struct android_wifi_af_params *params;
 	tSirMacAddr bssid;
 	int ret;
+	int len_wo_payload = 0;
 
 	/* The params are located after "SENDACTIONFRAME " */
 	total_len -= 16;
+	len_wo_payload = sizeof(*params) - ANDROID_WIFI_ACTION_FRAME_SIZE;
+	if (total_len <= len_wo_payload) {
+		hddLog(LOGE, FL("Invalid command len"));
+		return -EINVAL;
+	}
+
 	params = (struct android_wifi_af_params *)(command + 16);
 
 	if (params->len <= 0 || params->len > ANDROID_WIFI_ACTION_FRAME_SIZE ||
-            (params->len > total_len)) {
+            (params->len > (total_len - len_wo_payload))) {
 		hddLog(LOGE, FL("Invalid payload length: %d"), params->len);
 		return -EINVAL;
 	}
@@ -3592,6 +3625,14 @@ static int hdd_get_dwell_time(hdd_config_t *pCfg, tANI_U8 *command, char *extra,
     return ret;
 }
 
+int hdd_drv_cmd_validate(tANI_U8 *command, int len)
+{
+	if (command[len] != ' ')
+		return -EINVAL;
+
+	return 0;
+}
+
 static int hdd_set_dwell_time(hdd_adapter_t *pAdapter, tANI_U8 *command)
 {
     tHalHandle hHal;
@@ -3614,6 +3655,9 @@ static int hdd_set_dwell_time(hdd_adapter_t *pAdapter, tANI_U8 *command)
 
     if (strncmp(command, "SETDWELLTIME ACTIVE MAX", 23) == 0 )
     {
+        if (hdd_drv_cmd_validate(command, 23))
+            return -EINVAL;
+
         value = value + 24;
         temp = kstrtou32(value, 10, &val);
         if (temp != 0 || val < CFG_ACTIVE_MAX_CHANNEL_TIME_MIN ||
@@ -3630,6 +3674,9 @@ static int hdd_set_dwell_time(hdd_adapter_t *pAdapter, tANI_U8 *command)
     }
     else if (strncmp(command, "SETDWELLTIME ACTIVE MIN", 23) == 0)
     {
+        if (hdd_drv_cmd_validate(command, 23))
+            return -EINVAL;
+
         value = value + 24;
         temp = kstrtou32(value, 10, &val);
         if (temp !=0 || val < CFG_ACTIVE_MIN_CHANNEL_TIME_MIN  ||
@@ -3646,6 +3693,9 @@ static int hdd_set_dwell_time(hdd_adapter_t *pAdapter, tANI_U8 *command)
     }
     else if (strncmp(command, "SETDWELLTIME PASSIVE MAX", 24) == 0)
     {
+        if (hdd_drv_cmd_validate(command, 24))
+            return -EINVAL;
+
         value = value + 25;
         temp = kstrtou32(value, 10, &val);
         if (temp != 0 || val < CFG_PASSIVE_MAX_CHANNEL_TIME_MIN ||
@@ -3662,6 +3712,9 @@ static int hdd_set_dwell_time(hdd_adapter_t *pAdapter, tANI_U8 *command)
     }
     else if (strncmp(command, "SETDWELLTIME PASSIVE MIN", 24) == 0)
     {
+        if (hdd_drv_cmd_validate(command, 24))
+            return -EINVAL;
+
         value = value + 25;
         temp = kstrtou32(value, 10, &val);
         if (temp != 0 || val < CFG_PASSIVE_MIN_CHANNEL_TIME_MIN ||
@@ -3678,6 +3731,9 @@ static int hdd_set_dwell_time(hdd_adapter_t *pAdapter, tANI_U8 *command)
     }
     else if (strncmp(command, "SETDWELLTIME", 12) == 0)
     {
+        if (hdd_drv_cmd_validate(command, 12))
+            return -EINVAL;
+
         value = value + 13;
         temp = kstrtou32(value, 10, &val);
         if (temp != 0 || val < CFG_ACTIVE_MAX_CHANNEL_TIME_MIN ||
@@ -5438,7 +5494,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        else if (strncmp(command, "SETBAND", 7) == 0)
        {
            tANI_U8 *ptr = command ;
-           int ret = 0 ;
+
+           if (hdd_drv_cmd_validate(command, 7))
+               goto exit;
 
            /* Change band request received */
 
@@ -5453,6 +5511,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        else if (strncmp(command, "SETWMMPS", 8) == 0)
        {
            tANI_U8 *ptr = command;
+
+           if (hdd_drv_cmd_validate(command, 8))
+               goto exit;
+
            ret = hdd_wmmps_helper(pAdapter, ptr);
        }
        else if (strncasecmp(command, "COUNTRY", 7) == 0)
@@ -5460,6 +5522,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            eHalStatus status;
            unsigned long rc;
            char *country_code;
+
+           if (hdd_drv_cmd_validate(command, 7))
+               goto exit;
 
            country_code = command + 8;
 
@@ -5503,6 +5568,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_S8 rssi = 0;
            tANI_U8 lookUpThreshold = CFG_NEIGHBOR_LOOKUP_RSSI_THRESHOLD_DEFAULT;
            eHalStatus status = eHAL_STATUS_SUCCESS;
+
+           if (hdd_drv_cmd_validate(command, 14))
+               goto exit;
 
            /* Move pointer to ahead of SETROAMTRIGGER<delimiter> */
            value = value + 15;
@@ -5587,6 +5655,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 roamScanPeriod = 0;
            tANI_U16 neighborEmptyScanRefreshPeriod = CFG_EMPTY_SCAN_REFRESH_PERIOD_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 17))
+               goto exit;
+
            /* input refresh period is in terms of seconds */
            /* Move pointer to ahead of SETROAMSCANPERIOD<delimiter> */
            value = value + 18;
@@ -5657,6 +5728,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 roamScanRefreshPeriod = 0;
            tANI_U16 neighborScanRefreshPeriod = CFG_NEIGHBOR_SCAN_RESULTS_REFRESH_PERIOD_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 24))
+               goto exit;
+
            /* input refresh period is in terms of seconds */
            /* Move pointer to ahead of SETROAMSCANREFRESHPERIOD<delimiter> */
            value = value + 25;
@@ -5722,11 +5796,14 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
 	   tANI_BOOLEAN roamMode = CFG_LFR_FEATURE_ENABLED_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, SIZE_OF_SETROAMMODE))
+               goto exit;
+
 	   /* Move pointer to ahead of SETROAMMODE<delimiter> */
 	   value = value + SIZE_OF_SETROAMMODE + 1;
 
 	   /* Convert the value from ascii to integer */
-	   ret = kstrtou8(value, SIZE_OF_SETROAMMODE, &roamMode);
+	   ret = kstrtou8(value, 10, &roamMode);
 	   if (ret < 0)
 	   {
 	      /* If the input value is greater than max value of datatype, then also
@@ -5820,6 +5897,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U8 roamRssiDiff = CFG_ROAM_RSSI_DIFF_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 12))
+               goto exit;
+
            /* Move pointer to ahead of SETROAMDELTA<delimiter> */
            value = value + 13;
            /* Convert the value from ascii to integer */
@@ -5897,6 +5977,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        }
        else if (strncmp(command, "SETROAMSCANCHANNELS ", 20) == 0)
        {
+           if (hdd_drv_cmd_validate(command, 20))
+               goto exit;
+
            ret = hdd_parse_set_roam_scan_channels(pAdapter, command);
        }
        else if (strncmp(command, "GETROAMSCANCHANNELS", 19) == 0)
@@ -6034,6 +6117,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U8 minTime = CFG_NEIGHBOR_SCAN_MIN_CHAN_TIME_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 25))
+               goto exit;
+
            /* Move pointer to ahead of SETROAMSCANCHANNELMINTIME<delimiter> */
            value = value + 26;
            /* Convert the value from ascii to integer */
@@ -6073,6 +6159,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        }
        else if (strncmp(command, "SENDACTIONFRAME", 15) == 0)
        {
+           if (hdd_drv_cmd_validate(command, 15))
+               goto exit;
+
            ret = hdd_parse_sendactionframe(pAdapter, command,
                                            priv_data.total_len);
        }
@@ -6102,6 +6191,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
            tANI_U16 maxTime = CFG_NEIGHBOR_SCAN_MAX_CHAN_TIME_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, 18))
+               goto exit;
 
            /* Move pointer to ahead of SETSCANCHANNELTIME<delimiter> */
            value = value + 19;
@@ -6161,6 +6253,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U16 val = CFG_NEIGHBOR_SCAN_TIMER_PERIOD_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 15))
+               goto exit;
+
            /* Move pointer to ahead of SETSCANHOMETIME<delimiter> */
            value = value + 16;
            /* Convert the value from ascii to integer */
@@ -6219,6 +6314,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U8 val = CFG_ROAM_INTRA_BAND_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 16))
+               goto exit;
+
            /* Move pointer to ahead of SETROAMINTRABAND<delimiter> */
            value = value + 17;
            /* Convert the value from ascii to integer */
@@ -6274,6 +6372,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U8 nProbes = CFG_ROAM_SCAN_N_PROBES_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 14))
+               goto exit;
+
            /* Move pointer to ahead of SETSCANNPROBES<delimiter> */
            value = value + 15;
            /* Convert the value from ascii to integer */
@@ -6328,6 +6429,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
            tANI_U16 homeAwayTime = CFG_ROAM_SCAN_HOME_AWAY_TIME_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, 19))
+               goto exit;
 
            /* Move pointer to ahead of SETSCANHOMEAWAYTIME<delimiter> */
            /* input value is in units of msec */
@@ -6385,12 +6489,18 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        }
        else if (strncmp(command, "REASSOC", 7) == 0)
        {
-           ret = hdd_parse_reassoc(pAdapter, command);
+           if (hdd_drv_cmd_validate(command, 7))
+               goto exit;
+
+           ret = hdd_parse_reassoc(pAdapter, command, priv_data.total_len);
        }
        else if (strncmp(command, "SETWESMODE", 10) == 0)
        {
            tANI_U8 *value = command;
            tANI_BOOLEAN wesMode = CFG_ENABLE_WES_MODE_NAME_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, 10))
+               goto exit;
 
            /* Move pointer to ahead of SETWESMODE<delimiter> */
            value = value + 11;
@@ -6445,6 +6555,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U8 nOpportunisticThresholdDiff = CFG_OPPORTUNISTIC_SCAN_THRESHOLD_DIFF_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 24))
+               goto exit;
+
            /* Move pointer to ahead of SETOPPORTUNISTICRSSIDIFF<delimiter> */
            value = value + 25;
            /* Convert the value from ascii to integer */
@@ -6488,6 +6601,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
            tANI_U8 nRoamRescanRssiDiff = CFG_ROAM_RESCAN_RSSI_DIFF_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, 21))
+               goto exit;
 
            /* Move pointer to ahead of SETROAMRESCANRSSIDIFF<delimiter> */
            value = value + 22;
@@ -6533,6 +6649,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U8 lfrMode = CFG_LFR_FEATURE_ENABLED_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 11))
+               goto exit;
+
            /* Move pointer to ahead of SETFASTROAM<delimiter> */
            value = value + 12;
            /* Convert the value from ascii to integer */
@@ -6575,6 +6694,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
            tANI_U8 ft = CFG_FAST_TRANSITION_ENABLED_NAME_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, 17))
+               goto exit;
 
            /* Move pointer to ahead of SETFASTROAM<delimiter> */
            value = value + 18;
@@ -6720,6 +6842,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_U8 eseMode = CFG_ESE_FEATURE_ENABLED_DEFAULT;
 
+           if (hdd_drv_cmd_validate(command, 10))
+               goto exit;
+
            /* Check if the features OKC/ESE/11R are supported simultaneously,
               then this operation is not permitted (return FAILURE) */
            if (sme_getIsEseFeatureEnabled(pHddCtx->hHal) &&
@@ -6772,6 +6897,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            tANI_BOOLEAN roamScanControl = 0;
 
+           if (hdd_drv_cmd_validate(command, 18))
+               goto exit;
+
            /* Move pointer to ahead of SETROAMSCANCONTROL<delimiter> */
            value = value + 19;
            /* Convert the value from ascii to integer */
@@ -6803,6 +6931,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
            tANI_U8 okcMode = CFG_OKC_FEATURE_ENABLED_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, 10))
+               goto exit;
 
            /* Check if the features OKC/ESE/11R are supported simultaneously,
               then this operation is not permitted (return FAILURE) */
@@ -6855,6 +6986,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            char *bcMode;
            int ret;
 
+           if (hdd_drv_cmd_validate(command, 10))
+               goto exit;
+
            bcMode = command + 11;
            if ('1' == *bcMode)
            {
@@ -6897,6 +7031,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 filterType = 0;
            tANI_U8 *value = command;
 
+           if (hdd_drv_cmd_validate(command, 21))
+               goto exit;
+
            /* Move pointer to ahead of ENABLE_PKTFILTER_IPV6<delimiter> */
            value = value + 22;
 
@@ -6927,6 +7064,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        else if (strncmp(command, "BTCOEXMODE", 10) == 0 )
        {
            char *bcMode;
+
+           if (hdd_drv_cmd_validate(command, 10))
+               goto exit;
+
            bcMode = command + 11;
            if ('1' == *bcMode)
            {
@@ -6980,6 +7121,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                    "%s: Received MIRACAST command", __func__);
 
+           if (hdd_drv_cmd_validate(command, 8))
+               goto exit;
+
            ret = hdd_set_miracast_mode(pAdapter, command);
        }
        else if ((strncasecmp(command, "SETIBSSBEACONOUIDATA", 20) == 0) &&
@@ -7008,6 +7152,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
                ret = -EFAULT;
                goto exit;
            }
+
+           if (hdd_drv_cmd_validate(command, 20))
+               goto exit;
 
            /* moving to arguments of commands */
            value = value + 21;
@@ -7558,6 +7705,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8             tid = 0;
            hdd_station_ctx_t  *pHddStaCtx = NULL;
            tAniTrafStrmMetrics tsmMetrics;
+
+           if (hdd_drv_cmd_validate(command, 11))
+               goto exit;
+
            pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
            /* if not associated, return error */
            if (eConnectionState_Associated != pHddStaCtx->conn_info.connState)
@@ -7739,6 +7890,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
            int      targetRate;
+
+           if (hdd_drv_cmd_validate(command, 9))
+               goto exit;
+
            /* Move pointer to ahead of SETMCRATE<delimiter> */
            /* input value is in units of hundred kbps */
            value = value + 10;
@@ -7800,6 +7955,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        {
            tANI_U8 *value = command;
            tANI_U8 dfsScanMode = CFG_ROAMING_DFS_CHANNEL_DEFAULT;
+
+           if (hdd_drv_cmd_validate(command, 14))
+               goto exit;
 
            /* Move pointer to ahead of SETDFSSCANMODE<delimiter> */
            value = value + 15;
@@ -7885,6 +8043,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            tANI_U8 *value = command;
            int set_value;
 
+           if (hdd_drv_cmd_validate(command, 12))
+               goto exit;
+
            /* Move pointer to ahead of ENABLEEXTWOW*/
            value += 12;
            if (!(sscanf(value, "%d", &set_value))) {
@@ -7899,6 +8060,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        } else if (strncmp(command, "SETAPP1PARAMS", 13) == 0) {
            tANI_U8 *value = command;
 
+           if (hdd_drv_cmd_validate(command, 13))
+               goto exit;
+
            /* Move pointer to ahead of SETAPP1PARAMS*/
            value += 13;
            ret = hdd_set_app_type1_parser(pAdapter,
@@ -7908,6 +8072,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
 
        } else if (strncmp(command, "SETAPP2PARAMS", 13) == 0) {
            tANI_U8 *value = command;
+
+           if (hdd_drv_cmd_validate(command, 13))
+               goto exit;
 
            /* Move pointer to ahead of SETAPP2PARAMS*/
            value += 13;
@@ -7921,6 +8088,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        else if (strncmp(command, "TDLSSECONDARYCHANNELOFFSET", 26) == 0) {
            tANI_U8 *value = command;
            int set_value;
+
+           if (hdd_drv_cmd_validate(command, 26))
+               goto exit;
+
            /* Move pointer to point the string */
            value += 26;
            if (!(sscanf(value, "%d", &set_value))) {
@@ -7936,6 +8107,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        } else if (strncmp(command, "TDLSOFFCHANNELMODE", 18) == 0) {
            tANI_U8 *value = command;
            int set_value;
+
+           if (hdd_drv_cmd_validate(command, 18))
+               goto exit;
+
            /* Move pointer to point the string */
            value += 18;
            if (!(sscanf(value, "%d", &set_value))) {
@@ -7951,6 +8126,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        } else if (strncmp(command, "TDLSOFFCHANNEL", 14) == 0) {
            tANI_U8 *value = command;
            int set_value;
+
+           if (hdd_drv_cmd_validate(command, 14))
+               goto exit;
+
            /* Move pointer to point the string */
            value += 14;
            ret = sscanf(value, "%d", &set_value);
@@ -7974,6 +8153,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
        } else if (strncmp(command, "TDLSSCAN", 8) == 0) {
            uint8_t *value = command;
            int set_value;
+
+           if (hdd_drv_cmd_validate(command, 8))
+               goto exit;
+
            /* Move pointer to point the string */
            value += 8;
            ret = sscanf(value, "%d", &set_value);
@@ -8029,13 +8212,22 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
             * country code is set
             */
 
+           if (hdd_drv_cmd_validate(command, 15))
+               goto exit;
+
            ret = drv_cmd_set_fcc_channel(pAdapter, command, 15);
 
        } else if (strncmp(command, "RXFILTER-REMOVE", 15) == 0) {
 
+           if (hdd_drv_cmd_validate(command, 15))
+               goto exit;
+
            ret = hdd_driver_rxfilter_comand_handler(command, pAdapter, false);
 
        } else if (strncmp(command, "RXFILTER-ADD", 12) == 0) {
+
+           if (hdd_drv_cmd_validate(command, 12))
+               goto exit;
 
            ret = hdd_driver_rxfilter_comand_handler(command, pAdapter, true);
 
@@ -11484,7 +11676,8 @@ hdd_adapter_t *hdd_open_adapter(hdd_context_t *hdd_ctx,
 
 	/* Enable FW logs based on INI configuration */
 	if ((VOS_FTM_MODE != vos_get_conparam()) &&
-	    (hdd_ctx->cfg_ini->enablefwlog)) {
+	    (hdd_ctx->cfg_ini->enablefwlog) &&
+	    (hdd_ctx->current_intf_count == 1)) {
 		uint8_t count = 0;
 		uint32_t value = 0;
 		uint8_t num_entries = 0;
@@ -11954,6 +12147,7 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
          break;
 
       case WLAN_HDD_OCB:
+         wlan_hdd_dsrc_deinit_chan_stats(pAdapter);
          hdd_disconnect_tx_rx(pAdapter);
          WLANTL_ClearSTAClient(WLAN_HDD_GET_CTX(pAdapter)->pvosContext,
             WLAN_HDD_GET_STATION_CTX_PTR(pAdapter)->conn_info.staId[0]);
@@ -12166,7 +12360,7 @@ static void __hdd_connect_bss(struct net_device *dev, const u8 *bssid,
 			     resp_ie, resp_ie_len, status, gfp,
 			     nl_timeout_reason);
 }
-#else
+#else /* CFG80211_CONNECT_TIMEOUT_REASON_CODE */
 #if defined CFG80211_CONNECT_TIMEOUT
 static void hdd_cfg80211_connect_timeout(struct net_device *dev,
 					 const u8 *bssid,
@@ -12174,7 +12368,7 @@ static void hdd_cfg80211_connect_timeout(struct net_device *dev,
 {
 	cfg80211_connect_timeout(dev, bssid, NULL, 0, GFP_KERNEL);
 }
-#endif
+#endif /* CFG80211_CONNECT_TIMEOUT */
 static void __hdd_connect_bss(struct net_device *dev, const u8 *bssid,
 			      struct cfg80211_bss *bss, const u8 *req_ie,
 			      size_t req_ie_len, const u8 *resp_ie,
@@ -12184,7 +12378,7 @@ static void __hdd_connect_bss(struct net_device *dev, const u8 *bssid,
 	cfg80211_connect_bss(dev, bssid, bss, req_ie, req_ie_len,
 			     resp_ie, resp_ie_len, status, gfp);
 }
-#endif
+#endif /* CFG80211_CONNECT_TIMEOUT_REASON_CODE */
 /**
  * hdd_connect_bss() - API to send connection status to supplicant
  * @dev: network device
@@ -12226,6 +12420,177 @@ static void hdd_connect_bss(struct net_device *dev, const u8 *bssid,
 		resp_ie, resp_ie_len, status, gfp, timeout_reason);
 }
 #endif
+
+#ifdef WLAN_FEATURE_FILS_SK
+#ifdef CFG80211_CONNECT_DONE
+#ifdef CFG80211_FILS_SK_OFFLOAD_SUPPORT
+/**
+ * hdd_populate_fils_params() - Populate FILS keys to connect response
+ * @fils_params: connect response to supplicant
+ * @fils_kek: FILS kek
+ * @fils_kek_len: FILS kek length
+ * @pmk: FILS PMK
+ * @pmk_len: FILS PMK length
+ * @pmkid: PMKID
+ * @fils_seq_num: FILS Seq number
+ *
+ * Return: None
+ */
+static void hdd_populate_fils_params(struct cfg80211_connect_resp_params
+                     *fils_params, const uint8_t *fils_kek,
+                     size_t fils_kek_len, const uint8_t *pmk,
+                     size_t pmk_len, const uint8_t *pmkid,
+                     uint16_t fils_seq_num)
+{
+    /* Increament seq number to be used for next FILS */
+    fils_params->fils_erp_next_seq_num = fils_seq_num + 1;
+    fils_params->update_erp_next_seq_num = true;
+    fils_params->fils_kek = fils_kek;
+    fils_params->fils_kek_len = fils_kek_len;
+    fils_params->pmk = pmk;
+    fils_params->pmk_len = pmk_len;
+    fils_params->pmkid = pmkid;
+}
+#else /* CFG80211_FILS_SK_OFFLOAD_SUPPORT */
+static inline void hdd_populate_fils_params(struct cfg80211_connect_resp_params
+                        *fils_params, const uint8_t
+                        *fils_kek, size_t fils_kek_len,
+                        const uint8_t *pmk, size_t pmk_len,
+                        const uint8_t *pmkid,
+                        uint16_t fils_seq_num)
+{ }
+#endif /* CFG80211_FILS_SK_OFFLOAD_SUPPORT */
+
+/**
+ * hdd_connect_done() - Wrapper API to call cfg80211_connect_done
+ * @dev: network device
+ * @bssid: bssid to which we want to associate
+ * @bss: cfg80211 bss info
+ * @roam_info: information about connected bss
+ * @req_ie: Request Information Element
+ * @req_ie_len: len of the req IE
+ * @resp_ie: Response IE
+ * @resp_ie_len: len of ht response IE
+ * @status: status
+ * @gfp: allocation flags
+ * @connect_timeout: If timed out waiting for Auth/Assoc/Probe resp
+ * @timeout_reason: reason for connect timeout
+ * @roam_fils_params: FILS join response params
+ *
+ * This API is used as wrapper to send FILS key/sequence number
+ * params etc. to supplicant in case of FILS connection
+ *
+ * Return: None
+ */
+static void hdd_connect_done(struct net_device *dev, const u8 *bssid,
+                 struct cfg80211_bss *bss, tCsrRoamInfo *roam_info,
+                 const u8 *req_ie, size_t req_ie_len,
+                 const u8 *resp_ie, size_t resp_ie_len, u16 status,
+                 gfp_t gfp, bool connect_timeout, tSirResultCodes
+                 timeout_reason, struct fils_join_rsp_params
+                 *roam_fils_params)
+{
+    struct cfg80211_connect_resp_params fils_params;
+    vos_mem_zero(&fils_params, sizeof(fils_params));
+
+    fils_params.bssid = bssid;
+    if (!roam_fils_params) {
+        fils_params.status = WLAN_STATUS_UNSPECIFIED_FAILURE;
+        hdd_populate_fils_params(&fils_params, NULL, 0, NULL,
+                     0, NULL, roam_info->fils_seq_num);
+    } else {
+        fils_params.status = status;
+        fils_params.timeout_reason = timeout_reason;
+        fils_params.req_ie = req_ie;
+        fils_params.req_ie_len = req_ie_len;
+        fils_params.resp_ie = resp_ie;
+        fils_params.resp_ie_len = resp_ie_len;
+        fils_params.bss = bss;
+        hdd_populate_fils_params(&fils_params, roam_fils_params->kek,
+                     roam_fils_params->kek_len,
+                     roam_fils_params->fils_pmk,
+                     roam_fils_params->fils_pmk_len,
+                     roam_fils_params->fils_pmkid,
+                     roam_info->fils_seq_num);
+    }
+    hddLog(LOG1, "FILS indicate connect status %d seq no %d",
+          fils_params.status,
+          fils_params.fils_erp_next_seq_num);
+
+    cfg80211_connect_done(dev, &fils_params, gfp);
+
+    /* Clear all the FILS key info */
+    if (roam_fils_params && roam_fils_params->fils_pmk)
+        vos_mem_free(roam_fils_params->fils_pmk);
+    if (roam_fils_params)
+        vos_mem_free(roam_fils_params);
+    roam_info->fils_join_rsp = NULL;
+}
+#else /* CFG80211_CONNECT_DONE */
+static inline void hdd_connect_done(struct net_device *dev, const u8 *bssid,
+                    struct cfg80211_bss *bss, tCsrRoamInfo
+                    *roam_info, const u8 *req_ie,
+                    size_t req_ie_len, const u8 *resp_ie,
+                    size_t resp_ie_len, u16 status, gfp_t gfp,
+                    bool connect_timeout, tSirResultCodes
+                    timeout_reason, struct fils_join_rsp_params
+                    *roam_fils_params)
+{ }
+#endif /* CFG80211_CONNECT_DONE */
+#endif /* WLAN_FEATURE_FILS_SK */
+
+#if defined(CFG80211_CONNECT_DONE) && defined(WLAN_FEATURE_FILS_SK)
+/**
+ * hdd_fils_update_connect_results() - API to send fils connection status to
+ * supplicant.
+ * @dev: network device
+ * @bssid: bssid to which we want to associate
+ * @bss: cfg80211 bss info
+ * @roam_info: information about connected bss
+ * @req_ie: Request Information Element
+ * @req_ie_len: len of the req IE
+ * @resp_ie: Response IE
+ * @resp_ie_len: len of ht response IE
+ * @status: status
+ * @gfp: allocation flags
+ * @connect_timeout: If timed out waiting for Auth/Assoc/Probe resp
+ * @timeout_reason: reason for connect timeout
+ *
+ * The API is a wrapper to send connection status to supplicant
+ *
+ * Return: 0 if success else failure
+ */
+static int hdd_fils_update_connect_results(struct net_device *dev,
+            const u8 *bssid,
+            struct cfg80211_bss *bss,
+            tCsrRoamInfo *roam_info, const u8 *req_ie,
+            size_t req_ie_len, const u8 *resp_ie,
+            size_t resp_ie_len, u16 status, gfp_t gfp,
+            bool connect_timeout,
+            tSirResultCodes timeout_reason)
+{
+    ENTER();
+    if (!roam_info || !roam_info->is_fils_connection)
+        return -EINVAL;
+
+    hdd_connect_done(dev, bssid, bss, roam_info, req_ie, req_ie_len,
+             resp_ie, resp_ie_len, status, gfp, connect_timeout,
+             timeout_reason, roam_info->fils_join_rsp);
+    return 0;
+}
+#else /* CFG80211_CONNECT_DONE && WLAN_FEATURE_FILS_SK */
+static inline int hdd_fils_update_connect_results(struct net_device *dev,
+            const u8 *bssid,
+            struct cfg80211_bss *bss,
+            tCsrRoamInfo *roam_info, const u8 *req_ie,
+            size_t req_ie_len, const u8 *resp_ie,
+            size_t resp_ie_len, u16 status, gfp_t gfp,
+            bool connect_timeout,
+            tSirResultCodes timeout_reason)
+{
+    return -EINVAL;
+}
+#endif /* CFG80211_CONNECT_DONE && WLAN_FEATURE_FILS_SK */
 
 /**
  * hdd_connect_result() - API to send connection status to supplicant
@@ -12278,12 +12643,18 @@ void hdd_connect_result(struct net_device *dev,
 			roam_info->u.pConnectedProfile->SSID.length);
 	}
 
-	hdd_connect_bss(dev, bssid, bss, req_ie,
+	if (hdd_fils_update_connect_results(dev, bssid, bss,
+			roam_info, req_ie, req_ie_len, resp_ie,
+			resp_ie_len, status, gfp, connect_timeout,
+			timeout_reason) != 0) {
+			hdd_connect_bss(dev, bssid, bss, req_ie,
 				req_ie_len, resp_ie, resp_ie_len,
 				status, gfp, connect_timeout, timeout_reason);
+	}
+
 	vos_runtime_pm_allow_suspend(padapter->runtime_context.connect);
 }
-#else
+#else /* CFG80211_CONNECT_BSS */
 void hdd_connect_result(struct net_device *dev,
 			const u8 *bssid,
 			tCsrRoamInfo *roam_info,
@@ -12302,7 +12673,7 @@ void hdd_connect_result(struct net_device *dev,
 
 	vos_runtime_pm_allow_suspend(padapter->runtime_context.connect);
 }
-#endif
+#endif /* CFG80211_CONNECT_BSS */
 
 VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
 {
@@ -13423,6 +13794,76 @@ static inline int wlan_hdd_logging_sock_deactivate_svc(hdd_context_t *hdd_ctx)
 }
 #endif
 
+/**
+ * enum driver_unload_state - Various driver unload states
+ * @unload_start: Driver starting unload module.
+ * @unload_unregister_ip_notifier: Driver unregistering with ip notifiers.
+ * @unload_unregister_wext_adpater: Driver unregistering wext adapter.
+ * @unload_hdd_ftm_stop: Driver stopping ftm.
+ * @unload_hdd_ftm_close: Driver closing ftm.
+ * @unload_deregister_pm_ops:  Driver deregistering pm ops.
+ * @unload_unregister_thermal_notify_cb: Driver unregistering thermal callback.
+ * @unload_aborting_all_scan: Driver aborting all scan.
+ * @unload_disable_pwr_save: Driver disable power save in firmware.
+ * @unload_req_full_power: Driver requesting full power mode.
+ * @unload_set_idle_ps_config: Driver setting imps false.
+ * @unload_debugfs_exit: Driver exiting debugfs.
+ * @unload_netdev_notifier: Driver unregistering with netdev notifiers.
+ * @unload_stop_all_adapter: Driver stopping all adapters.
+ * @unload_vos_stop: Driver stopping vos.
+ * @unload_vos_sched_close: Driver closing scheduler.
+ * @unload_vos_nv_close: Driver closing nv module.
+ * @unload_vos_close: Driver closing vos module.
+ * @unload_deinit_greep_ap: Driver deinit greep ap.
+ * @unload_logging_sock_deactivate_svc: Driver deactivating logging socket.
+ * @unload_hdd_send_status_pkg: Driver sending status packet to LPSS.
+ * @unload_close_cesium_nl_sock: Driver closing cesium nl socket.
+ * @unload_runtime_suspend_deinit: Driver deinit  runtime suspend.
+ * @unload_close_all_adapters: Driver closing all adapter.
+ * @unload_ipa_cleanup: Driver performing ipa cleanup.
+ * @unload_flush_roc_work: Driver flush roc work.
+ * @unload_nl_srv_exit: Driver exit netlink service.
+ * @unload_wiphy_unregister: Driver unregister wiphy.
+ * @unload_wiphy_free: Driver free wiphy.
+ * @unload_subsystem_restart: Driver do subsystem restart.
+ * @unload_finish: Driver completed unload.
+ */
+enum driver_unload_state{
+	unload_start = 1,
+	unload_unregister_ip_notifier,
+	unload_unregister_wext_adpater,
+	unload_hdd_ftm_stop,
+	unload_hdd_ftm_close =5 ,
+	unload_deregister_pm_ops,
+	unload_unregister_thermal_notify_cb,
+	unload_aborting_all_scan,
+	unload_disable_pwr_save,
+	unload_req_full_power = 10,
+	unload_set_idle_ps_config,
+	unload_debugfs_exit,
+	unload_netdev_notifier,
+	unload_stop_all_adapter,
+	unload_vos_stop = 15,
+	unload_vos_sched_close,
+	unload_vos_nv_close,
+	unload_vos_close,
+	unload_deinit_greep_ap,
+	unload_logging_sock_deactivate_svc = 20,
+	unload_hdd_send_status_pkg,
+	unload_close_cesium_nl_sock,
+	unload_runtime_suspend_deinit,
+	unload_close_all_adapters,
+	unload_ipa_cleanup = 25,
+	unload_flush_roc_work,
+	unload_nl_srv_exit,
+	unload_wiphy_unregister,
+	unload_wiphy_free,
+	unload_subsystem_restart = 30,
+
+	/* keep it last*/
+	unload_finish = 0xff
+};
+
 /**---------------------------------------------------------------------------
 
   \brief hdd_wlan_exit() - HDD WLAN exit function
@@ -13445,12 +13886,13 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    hdd_config_t *pConfig = pHddCtx->cfg_ini;
 
    ENTER();
+   TRACK_UNLOAD_STATUS(unload_start);
 
    hddLog(LOGE, FL("Unregister IPv6 notifier"));
+   TRACK_UNLOAD_STATUS(unload_unregister_ip_notifier);
    hdd_wlan_unregister_ip6_notifier(pHddCtx);
    hddLog(LOGE, FL("Unregister IPv4 notifier"));
    unregister_inetaddr_notifier(&pHddCtx->ipv4_notifier);
-
    wlan_hdd_tsf_deinit(pHddCtx);
 
    if (VOS_FTM_MODE != hdd_get_conparam())
@@ -13458,12 +13900,12 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       // Unloading, restart logic is no more required.
       wlan_hdd_restart_deinit(pHddCtx);
    }
-
+   TRACK_UNLOAD_STATUS(unload_unregister_wext_adpater);
    hdd_UnregisterWext_all_adapters(pHddCtx);
-
    if (VOS_FTM_MODE == hdd_get_conparam())
    {
       hddLog(VOS_TRACE_LEVEL_INFO, "%s: FTM MODE", __func__);
+      TRACK_UNLOAD_STATUS(unload_hdd_ftm_stop);
 #if  defined(QCA_WIFI_FTM)
       if (hdd_ftm_stop(pHddCtx))
       {
@@ -13472,11 +13914,13 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       }
       pHddCtx->ftm.ftm_state = WLAN_FTM_STOPPED;
 #endif
+      TRACK_UNLOAD_STATUS(unload_hdd_ftm_close);
       wlan_hdd_ftm_close(pHddCtx);
       hddLog(VOS_TRACE_LEVEL_FATAL, "%s: FTM driver unloaded", __func__);
       goto free_hdd_ctx;
    }
 
+   TRACK_UNLOAD_STATUS(unload_deregister_pm_ops);
    /* DeRegister with platform driver as client for Suspend/Resume */
    vosStatus = hddDeregisterPmOps(pHddCtx);
    if ( !VOS_IS_STATUS_SUCCESS( vosStatus ) )
@@ -13485,6 +13929,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       VOS_ASSERT(0);
    }
 
+   TRACK_UNLOAD_STATUS(unload_unregister_thermal_notify_cb);
    vosStatus = hddDevTmUnregisterNotifyCallback(pHddCtx);
    if ( !VOS_IS_STATUS_SUCCESS( vosStatus ) )
    {
@@ -13511,8 +13956,8 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
     * the expectation is that by the time Request Full Power has completed,
     * all scans will be cancelled.
     */
+   TRACK_UNLOAD_STATUS(unload_aborting_all_scan);
    hdd_abort_mac_scan_all_adapters(pHddCtx);
-
 #ifdef FEATURE_BUS_BANDWIDTH
    if (VOS_TIMER_STATE_RUNNING ==
                         vos_timer_getCurrentState(&pHddCtx->bus_bw_timer))
@@ -13552,8 +13997,10 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    spin_unlock(&pHddCtx->acs_skip_lock);
 #endif
 
+
    if (pConfig && !pConfig->enablePowersaveOffload)
    {
+      TRACK_UNLOAD_STATUS(unload_disable_pwr_save);
       //Disable IMPS/BMPS as we do not want the device to enter any power
       //save mode during shutdown
       sme_DisablePowerSave(pHddCtx->hHal, ePMC_IDLE_MODE_POWER_SAVE);
@@ -13564,6 +14011,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       init_completion(&powerContext.completion);
       powerContext.magic = POWER_CONTEXT_MAGIC;
 
+      TRACK_UNLOAD_STATUS(unload_req_full_power);
       halStatus = sme_RequestFullPower(pHddCtx->hHal, hdd_full_power_callback,
             &powerContext, eSME_FULL_PWR_NEEDED_BY_HDD);
 
@@ -13610,18 +14058,22 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
        * Powersave Offload Case
        * Disable Idle Power Save Mode
        */
+      TRACK_UNLOAD_STATUS(unload_set_idle_ps_config);
       hdd_set_idle_ps_config(pHddCtx, FALSE);
    }
 
+   TRACK_UNLOAD_STATUS(unload_debugfs_exit);
    hdd_debugfs_exit(pHddCtx);
 
    // Unregister the Net Device Notifier
+   TRACK_UNLOAD_STATUS(unload_netdev_notifier);
    unregister_netdevice_notifier(&hdd_netdev_notifier);
 
    /* Stop all adapters, this will ensure the termination of active
     * connections on the interface. Make sure the vos_scheduler is
     * still available to handle those control messages
     */
+   TRACK_UNLOAD_STATUS(unload_stop_all_adapter);
    hdd_stop_all_adapters( pHddCtx );
 
 #ifdef QCA_PKT_PROTO_TRACE
@@ -13629,6 +14081,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
        vos_pkt_proto_trace_close();
 #endif
 
+   TRACK_UNLOAD_STATUS(unload_vos_stop);
    //Stop all the modules
    vosStatus = vos_stop( pVosContext );
    if (!VOS_IS_STATUS_SUCCESS(vosStatus))
@@ -13641,6 +14094,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    //This requires pMac access, Call this before vos_close().
    hdd_unregister_mcast_bcast_filter(pHddCtx);
 
+   TRACK_UNLOAD_STATUS(unload_vos_sched_close);
    //Close the scheduler before calling vos_close to make sure no thread is
    // scheduled after the each module close is called i.e after all the data
    // structures are freed.
@@ -13657,6 +14111,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
 
    hdd_hostapd_channel_wakelock_deinit(pHddCtx);
 
+  TRACK_UNLOAD_STATUS(unload_vos_nv_close);
   vosStatus = vos_nv_close();
   if (!VOS_IS_STATUS_SUCCESS(vosStatus))
   {
@@ -13665,29 +14120,37 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
      VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vosStatus ) );
   }
 
+   TRACK_UNLOAD_STATUS(unload_vos_close);
    //Close VOSS
    //This frees pMac(HAL) context. There should not be any call that requires pMac access after this.
    vos_close(pVosContext);
 
+   TRACK_UNLOAD_STATUS(unload_deinit_greep_ap);
    hdd_wlan_green_ap_deinit(pHddCtx);
 
    //Close Watchdog
    if (pConfig && pConfig->fIsLogpEnabled)
       vos_watchdog_close(pVosContext);
 
-   if (VOS_FTM_MODE != hdd_get_conparam())
+   if (VOS_FTM_MODE != hdd_get_conparam()) {
+       TRACK_UNLOAD_STATUS(unload_logging_sock_deactivate_svc);
        wlan_hdd_logging_sock_deactivate_svc(pHddCtx);
+   }
 
 #ifdef WLAN_FEATURE_LPSS
+   TRACK_UNLOAD_STATUS(unload_hdd_send_status_pkg);
    wlan_hdd_send_status_pkg(NULL, NULL, 0, 0);
 #endif
-
+   TRACK_UNLOAD_STATUS(unload_close_cesium_nl_sock);
    hdd_close_cesium_nl_sock();
 
+   TRACK_UNLOAD_STATUS(unload_runtime_suspend_deinit);
    hdd_runtime_suspend_deinit(pHddCtx);
+   TRACK_UNLOAD_STATUS(unload_close_all_adapters);
    hdd_close_all_adapters( pHddCtx );
 
 #ifdef IPA_OFFLOAD
+   TRACK_UNLOAD_STATUS(unload_ipa_cleanup);
    hdd_ipa_cleanup(pHddCtx);
 #endif
 
@@ -13698,11 +14161,13 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
                                            __func__);
    }
 
+   TRACK_UNLOAD_STATUS(unload_flush_roc_work);
    /* Free up RoC request queue and flush workqueue */
    vos_flush_work(&pHddCtx->rocReqWork);
    hdd_list_destroy(&pHddCtx->hdd_roc_req_q);
 
 free_hdd_ctx:
+   TRACK_UNLOAD_STATUS(unload_nl_srv_exit);
    nl_srv_exit();
 
    /* Free up dynamically allocated members inside HDD Adapter */
@@ -13714,20 +14179,24 @@ free_hdd_ctx:
    wlan_hdd_deinit_chan_info(pHddCtx);
    wlan_hdd_deinit_tx_rx_histogram(pHddCtx);
    hdd_free_probe_req_ouis(pHddCtx);
+   TRACK_UNLOAD_STATUS(unload_wiphy_unregister);
    wiphy_unregister(wiphy) ;
    wlan_hdd_cfg80211_deinit(wiphy);
+   TRACK_UNLOAD_STATUS(unload_wiphy_free);
    wiphy_free(wiphy) ;
    if (hdd_is_ssr_required())
    {
 #ifdef MSM_PLATFORM
 #ifdef CONFIG_CNSS
        /* WDI timeout had happened during unload, so SSR is needed here */
+       TRACK_UNLOAD_STATUS(unload_subsystem_restart);
        subsystem_restart("wcnss");
 #endif
 #endif
        msleep(5000);
    }
    hdd_set_ssr_required (VOS_FALSE);
+   TRACK_UNLOAD_STATUS(unload_finish);
 }
 
 void __hdd_wlan_exit(void)
@@ -14240,6 +14709,7 @@ static void hdd_set_bundle_require(uint16_t session_id, hdd_context_t *hdd_ctx,
 }
 #endif
 
+
 void hdd_cnss_request_bus_bandwidth(hdd_context_t *pHddCtx,
         const uint64_t tx_packets, const uint64_t rx_packets)
 {
@@ -14414,6 +14884,7 @@ static void hdd_bus_bw_compute_cbk(void *priv)
         }
 
         hdd_set_bundle_require(pAdapter->sessionId, pHddCtx, tx_bytes);
+        hdd_set_driver_del_ack_enable(pAdapter->sessionId, pHddCtx, rx_packets);
 
         total_rx += pAdapter->stats.rx_packets;
         total_tx += pAdapter->stats.tx_packets;
@@ -15233,6 +15704,7 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    pHddCtx->last_scan_reject_session_id = 0xFF;
    pHddCtx->last_scan_reject_reason = 0;
    pHddCtx->last_scan_reject_timestamp = 0;
+   pHddCtx->scan_reject_cnt = 0;
 
    init_completion(&pHddCtx->full_pwr_comp_var);
    init_completion(&pHddCtx->standby_comp_var);
@@ -16646,6 +17118,91 @@ static int __init hdd_module_init ( void)
 }
 #endif /* #ifdef MODULE */
 
+static struct timer_list unload_timer;
+static bool unload_timer_started;
+
+#ifdef CONFIG_SLUB_DEBUG_ON
+#define HDD_UNLOAD_WAIT_TIME 35000
+#else
+#define HDD_UNLOAD_WAIT_TIME 30000
+#endif
+
+/**
+ * hdd_unload_timer_init() - API to initialize unload timer
+ *
+ * initialize unload timer
+ *
+ * Return: None
+ */
+static void hdd_unload_timer_init(void)
+{
+	init_timer(&unload_timer);
+}
+
+/**
+ * hdd_unload_timer_del() - API to Delete unload timer
+ *
+ * Delete unload timer
+ *
+ * Return: None
+ */
+static void hdd_unload_timer_del(void)
+{
+	del_timer(&unload_timer);
+	unload_timer_started = false;
+}
+
+/**
+ * hdd_unload_timer_cb() - Unload timer callback function
+ *
+ * Unload timer callback function
+ *
+ * Return: None
+ */
+static void hdd_unload_timer_cb(unsigned long data)
+{
+	v_CONTEXT_t vos_context = NULL;
+	hdd_context_t *hdd_ctx = NULL;
+
+	pr_err("HDD unload timer expired!,current unload status: %d",
+		g_current_unload_state);
+	/* Get the global VOSS context. */
+	vos_context = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
+	if(vos_context) {
+		hdd_ctx = (hdd_context_t *)vos_get_context(VOS_MODULE_ID_HDD,
+						vos_context );
+	if(hdd_ctx)
+		pr_err("Driver loading: %d unloading:%d logp_in_progress: %d",
+				hdd_ctx->isLoadInProgress,
+				hdd_ctx->isUnloadInProgress,
+			hdd_ctx->isLogpInProgress);
+	} else
+		pr_err("%s: Global VOS context is Null", __func__);
+
+#ifdef CONFIG_SLUB_DEBUG_ON
+	VOS_BUG(0);
+#endif
+}
+
+/**
+ * hdd_unload_timer_start() - API to start unload timer
+ * @msec: timer interval in msec units
+ *
+ * API to start unload timer
+ *
+ * Return: None
+ */
+static void hdd_unload_timer_start(int msec)
+{
+	if(unload_timer_started)
+		hddLog(VOS_TRACE_LEVEL_FATAL,
+			"%s: Starting unload timer when it's running!",
+			__func__);
+	unload_timer.expires = jiffies + msecs_to_jiffies(msec);
+	unload_timer.function = hdd_unload_timer_cb;
+	add_timer(&unload_timer);
+	unload_timer_started = true;
+}
 /**---------------------------------------------------------------------------
 
   \brief hdd_driver_exit() - Exit function
@@ -16718,7 +17275,12 @@ static void hdd_driver_exit(void)
    }
 
    vos_wait_for_work_thread_completion(__func__);
+   /* If unload never completes, then do kernel panic. */
+   hdd_unload_timer_init();
+   hdd_unload_timer_start(HDD_UNLOAD_WAIT_TIME);
    hif_unregister_driver();
+   hdd_unload_timer_del();
+
    vos_preClose( &pVosContext );
 
 #ifdef TIMER_MANAGER
@@ -18255,6 +18817,7 @@ void hdd_stop_bus_bw_compute_timer(hdd_adapter_t *pAdapter)
         hdd_ipa_set_perf_level(pHddCtx, 0, 0);
         hdd_rst_tcp_delack(pHddCtx);
         tlshim_reset_bundle_require();
+        tlshim_driver_del_ack_disable();
     }
 }
 #endif

@@ -830,7 +830,6 @@ ol_txrx_pdev_attach(
         OL_TX_SCHED_WRR_ADV_CAT_MCAST_DATA;
     pdev->tid_to_ac[OL_TX_NUM_TIDS + OL_TX_VDEV_DEFAULT_MGMT] =
         OL_TX_SCHED_WRR_ADV_CAT_MCAST_MGMT;
-
     return pdev; /* success */
 
 pn_trace_attach_fail:
@@ -904,6 +903,8 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
     TXRX_ASSERT1(TAILQ_EMPTY(&pdev->vdev_list));
 
     OL_RX_REORDER_TIMEOUT_CLEANUP(pdev);
+
+    ol_per_pkt_tx_stats_enable(0);
 
     if (ol_cfg_is_high_latency(pdev->ctrl_pdev)) {
         ol_tx_sched_detach(pdev);
@@ -1016,9 +1017,119 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
 #ifdef QCA_COMPUTE_TX_DELAY
     adf_os_spinlock_destroy(&pdev->tx_delay.mutex);
 #endif
-
     adf_os_mem_free(pdev);
 }
+
+#ifdef QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK
+
+/**
+ * ol_txrx_vdev_init_tcp_del_ack() - initialize tcp delayed ack structure
+ * @vdev: vdev handle
+ *
+ * Return: none
+ */
+void ol_txrx_vdev_init_tcp_del_ack(struct ol_txrx_vdev_t *vdev)
+{
+	int i = 0;
+
+	vdev->driver_del_ack_enabled = false;
+	adf_os_hrtimer_init(vdev->pdev->osdev,
+		&vdev->tcp_ack_hash.timer, ol_tx_hl_vdev_tcp_del_ack_timer);
+	adf_os_create_bh(vdev->pdev->osdev, &vdev->tcp_ack_hash.tcp_del_ack_tq,
+		 tcp_del_ack_tasklet, (unsigned long)vdev);
+	adf_os_atomic_init(&vdev->tcp_ack_hash.is_timer_running);
+	adf_os_atomic_init(&vdev->tcp_ack_hash.tcp_node_in_use_count);
+	adf_os_spinlock_init(&vdev->tcp_ack_hash.tcp_free_list_lock);
+	vdev->tcp_ack_hash.tcp_free_list = NULL;
+	for (i = 0; i < OL_TX_HL_DEL_ACK_HASH_SIZE; i++) {
+		adf_os_spinlock_init(&vdev->tcp_ack_hash.node[i].hash_node_lock);
+		vdev->tcp_ack_hash.node[i].no_of_entries = 0;
+		vdev->tcp_ack_hash.node[i].head = NULL;
+	}
+}
+
+/**
+ * ol_txrx_vdev_deinit_tcp_del_ack() - deinitialize tcp delayed ack structure
+ * @vdev: vdev handle
+ *
+ * Return: none
+ */
+void ol_txrx_vdev_deinit_tcp_del_ack(struct ol_txrx_vdev_t *vdev)
+{
+	struct tcp_stream_node *temp = NULL;
+
+	adf_os_destroy_bh(vdev->pdev->osdev, &vdev->tcp_ack_hash.tcp_del_ack_tq);
+
+	adf_os_spin_lock_bh(&vdev->tcp_ack_hash.tcp_free_list_lock);
+	while (vdev->tcp_ack_hash.tcp_free_list) {
+		temp = vdev->tcp_ack_hash.tcp_free_list;
+		vdev->tcp_ack_hash.tcp_free_list = temp->next;
+		adf_os_mem_free(temp);
+	}
+	adf_os_spin_unlock_bh(&vdev->tcp_ack_hash.tcp_free_list_lock);
+}
+
+/**
+ * ol_txrx_vdev_free_tcp_node() - add tcp node in free list
+ * @vdev: vdev handle
+ * @node: tcp stream node
+ *
+ * Return: none
+ */
+void ol_txrx_vdev_free_tcp_node(struct ol_txrx_vdev_t *vdev,
+				struct tcp_stream_node *node)
+{
+	adf_os_atomic_dec(&vdev->tcp_ack_hash.tcp_node_in_use_count);
+
+	adf_os_spin_lock_bh(&vdev->tcp_ack_hash.tcp_free_list_lock);
+	if (vdev->tcp_ack_hash.tcp_free_list) {
+		node->next = vdev->tcp_ack_hash.tcp_free_list;
+		vdev->tcp_ack_hash.tcp_free_list = node;
+	} else {
+		vdev->tcp_ack_hash.tcp_free_list = node;
+		node->next = NULL;
+	}
+	adf_os_spin_unlock_bh(&vdev->tcp_ack_hash.tcp_free_list_lock);
+}
+
+/**
+ * ol_txrx_vdev_alloc_tcp_node() - allocate tcp node
+ * @vdev: vdev handle
+ *
+ * Return: tcp stream node
+ */
+struct tcp_stream_node *ol_txrx_vdev_alloc_tcp_node(struct ol_txrx_vdev_t *vdev)
+{
+	struct tcp_stream_node *node = NULL;
+
+	adf_os_spin_lock_bh(&vdev->tcp_ack_hash.tcp_free_list_lock);
+	if (vdev->tcp_ack_hash.tcp_free_list) {
+		node = vdev->tcp_ack_hash.tcp_free_list;
+		vdev->tcp_ack_hash.tcp_free_list = node->next;
+	}
+	adf_os_spin_unlock_bh(&vdev->tcp_ack_hash.tcp_free_list_lock);
+
+	if (!node) {
+		node = adf_os_mem_alloc(vdev->pdev->osdev,
+				 sizeof(struct ol_txrx_vdev_t));
+		if (!node) {
+			TXRX_PRINT(TXRX_PRINT_LEVEL_FATAL_ERR, "Malloc failed");
+			return NULL;
+		}
+	}
+	adf_os_atomic_inc(&vdev->tcp_ack_hash.tcp_node_in_use_count);
+	return node;
+}
+#else
+static inline
+void ol_txrx_vdev_init_tcp_del_ack(struct ol_txrx_vdev_t *vdev)
+{
+}
+static inline
+void ol_txrx_vdev_deinit_tcp_del_ack(struct ol_txrx_vdev_t *vdev)
+{
+}
+#endif
 
 ol_txrx_vdev_handle
 ol_txrx_vdev_attach(
@@ -1121,6 +1232,8 @@ ol_txrx_vdev_attach(
             &vdev->bundle_queue.timer,
             ol_tx_hl_vdev_bundle_timer,
             vdev, ADF_DEFERRABLE_TIMER);
+
+    ol_txrx_vdev_init_tcp_del_ack(vdev);
 
     /* add this vdev into the pdev's list */
     TAILQ_INSERT_TAIL(&pdev->vdev_list, vdev, vdev_list_elem);
@@ -2633,21 +2746,37 @@ exit:
 bool ol_txrx_set_ocb_def_tx_param(ol_txrx_vdev_handle vdev,
 	void *_def_tx_param, uint32_t def_tx_param_size)
 {
+	int count, channel_nums = def_tx_param_size /
+		sizeof(struct ocb_tx_ctrl_hdr_t);
 	struct ocb_tx_ctrl_hdr_t *def_tx_param =
 		(struct ocb_tx_ctrl_hdr_t *)_def_tx_param;
 
-	if (def_tx_param) {
+	if (def_tx_param == NULL) {
 		/*
-		 * Default TX parameters are provided.
-		 * Validate the contents and
-		 * save them in the vdev.
+		 * Default TX parameters are not provided.
+		 * Delete the old defaults.
 		 */
-		if (def_tx_param_size != sizeof(struct ocb_tx_ctrl_hdr_t)) {
-			VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
-			    "Invalid size of OCB default TX params");
-			return false;
+		if (vdev->ocb_def_tx_param) {
+			vos_mem_free(vdev->ocb_def_tx_param);
+			vdev->ocb_def_tx_param = NULL;
 		}
+		return true;
+	}
 
+	/*
+	 * Default TX parameters are provided.
+	 * Validate the contents and
+	 * save them in the vdev.
+	 * Support up to two channel TX ctrl parameters.
+	 */
+	if (def_tx_param_size != channel_nums *
+		sizeof(struct ocb_tx_ctrl_hdr_t)) {
+		VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
+			  "Invalid size of OCB default TX params");
+		return false;
+	}
+
+	for (count = 0; count < channel_nums; count++, def_tx_param++) {
 		if (def_tx_param->version != OCB_HEADER_VERSION) {
 			VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
 				  "Invalid version of OCB default TX params");
@@ -2669,35 +2798,37 @@ bool ol_txrx_set_ocb_def_tx_param(ol_txrx_vdev_handle vdev,
 			}
 		}
 
-		if (def_tx_param->valid_datarate &&
-			    def_tx_param->datarate > MAX_DATARATE) {
+		/* Default data rate is always valid set by dsrc_config app. */
+		if (!def_tx_param->valid_datarate ||
+			def_tx_param->datarate > MAX_DATARATE) {
 			VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
 				  "Invalid default datarate");
 			return false;
 		}
 
+		/* Default tx power is always valid set by dsrc_config. */
+		if (!def_tx_param->valid_pwr) {
+			VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
+				  "Invalid default tx power");
+			return false;
+		}
+
 		if (def_tx_param->valid_tid &&
-			    def_tx_param->ext_tid > MAX_TID) {
+			def_tx_param->ext_tid > MAX_TID) {
 			VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
 				  "Invalid default TID");
 			return false;
 		}
-
-		if (vdev->ocb_def_tx_param == NULL)
-			vdev->ocb_def_tx_param =
-				vos_mem_malloc(sizeof(*vdev->ocb_def_tx_param));
-		vos_mem_copy(vdev->ocb_def_tx_param, def_tx_param,
-			     sizeof(*vdev->ocb_def_tx_param));
-	} else {
-		/*
-		 * Default TX parameters are not provided.
-		 * Delete the old defaults.
-		 */
-		if (vdev->ocb_def_tx_param) {
-			vos_mem_free(vdev->ocb_def_tx_param);
-			vdev->ocb_def_tx_param = NULL;
-		}
 	}
+
+	if (vdev->ocb_def_tx_param) {
+		vos_mem_free(vdev->ocb_def_tx_param);
+		vdev->ocb_def_tx_param = NULL;
+	}
+	vdev->ocb_def_tx_param = vos_mem_malloc(def_tx_param_size);
+	if (!vdev->ocb_def_tx_param)
+		return false;
+	vos_mem_copy(vdev->ocb_def_tx_param, _def_tx_param, def_tx_param_size);
 
 	return true;
 }
