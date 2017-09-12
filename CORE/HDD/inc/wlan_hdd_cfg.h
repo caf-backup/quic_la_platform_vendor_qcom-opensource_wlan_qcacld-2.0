@@ -3173,6 +3173,36 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 
 #endif /* QCA_SUPPORT_TXRX_HL_BUNDLE */
 
+#ifdef QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK
+
+#define CFG_DEL_ACK_THRESHOLD_HIGH              "gDriverDelAckHighThreshold"
+#define CFG_DEL_ACK_THRESHOLD_HIGH_DEFAULT      (300)
+#define CFG_DEL_ACK_THRESHOLD_HIGH_MIN          (0)
+#define CFG_DEL_ACK_THRESHOLD_HIGH_MAX          (70000)
+
+#define CFG_DEL_ACK_THRESHOLD_LOW               "gDriverDelAckLowThreshold"
+#define CFG_DEL_ACK_THRESHOLD_LOW_DEFAULT       (100)
+#define CFG_DEL_ACK_THRESHOLD_LOW_MIN           (0)
+#define CFG_DEL_ACK_THRESHOLD_LOW_MAX           (70000)
+
+#define CFG_DEL_ACK_TIMER_IN_MS                 "gDriverDelAckTimerValue"
+#define CFG_DEL_ACK_TIMER_IN_MS_DEFAULT         (3)
+#define CFG_DEL_ACK_TIMER_IN_MS_MIN             (1)
+#define CFG_DEL_ACK_TIMER_IN_MS_MAX             (15)
+
+#define CFG_DEL_ACK_PKT_COUNT                   "gDriverDelAckPktCount"
+#define CFG_DEL_ACK_PKT_COUNT_DEFAULT           (20)
+#define CFG_DEL_ACK_PKT_COUNT_MIN               (0)
+#define CFG_DEL_ACK_PKT_COUNT_MAX               (50)
+
+#define CFG_DEL_ACK_ENABLE                      "gDriverDelAckEnable"
+#define CFG_DEL_ACK_ENABLE_DEFAULT              (1)
+#define CFG_DEL_ACK_ENABLE_MIN                  (0)
+#define CFG_DEL_ACK_ENABLE_MAX                  (1)
+
+#endif /* QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK */
+
+
 #ifdef WLAN_FEATURE_11W
 #define CFG_PMF_SA_QUERY_MAX_RETRIES_NAME          "pmfSaQueryMaxRetries"
 #define CFG_PMF_SA_QUERY_MAX_RETRIES_DEFAULT       ( 5 )
@@ -4612,6 +4642,56 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_REDUCED_BEACON_INTERVAL_MAX     (100)
 #define CFG_REDUCED_BEACON_INTERVAL_DEFAULT (0)
 
+#define CFG_NO_ACK_ENABLE         "gEnableNoAck"
+#define CFG_NO_ACK_MIN     (0)
+#define CFG_NO_ACK_MAX     (1)
+#define CFG_NO_ACK_DEFAULT (0)
+
+#ifdef FEATURE_COEX_PTA_CONFIG_ENABLE
+/*
+ * <ini>
+ * gCoexPtaConfigEnable - enable pta coex
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable the coexistence between QCA wifi and External BT.
+ * when val is 1, or the feature is disabled.
+ *
+ * Related: none
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_COEX_PTA_CONFIG_ENABLE         "gCoexPtaConfigEnable"
+#define CFG_COEX_PTA_CONFIG_ENABLE_MIN     (0)
+#define CFG_COEX_PTA_CONFIG_ENABLE_MAX     (2)
+#define CFG_COEX_PTA_CONFIG_ENABLE_DEFAULT (0)
+
+/*
+ * <ini>
+ * gCoexPtaConfigEnable - configure pta coex param
+ * @Min: 0x00000000
+ * @Max: 0xFFFFFFFF
+ * @Default: 0x00000000
+ *
+ * This ini is used to configure the coexistence param between QCA wifi and External BT.
+ *
+ * Related: none
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_COEX_PTA_CONFIG_PARAM         "gCoexPtaConfigParam"
+#define CFG_COEX_PTA_CONFIG_PARAM_MIN     (0x00000000)
+#define CFG_COEX_PTA_CONFIG_PARAM_MAX     (0xFFFFFFFF)
+#define CFG_COEX_PTA_CONFIG_PARAM_DEFAULT (0x00000000)
+#endif
+
 /*
  * <ini>
  * arp_ac_category - ARP access category
@@ -5223,6 +5303,15 @@ struct hdd_config {
    uint16_t                    pkt_bundle_timer_value;
    uint16_t                    pkt_bundle_size;
 #endif
+
+#ifdef QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK
+   uint8_t                     del_ack_enable;
+   uint32_t                    del_ack_threshold_high;
+   uint32_t                    del_ack_threshold_low;
+   uint16_t                    del_ack_timer_value;
+   uint16_t                    del_ack_pkt_count;
+#endif
+
    /* FW debug log parameters */
    v_U32_t     enableFwLogType;
    v_U32_t     enableFwLogLevel;
@@ -5382,6 +5471,13 @@ struct hdd_config {
    uint32_t                    coex_inquiry_p2p_sta_bt_interval;
    uint32_t                    coex_inquiry_p2p_sta_wlan_interval;
    uint32_t                    coex_tx_power;
+
+   v_BOOL_t                    gEnableNoAck;
+
+#ifdef FEATURE_COEX_PTA_CONFIG_ENABLE
+   uint8_t                     coex_pta_config_enable;
+   uint32_t                    coex_pta_config_param;
+#endif
 
    uint8_t                     inform_bss_rssi_raw;
 #ifdef WLAN_FEATURE_TSF

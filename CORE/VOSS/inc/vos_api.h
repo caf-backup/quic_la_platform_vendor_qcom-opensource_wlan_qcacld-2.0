@@ -339,6 +339,8 @@ v_VOID_t vos_fwDumpReq(tANI_U32 cmd, tANI_U32 arg1, tANI_U32 arg2,
 
 v_BOOL_t vos_is_packet_log_enabled(void);
 
+v_BOOL_t vos_config_is_no_ack(void);
+
 #ifdef WLAN_FEATURE_TSF_PLUS
 bool vos_is_ptp_rx_opt_enabled(void);
 bool vos_is_ptp_tx_opt_enabled(void);
@@ -408,6 +410,14 @@ int vos_get_radio_index(void);
 int vos_set_radio_index(int radio_index);
 void vos_svc_fw_shutdown_ind(struct device *dev);
 uint64_t vos_do_div(uint64_t, uint32_t);
+/**
+ * vos_do_div64() - Do uint64/64 divsion.
+ * @dividend: Dividend value
+ * @divisor: Divisor value
+ *
+ * Return: Quotient
+ */
+uint64_t vos_do_div64(uint64_t dividend, uint64_t divisor);
 VOS_STATUS vos_force_fw_dump(void);
 
 bool vos_is_probe_rsp_offload_enabled(void);

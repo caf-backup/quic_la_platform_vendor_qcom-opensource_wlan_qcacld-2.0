@@ -269,6 +269,8 @@ typedef v_U8_t tWlanHddMacAddr[HDD_MAC_ADDR_LEN];
 #define MAX_PROBE_REQ_OUIS 16
 
 #define SCAN_REJECT_THRESHOLD_TIME 300000 /* Time is in msec, equal to 5 mins */
+#define SCAN_REJECT_THRESHOLD 15
+
 
 /*
  * @eHDD_SCAN_REJECT_DEFAULT: default value
@@ -1428,6 +1430,7 @@ struct hdd_adapter_s
     struct sir_ocb_get_tsf_timer_response ocb_get_tsf_timer_resp;
     struct sir_dcc_get_stats_response *dcc_get_stats_resp;
     struct sir_dcc_update_ndl_response dcc_update_ndl_resp;
+    struct dsrc_radio_chan_stats_ctxt dsrc_chan_stats;
 #ifdef WLAN_FEATURE_DSRC
     /* MAC addresses used for OCB interfaces */
     tSirMacAddr ocb_mac_address[VOS_MAX_CONCURRENCY_PERSONA];
@@ -2109,6 +2112,7 @@ struct hdd_context_s
     v_U8_t last_scan_reject_session_id;
     scan_reject_states last_scan_reject_reason;
     v_TIME_t last_scan_reject_timestamp;
+    uint8_t scan_reject_cnt;
     uint8_t hdd_dfs_regdomain;
 #ifdef WLAN_FEATURE_TSF
     /* indicate whether tsf has been initialized */
@@ -2609,6 +2613,27 @@ static inline void wlan_hdd_restart_sap(hdd_adapter_t *ap_adapter)
 }
 #endif
 
+#ifdef QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK
+static inline
+void hdd_set_driver_del_ack_enable(uint16_t session_id, hdd_context_t *hdd_ctx,
+				   uint64_t rx_packets)
+{
+	tlshim_set_driver_del_ack_enable(session_id, rx_packets,
+		hdd_ctx->cfg_ini->busBandwidthComputeInterval,
+		hdd_ctx->cfg_ini->del_ack_threshold_high,
+		hdd_ctx->cfg_ini->del_ack_threshold_low);
+
+}
+#else
+static inline
+void hdd_set_driver_del_ack_enable(uint16_t session_id, hdd_context_t *hdd_ctx,
+				   uint64_t rx_packets)
+{
+}
+#endif
+
+
+
 int hdd_reassoc(hdd_adapter_t *pAdapter, const tANI_U8 *bssid,
 		const tANI_U8 channel, const handoff_src src);
 
@@ -2624,4 +2649,17 @@ void wlan_hdd_deinit_chan_info(hdd_context_t *hdd_ctx);
 void hdd_chip_pwr_save_fail_detected_cb(void *hddctx,
 				struct chip_pwr_save_fail_detected_params
 				*data);
+
+/**
+ * hdd_drv_cmd_validate() - Validates for space in hdd driver command
+ * @command: pointer to input data (its a NULL terminated string)
+ * @len: length of command name
+ *
+ * This function checks for space after command name and if no space
+ * is found returns error.
+ *
+ * Return: 0 for success non-zero for failure
+ */
+int hdd_drv_cmd_validate(tANI_U8 *command, int len);
+
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )
