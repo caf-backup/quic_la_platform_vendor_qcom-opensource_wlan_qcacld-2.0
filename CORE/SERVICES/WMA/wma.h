@@ -1688,5 +1688,7 @@ int wma_crash_inject(tp_wma_handle wma_handle, uint32_t type,
 			uint32_t delay_time_ms);
 
 uint32_t wma_get_vht_ch_width(void);
+WLAN_PHY_MODE wma_chan_to_mode(u8 chan, ePhyChanBondState chan_offset,
+			u8 vht_capable, u8 dot11_mode);
 
 #endif
