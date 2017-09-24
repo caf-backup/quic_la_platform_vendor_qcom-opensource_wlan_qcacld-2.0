@@ -7895,8 +7895,15 @@ static int wma_unified_dfs_radar_rx_event_handler(void *handle,
 	event->re_full_ts = (((uint64_t)radar_event->upload_fullts_high) << 32)
 			| radar_event->upload_fullts_low;
 
-	/* Index of peak magnitude */
-	event->sidx = radar_event->peak_sidx;
+	/**
+	 * Index of peak magnitude
+	 * To do
+	 * Need change interface of WMI_DFS_RADAR_EVENTID to get delta_diff and
+	 * delta_peak when DFS Phyerr filtering offload is enabled.
+	 */
+	event->sidx = radar_event->peak_sidx & 0x0000ffff;
+	event->re_delta_diff = 0;
+	event->re_delta_peak = 0;
 	event->re_flags = 0;
 
 	/*
@@ -26491,8 +26498,12 @@ static void wma_process_update_rx_nss(tp_wma_handle wma_handle,
 		&wma_handle->interfaces[update_rx_nss->smesessionId];
 	int rxNss = update_rx_nss->rxNss;
 
-	if (wma_handle->per_band_chainmask_supp)
-		wma_update_txrx_chainmask(intr->nss, &rxNss);
+	if (wma_handle->per_band_chainmask_supp) {
+		if (intr->mhz < WMA_2_4_GHZ_MAX_FREQ)
+			wma_update_txrx_chainmask(intr->nss_2g, &rxNss);
+		else
+			wma_update_txrx_chainmask(intr->nss_5g, &rxNss);
+	}
 	else
 		wma_update_txrx_chainmask(wma_handle->num_rf_chains, &rxNss);
 	intr->nss = (tANI_U8) rxNss;
