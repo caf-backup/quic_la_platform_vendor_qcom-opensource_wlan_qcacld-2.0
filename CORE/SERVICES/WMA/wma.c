@@ -6429,6 +6429,12 @@ static int wma_pdev_div_info_evt_handler(void *handle, u_int8_t *event_buf,
 		event->num_chains_valid = CHAIN_MAX_NUM;
 	}
 
+	if (event->num_chains_valid > CHAIN_MAX_NUM) {
+		WMA_LOGD("Sizing down the chains no %d to max",
+			  event->num_chains_valid);
+		event->num_chains_valid = CHAIN_MAX_NUM;
+	}
+
 	WMA_LOGD(FL("num_chains_valid: %d"), event->num_chains_valid);
 	chain_rssi_result.num_chains_valid = event->num_chains_valid;
 
