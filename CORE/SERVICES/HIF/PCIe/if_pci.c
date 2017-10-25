@@ -1597,6 +1597,7 @@ again:
 
     OS_MEMZERO(sc, sizeof(*sc));
     sc->mem = mem;
+    sc->mem_len = pci_resource_len(pdev, BAR_NUM);
     sc->pdev = pdev;
     sc->dev = &pdev->dev;
 
