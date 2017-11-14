@@ -6390,6 +6390,8 @@ typedef struct
     tANI_U32 contentionTimeAvg;
     /* num of data pkts used for contention statistics */
     tANI_U32 contentionNumSamples;
+    /* num of pending msdu */
+    tANI_U32 pending_msdu;
 } tSirWifiWmmAcStat, *tpSirWifiWmmAcStat;
 
 /* Interface statistics - corresponding to 2nd most
