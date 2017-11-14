@@ -5679,7 +5679,7 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 		}
 
 		if (total_array_len > (WMA_SVC_MSG_MAX_SIZE /
-		    (sizeof(uint16_t) * WLAN_MAX_AC))) {
+		    (sizeof(uint32_t) * WLAN_MAX_AC))) {
 			excess_data = true;
 			break;
 		} else {
@@ -5689,20 +5689,28 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 						(sizeof(struct sir_wifi_tx) +
 						sizeof(struct sir_wifi_rx)));
 		}
-		buf_len += peer_num *
-			   (sizeof(struct sir_wifi_ll_ext_peer_stats) +
-			   total_peer_len);
+		if (total_peer_len > WMA_SVC_MSG_MAX_SIZE) {
+			excess_data = true;
+			break;
+		}
+		if (peer_num > WMA_SVC_MSG_MAX_SIZE / (total_peer_len +
+		    sizeof(struct sir_wifi_ll_ext_peer_stats))) {
+			excess_data = true;
+			break;
+		} else {
+			buf_len += peer_num *
+				   (sizeof(struct sir_wifi_ll_ext_peer_stats) +
+				   total_peer_len);
+		}
 	} while (0);
 
-	if (excess_data) {
-		WMA_LOGE("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d ",
+	if (excess_data || (buf_len > WMA_SVC_MSG_MAX_SIZE)) {
+		WMA_LOGE("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d tx_succ%d tx_fail %d tx_ppdu %d rx_mpdu %d rx_mcs %d",
 			 __func__, peer_num, fixed_param->num_chan_cca_stats,
-			 fixed_param->tx_mpdu_aggr_array_len);
-		WMA_LOGE("tx_succ %d tx_fail %d tx_ppdu %d ",
+			 fixed_param->tx_mpdu_aggr_array_len,
 			 fixed_param->tx_succ_mcs_array_len,
 			 fixed_param->tx_fail_mcs_array_len,
-			 fixed_param->tx_ppdu_delay_array_len);
-		WMA_LOGE("rx_mpdu %d rx_mcs %d",
+			 fixed_param->tx_ppdu_delay_array_len,
 			 fixed_param->rx_mpdu_aggr_array_len,
 			 fixed_param->rx_mcs_array_len);
 		return NULL;
