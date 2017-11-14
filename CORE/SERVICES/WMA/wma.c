@@ -3870,6 +3870,13 @@ static int wma_extscan_rsp_handler(tp_wma_handle wma, uint8_t *buf)
 	}
 
 	event = (wmi_extscan_start_stop_event_fixed_param *)buf;
+
+	if (event->vdev_id >= wma->max_bssid) {
+		WMA_LOGE("%s: max vdev id's %d reached",
+			  __func__, event->vdev_id);
+		return -EINVAL;
+	}
+
 	vdev_id = event->vdev_id;
 	extscan_ind = vos_mem_malloc(sizeof(*extscan_ind));
 	if (!extscan_ind) {
@@ -6335,6 +6342,14 @@ static int wma_unified_power_debug_stats_event_handler(void *handle,
 		return -EINVAL;
 	}
 
+	if (param_buf->num_debug_register > ((WMA_SVC_MSG_MAX_SIZE -
+		sizeof(wmi_pdev_chip_power_stats_event_fixed_param)) /
+		sizeof(uint32_t))) {
+		WMA_LOGE("excess payload: LEN num_debug_register:%u",
+			 param_buf->num_debug_register);
+		return -EINVAL;
+	}
+
 	debug_registers = param_tlvs->debug_registers;
 	stats_registers_len =
 			(sizeof(uint32_t) * param_buf->num_debug_register);
@@ -6913,7 +6928,9 @@ static int wma_beacon_swba_handler(void *handle, u_int8_t *event, u_int32_t len)
 		return -EINVAL;
 	}
 
-	for ( ; vdev_map; vdev_id++, vdev_map >>= 1) {
+        WMA_LOGD("vdev_map = %d", vdev_map);
+        for (; vdev_map && vdev_id < wma->max_bssid;
+             vdev_id++, vdev_map >>= 1) {
 		if (!(vdev_map & 0x1))
 			continue;
 		if (!wdi_out_cfg_is_high_latency(pdev->ctrl_pdev))
@@ -19518,6 +19535,8 @@ static wmi_buf_t wma_setup_install_key_cmd(tp_wma_handle wma_handle,
 	cmd->key_ix = key_params->key_idx;
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(key_params->peer_mac,
 				   &cmd->peer_macaddr);
+	vos_mem_copy(&cmd->key_rsc_counter,
+		&key_params->key_rsc[0], sizeof(uint64_t));
 	if (key_params->unicast)
 		cmd->key_flags |= PAIRWISE_USAGE;
 	else
@@ -19648,6 +19667,9 @@ static wmi_buf_t wma_setup_install_key_cmd(tp_wma_handle wma_handle,
 		 key_params->key_idx, key_params->key_type, key_params->key_len,
 		 key_params->unicast, key_params->peer_mac,
 		 key_params->def_key_idx);
+	WMA_LOGD("keyrsc param key_seq_counter_h:0x%x key_seq_counter_l: 0x%x",
+		cmd->key_rsc_counter.key_seq_counter_h,
+		cmd->key_rsc_counter.key_seq_counter_l);
 
 	return buf;
 }
@@ -19721,6 +19743,10 @@ static void wma_set_bsskey(tp_wma_handle wma_handle, tpSetBssKeyParams key_info)
 			key_params.key_idx = key_info->key[i].keyId;
 
 		key_params.key_len = key_info->key[i].keyLength;
+		vos_mem_copy(key_params.key_rsc,
+			key_info->key[i].keyRsc,
+			SIR_MAC_MAX_KEY_RSC_LEN);
+
 		if (key_info->encType == eSIR_ED_TKIP) {
 			vos_mem_copy(key_params.key_data,
 				     key_info->key[i].key, 16);
