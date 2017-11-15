@@ -664,6 +664,14 @@ static int wma_ndp_end_response_event_handler(void *handle,
 	WMA_LOGD(FL("WMI_NDP_END_RSP_EVENTID(0x%X) recieved. transaction_id: %d, rsp_status: %d, reason_code: %d"),
 		 WMI_NDP_END_RSP_EVENTID, fixed_params->transaction_id,
 		 fixed_params->rsp_status, fixed_params->reason_code);
+	if (((U32_MAX - sizeof(*end_rsp))/sizeof(struct peer_ndp_map)) <
+					 event->num_ndp_end_rsp_per_ndi_list) {
+		WMA_LOGD(FL(" Number of NDP end rsp %d is very large "),
+			event->num_ndp_end_rsp_per_ndi_list);
+		pe_msg.bodyval = true;
+		ret = -EINVAL;
+		goto send_ndp_end_rsp;
+	}
 
 	len_end_rsp = sizeof(*end_rsp) + (event->num_ndp_end_rsp_per_ndi_list *
 						sizeof(struct peer_ndp_map));
