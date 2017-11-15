@@ -1073,6 +1073,7 @@ typedef struct tagCsrConfigParam
     tANI_U32 bgScanInterval;
     tANI_U16 TxRate;
     eCsrRoamWmmUserModeType WMMSupportMode;
+    tANI_U8 gStaLocalEDCAEnable;
     tANI_BOOLEAN Is11eSupportEnabled;
     tANI_BOOLEAN Is11dSupportEnabled;
     tANI_BOOLEAN Is11dSupportEnabledOriginal;

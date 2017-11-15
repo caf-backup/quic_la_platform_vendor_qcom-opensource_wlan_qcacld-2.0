@@ -1955,6 +1955,8 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
                                pParam->is_sta_connection_in_5gz_enabled;
 
         pMac->enable_dot11p = pParam->enable_dot11p;
+        pMac->roam.configParam.gStaLocalEDCAEnable =
+                               pParam->gStaLocalEDCAEnable;
     }
 
     return status;
