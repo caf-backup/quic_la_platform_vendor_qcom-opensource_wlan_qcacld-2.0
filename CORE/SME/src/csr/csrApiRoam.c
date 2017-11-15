@@ -1956,6 +1956,8 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
         pMac->enable_dot11p = pParam->enable_dot11p;
         pMac->roam.configParam.sendDeauthBeforeCon =
                                pParam->sendDeauthBeforeCon;
+        pMac->roam.configParam.gStaLocalEDCAEnable =
+                               pParam->gStaLocalEDCAEnable;
     }
 
     return status;
