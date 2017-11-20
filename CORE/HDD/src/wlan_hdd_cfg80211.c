@@ -19209,13 +19209,16 @@ static int wlan_hdd_tdls_add_station(struct wiphy *wiphy,
 
     rc = wait_for_completion_timeout(&pAdapter->tdls_add_station_comp,
            msecs_to_jiffies(WAIT_TIME_TDLS_ADD_STA));
+    if (rc <= 0) {
+        hddLog(LOGE, FL("timeout waiting for tdls add station indication %ld"), ret);
+        goto error;
+    }
+
     mutex_lock(&pHddCtx->tdls_lock);
     pTdlsPeer = wlan_hdd_tdls_find_peer(pAdapter, mac, FALSE);
 
-    if (rc <= 0 || (pTdlsPeer &&
-                   (pTdlsPeer->link_status == eTDLS_LINK_TEARING))) {
-        hddLog(LOGE, FL("timeout waiting for tdls add station indication %ld  peer link status %u"),
-                     ret, pTdlsPeer->link_status);
+    if (pTdlsPeer && (pTdlsPeer->link_status == eTDLS_LINK_TEARING)) {
+        hddLog(LOGE, FL("peer link status %u"), pTdlsPeer->link_status);
         mutex_unlock(&pHddCtx->tdls_lock);
         goto error;
     }
@@ -19608,15 +19611,24 @@ static int __wlan_hdd_cfg80211_add_key( struct wiphy *wiphy,
         return -EINVAL;
     }
 
+    if (CSR_MAX_RSC_LEN < params->seq_len)
+    {
+        hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Invalid seq length %d", __func__,
+                params->seq_len);
+
+        return -EINVAL;
+    }
+
     hddLog(VOS_TRACE_LEVEL_INFO,
-           "%s: called with key index = %d & key length %d",
-           __func__, key_index, params->key_len);
+           "%s: called with key index = %d & key length %d & seq length %d",
+           __func__, key_index, params->key_len, params->seq_len);
 
     /*extract key idx, key len and key*/
     vos_mem_zero(&setKey,sizeof(tCsrRoamSetKey));
     setKey.keyId = key_index;
     setKey.keyLength = params->key_len;
     vos_mem_copy(&setKey.Key[0],params->key, params->key_len);
+    vos_mem_copy(&setKey.keyRsc[0], params->seq, params->seq_len);
 
     switch (params->cipher)
     {
@@ -27880,7 +27892,7 @@ static int __wlan_hdd_cfg80211_tdls_mgmt(struct wiphy *wiphy,
                           "%s: Sending frame action_code %u.Disable BMPS",
                           __func__, action_code);
                 status = hdd_disable_bmps_imps(pHddCtx, WLAN_HDD_INFRA_STATION);
-                if (status == VOS_STATUS_SUCCESS)
+                if ((status == VOS_STATUS_SUCCESS) && (pHddTdlsCtx != NULL))
                     pHddTdlsCtx->is_tdls_disabled_bmps = true;
             }
         }
