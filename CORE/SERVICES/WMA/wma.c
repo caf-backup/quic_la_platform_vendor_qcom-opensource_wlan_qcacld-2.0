@@ -5185,7 +5185,6 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
 
-/**
 u_int8_t *wma_add_p2p_ie(u_int8_t *frm)
 {
 	u_int8_t wfa_oui[3] = WMA_P2P_WFA_OUI;
