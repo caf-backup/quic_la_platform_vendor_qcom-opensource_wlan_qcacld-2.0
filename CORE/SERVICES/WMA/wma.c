@@ -5532,6 +5532,8 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 {
 	tSirLLStatsResults *buf;
 	uint32_t buf_len;
+	uint32_t total_array_len, total_peer_len;
+	bool excess_data = false;
 
 	if (!len || !fixed_param) {
 		WMA_LOGE(FL("Invalid input parameters."));
@@ -5595,21 +5597,88 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 	 *     ---------------------------------
 	 */
 	buf_len = sizeof(tSirLLStatsResults) +
-		  sizeof(struct sir_wifi_ll_ext_stats) +
-		  fixed_param->num_chan_cca_stats *
-		  sizeof(struct sir_wifi_chan_cca_stats) +
-		  peer_num *
-		  (sizeof(struct sir_wifi_ll_ext_peer_stats) +
-		   WLAN_MAX_AC *
-		   (sizeof(struct sir_wifi_tx) +
-		    sizeof(struct sir_wifi_rx)) +
-		    sizeof(uint32_t) * WLAN_MAX_AC *
-		    (fixed_param->tx_mpdu_aggr_array_len +
-		     fixed_param->tx_succ_mcs_array_len +
-		     fixed_param->tx_fail_mcs_array_len +
-		     fixed_param->tx_ppdu_delay_array_len +
-		     fixed_param->rx_mpdu_aggr_array_len +
-		     fixed_param->rx_mcs_array_len));
+			sizeof(struct sir_wifi_ll_ext_stats);
+
+	do {
+		if (fixed_param->num_chan_cca_stats > (WMA_SVC_MSG_MAX_SIZE /
+		    sizeof(struct sir_wifi_chan_cca_stats))) {
+			excess_data = true;
+			break;
+		}
+		buf_len += (fixed_param->num_chan_cca_stats *
+				sizeof(struct sir_wifi_chan_cca_stats));
+		if (fixed_param->tx_mpdu_aggr_array_len >
+		    WMA_SVC_MSG_MAX_SIZE) {
+			excess_data = true;
+			break;
+		} else {
+			total_array_len = fixed_param->tx_mpdu_aggr_array_len;
+		}
+		if (fixed_param->tx_succ_mcs_array_len >
+		    (WMA_SVC_MSG_MAX_SIZE - total_array_len)) {
+			excess_data = true;
+			break;
+		} else {
+			total_array_len += fixed_param->tx_succ_mcs_array_len;
+		}
+		if (fixed_param->tx_fail_mcs_array_len >
+		    (WMA_SVC_MSG_MAX_SIZE - total_array_len)) {
+			excess_data = true;
+			break;
+		} else {
+			total_array_len += fixed_param->tx_fail_mcs_array_len;
+		}
+		if (fixed_param->tx_ppdu_delay_array_len >
+		    (WMA_SVC_MSG_MAX_SIZE - total_array_len)) {
+			excess_data = true;
+			break;
+		} else {
+			total_array_len += fixed_param->tx_ppdu_delay_array_len;
+		}
+		if (fixed_param->rx_mpdu_aggr_array_len >
+		    (WMA_SVC_MSG_MAX_SIZE - total_array_len)) {
+			excess_data = true;
+			break;
+		} else {
+			total_array_len += fixed_param->rx_mpdu_aggr_array_len;
+		}
+		if (fixed_param->rx_mcs_array_len >
+		    (WMA_SVC_MSG_MAX_SIZE - total_array_len)) {
+			excess_data = true;
+			break;
+		} else {
+			total_array_len += fixed_param->rx_mcs_array_len;
+		}
+
+		if (total_array_len > (WMA_SVC_MSG_MAX_SIZE /
+		    (sizeof(uint16_t) * WLAN_MAX_AC))) {
+			excess_data = true;
+			break;
+		} else {
+			total_peer_len = (sizeof(uint32_t) * WLAN_MAX_AC *
+						total_array_len) +
+						(WLAN_MAX_AC *
+						(sizeof(struct sir_wifi_tx) +
+						sizeof(struct sir_wifi_rx)));
+		}
+		buf_len += peer_num *
+			   (sizeof(struct sir_wifi_ll_ext_peer_stats) +
+			   total_peer_len);
+	} while (0);
+
+	if (excess_data) {
+		WMA_LOGE("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d ",
+			 __func__, peer_num, fixed_param->num_chan_cca_stats,
+			 fixed_param->tx_mpdu_aggr_array_len);
+		WMA_LOGE("tx_succ %d tx_fail %d tx_ppdu %d ",
+			 fixed_param->tx_succ_mcs_array_len,
+			 fixed_param->tx_fail_mcs_array_len,
+			 fixed_param->tx_ppdu_delay_array_len);
+		WMA_LOGE("rx_mpdu %d rx_mcs %d",
+			 fixed_param->rx_mpdu_aggr_array_len,
+			 fixed_param->rx_mcs_array_len);
+		return NULL;
+	}
 
 	buf = (tSirLLStatsResults *)vos_mem_malloc(buf_len);
 	if (buf == NULL) {
@@ -5642,6 +5711,7 @@ static void __wma_fill_tx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 	wmi_tx_stats *wmi_tx;
 	struct sir_wifi_tx *tx_stats;
 	struct sir_wifi_ll_ext_peer_stats *peer_stats;
+	uint8_t *counter;
 	uint32_t *tx_mpdu_aggr, *tx_succ_mcs, *tx_fail_mcs, *tx_delay;
 	uint32_t len, dst_len, tx_mpdu_aggr_array_len, tx_succ_mcs_array_len,
 		 tx_fail_mcs_array_len, tx_delay_array_len;
@@ -5660,22 +5730,31 @@ static void __wma_fill_tx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 	wmi_tx = param_buf->tx_stats;
 
 	len = fix_param->num_peer_ac_tx_stats *
-		WLAN_MAX_AC * tx_mpdu_aggr_array_len * sizeof(uint32_t);
-	if (len <= dst_len) {
+		WLAN_MAX_AC * tx_mpdu_aggr_array_len;
+	if (len * sizeof(uint32_t) <= dst_len) {
 		tx_mpdu_aggr = (uint32_t *)result;
-		vos_mem_copy(tx_mpdu_aggr, param_buf->tx_mpdu_aggr, len);
-		result += len;
-		dst_len -= len;
+		counter = (uint8_t *)param_buf->tx_mpdu_aggr;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		result += len * sizeof(uint32_t);
+		dst_len -= len * sizeof(uint32_t);
 	} else {
 		WMA_LOGE(FL("TX_MPDU_AGGR buffer length is wrong."));
 		tx_mpdu_aggr = NULL;
 	}
 
 	len = fix_param->num_peer_ac_tx_stats * WLAN_MAX_AC *
-		tx_succ_mcs_array_len * sizeof(uint32_t);
-	if (len <= dst_len) {
+		tx_succ_mcs_array_len;
+	if (len * sizeof(uint32_t) <= dst_len) {
 		tx_succ_mcs = (uint32_t *)result;
-		vos_mem_copy(tx_succ_mcs, param_buf->tx_succ_mcs, len);
+		counter = (uint8_t *)param_buf->tx_succ_mcs;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		len *= sizeof(uint32_t);
 		result += len;
 		dst_len -= len;
 	} else {
@@ -5684,10 +5763,15 @@ static void __wma_fill_tx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 	}
 
 	len = fix_param->num_peer_ac_tx_stats * WLAN_MAX_AC *
-		tx_fail_mcs_array_len * sizeof(uint32_t);
-	if (len <= dst_len) {
+		tx_fail_mcs_array_len;
+	if (len * sizeof(uint32_t) <= dst_len) {
 		tx_fail_mcs = (uint32_t *)result;
-		vos_mem_copy(tx_fail_mcs, param_buf->tx_fail_mcs, len);
+		counter = (uint8_t *)param_buf->tx_fail_mcs;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		len *= sizeof(uint32_t);
 		result += len;
 		dst_len -= len;
 	} else {
@@ -5696,10 +5780,15 @@ static void __wma_fill_tx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 	}
 
 	len = fix_param->num_peer_ac_tx_stats *
-		WLAN_MAX_AC * tx_delay_array_len * sizeof(uint32_t);
-	if (len <= dst_len) {
+		WLAN_MAX_AC * tx_delay_array_len;
+	if (len * sizeof(uint32_t) <= dst_len) {
 		tx_delay = (uint32_t *)result;
-		vos_mem_copy(tx_delay, param_buf->tx_ppdu_delay, len);
+		counter = (uint8_t *)param_buf->tx_ppdu_delay;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		len *= sizeof(uint32_t);
 		result += len;
 		dst_len -= len;
 	} else {
@@ -5789,6 +5878,7 @@ static void __wma_fill_rx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 	struct sir_wifi_rx *rx_stats;
 	struct sir_wifi_ll_ext_peer_stats *peer_stats;
 	uint32_t len, dst_len, rx_mpdu_aggr_array_len, rx_mcs_array_len;
+	uint8_t *counter;
 
 	rx_mpdu_aggr_array_len = fix_param->rx_mpdu_aggr_array_len;
 	ll_stats->rx_mpdu_aggr_array_len = rx_mpdu_aggr_array_len;
@@ -5799,11 +5889,16 @@ static void __wma_fill_rx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 
 	result = *buf;
 	dst_len = *buf_length;
-	len = sizeof(uint32_t) * (fix_param->num_peer_ac_rx_stats *
-				  WLAN_MAX_AC * rx_mpdu_aggr_array_len);
-	if (len <= dst_len) {
+	len = fix_param->num_peer_ac_rx_stats *
+		  WLAN_MAX_AC * rx_mpdu_aggr_array_len;
+	if (len * sizeof(uint32_t) <= dst_len) {
 		rx_mpdu_aggr = (uint32_t *)result;
-		vos_mem_copy(rx_mpdu_aggr, param_buf->rx_mpdu_aggr, len);
+		counter = (uint8_t *)param_buf->rx_mpdu_aggr;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		len *= sizeof(uint32_t);
 		result += len;
 		dst_len -= len;
 	} else {
@@ -5811,11 +5906,16 @@ static void __wma_fill_rx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 		rx_mpdu_aggr = NULL;
 	}
 
-	len = sizeof(uint32_t) * (fix_param->num_peer_ac_rx_stats *
-				  WLAN_MAX_AC * rx_mcs_array_len);
-	if (len <= dst_len) {
+	len = fix_param->num_peer_ac_rx_stats *
+		  WLAN_MAX_AC * rx_mcs_array_len;
+	if (len * sizeof(uint32_t) <= dst_len) {
 		rx_mcs = (uint32_t *)result;
-		vos_mem_copy(rx_mcs, param_buf->rx_mcs, len);
+		counter = (uint8_t *)param_buf->rx_mcs;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		len *= sizeof(uint32_t);
 		result += len;
 		dst_len -= len;
 	} else {
