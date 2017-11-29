@@ -4748,6 +4748,66 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_SKIP_MAC_CONFIG_MAX     (1)
 #define CFG_SKIP_MAC_CONFIG_DEFAULT (0)
 
+/*
+ * <ini>
+ * gCCAThresholdEnable - enable/disable CCA threshold setting
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to overide CCA threshold for ESTI Adaptivity.
+ *
+ * Related: NOne
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_CCA_THRESHOLD_ENABLE_NAME    "gCCAThresholdEnable"
+#define CFG_CCA_THRESHOLD_ENABLE_MIN     (0)
+#define CFG_CCA_THRESHOLD_ENABLE_MAX     (1)
+#define CFG_CCA_THRESHOLD_ENABLE_DEFAULT (0)
+
+/*
+ * <ini>
+ * gCCAThreshold2G - CCA threshold for 2G band
+ * @Min: 10
+ * @Max: 127
+ * @Default: 28
+ *
+ * Once CCA threshold is enabled, this is threshold for 2G band.
+ *
+ * Related: None
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_CCA_THRESHOLD_2G_NAME    "gCCAThreshold2G"
+#define CFG_CCA_THRESHOLD_2G_MIN     (10)
+#define CFG_CCA_THRESHOLD_2G_MAX     (127)
+#define CFG_CCA_THRESHOLD_2G_DEFAULT (28)
+
+/*
+ * <ini>
+ * gCCAThreshold5G - CCA threshold for 5G band
+ * @Min: 10
+ * @Max: 127
+ * @Default: 28
+ *
+ * Once CCA threshold is enabled, this is threshold for 5G band.
+ *
+ * Related: None
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_CCA_THRESHOLD_5G_NAME    "gCCAThreshold5G"
+#define CFG_CCA_THRESHOLD_5G_MIN     (10)
+#define CFG_CCA_THRESHOLD_5G_MAX     (127)
+#define CFG_CCA_THRESHOLD_5G_DEFAULT (28)
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -5618,6 +5678,10 @@ struct hdd_config {
    bool                        sap_probe_resp_offload;
    uint32_t                    sta_auth_retries_for_code17;
    uint8_t                     skip_mac_config;
+
+   bool      cca_threshold_enable;
+   uint32_t  cca_threshold_2g;
+   uint32_t  cca_threshold_5g;
 };
 
 typedef struct hdd_config hdd_config_t;
