@@ -621,7 +621,14 @@ ol_rx_pn_ind_handler(
         return;
     }
 
-    adf_os_atomic_set(&peer->fw_pn_check, 1);
+    /* Some AP doesn't support block ack, so win_sz_mask doesn't
+     * set correctly, which will bypass PN status check as
+     * default win_sz_mask is 0.
+     *
+     * Enable pn check on host side.
+     */
+     /* adf_os_atomic_set(&peer->fw_pn_check, 1); */
+
     /*TODO: Fragmentation case*/
     win_sz_mask = peer->tids_rx_reorder[tid].win_sz_mask;
     seq_num_start &= win_sz_mask;
