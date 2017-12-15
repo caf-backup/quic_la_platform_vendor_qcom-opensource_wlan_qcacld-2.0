@@ -8416,6 +8416,12 @@ static int wma_unified_bcntx_status_event_handler(void *handle, u_int8_t *cmd_pa
 
    resp_event = param_buf->fixed_param;
 
+   if (resp_event->vdev_id >= wma->max_bssid) {
+        WMA_LOGE("%s: received invalid vdev_id %d",
+                __func__, resp_event->vdev_id);
+        return -EINVAL;
+   }
+
    /* Check for valid handle to ensure session is not deleted in any race */
    if (!wma->interfaces[resp_event->vdev_id].handle) {
       WMA_LOGE("%s: The session does not exist", __func__);
@@ -34717,6 +34723,11 @@ static int wma_roam_event_callback(WMA_HANDLE handle, u_int8_t *event_buf,
 	wmi_event = param_buf->fixed_param;
 	WMA_LOGD("%s: Reason %x for vdevid %x, rssi %d",
 		__func__, wmi_event->reason, wmi_event->vdev_id, wmi_event->rssi);
+
+	if (wmi_event->vdev_id >= wma_handle->max_bssid) {
+		WMA_LOGE("Invalid vdev id from firmware");
+		return -EINVAL;
+	}
 
 	DPTRACE(adf_dp_trace_record_event(ADF_DP_TRACE_EVENT_RECORD,
 		wmi_event->vdev_id, ADF_PROTO_TYPE_EVENT, ADF_ROAM_EVENTID));
