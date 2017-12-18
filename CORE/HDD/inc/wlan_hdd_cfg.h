@@ -3243,6 +3243,27 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_REORDER_OFFLOAD_SUPPORT_MAX     ( 1 )
 #define CFG_REORDER_OFFLOAD_SUPPORT_DEFAULT ( 0 )
 
+/*
+ * <ini>
+ * gEnableHostapdEdca - Use hostapd EDCA local params
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable using hostapd
+ * EDCA local params.
+ *
+ * Supported Feature: EDCA
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_EDCA_FROM_HOSTAPD                      "gEnableHostapdEdcaLocal"
+#define CFG_EDCA_FROM_HOSTAPD_MIN                  ( 0 )
+#define CFG_EDCA_FROM_HOSTAPD_MAX                  ( 1 )
+#define CFG_EDCA_FROM_HOSTAPD_DEFAULT              ( 0 )
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 #define CFG_ROAMING_OFFLOAD_NAME                "gRoamOffloadEnabled"
 #define CFG_ROAMING_OFFLOAD_MIN                 (0)
@@ -3326,6 +3347,32 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_ENABLE_NAN_SUPPORT_MIN                      (0)
 #define CFG_ENABLE_NAN_SUPPORT_MAX                      (1)
 #endif
+
+/*
+ * <ini>
+ * gEnableAcTxqOptimize
+ * @Min: 0
+ * @Max: 0x13
+ * @Default: 0
+ *
+ * This ini is used to enable one AC tx queue optimize
+ *
+ * Usage: Internal/External
+ *
+ * bits 0-1:   WMM_AC_BE 0
+ *             WMM_AC_BK 1
+ *             WMM_AC_VI 2
+ *             WMM_AC_VO 3
+ * bits 2-3:   reserved
+ * bits 4:     Enalbe
+ * bits 5-7:   reserved
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_AC_TXQ_OPTIMIZE                 "gEnableAcTxqOptimize"
+#define CFG_ENABLE_AC_TXQ_OPTIMIZE_MIN             ( 0x0 )
+#define CFG_ENABLE_AC_TXQ_OPTIMIZE_MAX             ( 0x13 )
+#define CFG_ENABLE_AC_TXQ_OPTIMIZE_DEFAULT         ( 0x0 )
 
 #define CFG_ENABLE_SELF_RECOVERY                   "gEnableSelfRecovery"
 #define CFG_ENABLE_SELF_RECOVERY_MIN               ( 0 )
@@ -5302,6 +5349,7 @@ struct hdd_config {
    v_U32_t                     TxPower2g;
    v_U32_t                     TxPower5g;
    v_U32_t                     gEnableDebugLog;
+   uint8_t                     enable_ac_txq_optimize;
    v_U8_t                      rxhandle;
    uint8_t                     cpu_map_list[CFG_RPS_RX_QUEUE_CPU_MAP_LIST_LEN];
    v_BOOL_t                    fDfsPhyerrFilterOffload;
@@ -5401,6 +5449,7 @@ struct hdd_config {
    bool                        crash_inject_enabled;
    v_S31_t                     dfsRadarPriMultiplier;
    v_U8_t                      reorderOffloadSupport;
+   uint8_t                     enable_hostapd_edca_local;
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
    v_BOOL_t                    isRoamOffloadEnabled;

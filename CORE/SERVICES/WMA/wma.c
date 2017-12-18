@@ -33391,6 +33391,67 @@ static VOS_STATUS wma_get_isolation(tp_wma_handle wma)
 }
 
 /*
+ * wma_peer_flush_pending() - Flush peer data in fw
+ * @wma_handle: WMA handle
+ * @sta_inactivity_timer: sme_sta_inactivity_timeout
+ *
+ * This function is used to discard pending packets of tids in fw.
+ *
+ * Return: None
+ */
+static void wma_peer_flush_pending(tp_wma_handle wma,
+				   struct sme_flush_pending *flush_pend)
+{
+	u_int8_t ac_to_tid[4][2] = { {0, 3}, {1, 2}, {4, 5}, {6, 7} };
+	u_int8_t vdev_id, peer_id;
+	u_int32_t peer_tid_bitmap = 0;
+	struct wma_txrx_node *iface;
+	u_int8_t i;
+	struct ol_txrx_peer_t *peer;
+	ol_txrx_pdev_handle pdev;
+
+	pdev = vos_get_context(VOS_MODULE_ID_TXRX, wma->vos_context);
+	if (!pdev) {
+		WMA_LOGE("%s: pdev is NULL", __func__);
+		return;
+	}
+
+	peer = ol_txrx_find_peer_by_addr(pdev, flush_pend->peer_addr.bytes,
+					 &peer_id);
+	if (!peer) {
+		WMA_LOGE("PEER [%pM] not found", flush_pend->peer_addr.bytes);
+		return;
+	}
+	WMA_LOGI("PEER [%pM] found", flush_pend->peer_addr.bytes);
+
+	vdev_id = flush_pend->session_id;
+	iface = &wma->interfaces[vdev_id];
+	if (!iface->handle) {
+		WMA_LOGE("%s: Failed to get iface handle: %p",
+			 __func__, iface->handle);
+		return;
+	}
+
+	if (flush_pend->flush_ac) {
+		for (i = 0; i < 4; ++i) {
+			if (((flush_pend->flush_ac & 0x0f) >> i) & 0x01) {
+				peer_tid_bitmap |= (1 << ac_to_tid[i][0]) |
+						   (1 << ac_to_tid[i][1]);
+			}
+		}
+	} else {
+		return;
+	}
+
+	WMA_LOGI("%s: vdevid %d peer_tid_bitmap %08x", __func__,
+		 vdev_id, peer_tid_bitmap);
+
+	wmi_unified_peer_flush_tids_send(wma->wmi_handle,
+					 flush_pend->peer_addr.bytes,
+					 peer_tid_bitmap, vdev_id);
+}
+
+/*
  * function   : wma_mc_process_msg
  * Description :
  * Args       :
@@ -34323,6 +34384,14 @@ VOS_STATUS wma_mc_process_msg(v_VOID_t *vos_context, vos_msg_t *msg)
         case WDA_GET_ISOLATION:
             wma_get_isolation(wma_handle);
             break;
+		case WDA_PEER_FLUSH_PENDING:
+			wma_peer_flush_pending(wma_handle, msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
+			break;
+		case WDA_SET_AC_TXQ_OPTIMIZE:
+			wma_set_ac_txq_optimize(wma_handle, msg->bodyptr);
+			vos_mem_free(msg->bodyptr);
+			break;
 		default:
 			WMA_LOGD("unknow msg type %x", msg->type);
 			/* Do Nothing? MSG Body should be freed at here */
@@ -34347,10 +34416,15 @@ static int wma_scan_event_callback(WMA_HANDLE handle, u_int8_t *data,
 	vos_msg_t vos_msg = {0};
 	VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
 
-        param_buf = (WMI_SCAN_EVENTID_param_tlvs *) data;
-        wmi_event = param_buf->fixed_param;
-        vdev_id = wmi_event->vdev_id;
-        scan_id = wma_handle->interfaces[vdev_id].scan_info.scan_id;
+	if (wmi_event->vdev_id >= wma_handle->max_bssid) {
+		WMA_LOGE("Invalid vdev id from firmware");
+		return -EINVAL;
+	}
+
+	param_buf = (WMI_SCAN_EVENTID_param_tlvs *) data;
+	wmi_event = param_buf->fixed_param;
+	vdev_id = wmi_event->vdev_id;
+	scan_id = wma_handle->interfaces[vdev_id].scan_info.scan_id;
 
 	adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
 	if (wma_handle->roam_preauth_scan_id == wmi_event->scan_id) {
@@ -38445,6 +38519,74 @@ VOS_STATUS wma_set_cts2self_for_p2p_go(void *wda_handle,
 
 	WMA_LOGD("Successfully Set CTS2SELF for p2p GO %d",
 		cts2self_for_p2p_go);
+	return VOS_STATUS_SUCCESS;
+}
+
+/**
+ * wmi_unified_ac_txq_optimize_send() - set command to firmware.
+ * @wmi:                     wmi_unified_t
+ * @ac_txq_optimize:         value needs to set to firmware.
+ *
+ * Return: VOS_STATUS.
+ */
+static int32_t
+wmi_unified_ac_txq_optimize_send(wmi_unified_t wmi, uint8_t *ac_txq_optimize)
+{
+	wmi_pdev_set_ac_tx_queue_optimized_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	int32_t len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi, len);
+
+	if (!buf) {
+		WMA_LOGP("%s: wmi_buf_alloc failed", __func__);
+		return -ENOMEM;
+	}
+	cmd = (wmi_pdev_set_ac_tx_queue_optimized_cmd_fixed_param *)
+	       wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_pdev_set_ac_tx_queue_optimized_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+		       wmi_pdev_set_ac_tx_queue_optimized_cmd_fixed_param));
+
+	cmd->pdev_id = 0;
+	if ((*ac_txq_optimize & 0x0f) < NUM_AC)
+		cmd->ac = *ac_txq_optimize & 0x0f;
+	else
+		return -EINVAL;
+
+	cmd->ac_tx_queue_optimize_enable = 1;
+
+	if (wmi_unified_cmd_send(wmi, buf, len,
+				 WMI_PDEV_SET_AC_TX_QUEUE_OPTIMIZED_CMDID)) {
+		WMA_LOGP("%s: Failed to send AC queue optimize command",
+			 __func__);
+		wmi_buf_free(buf);
+		return -EIO;
+	}
+	WMA_LOGI("%s: ac %d pdev_id %d", __func__, cmd->ac, cmd->pdev_id);
+	return 0;
+}
+
+/**
+ * wma_set_ac_txq_optimize() - set one AC Tx queue optimize command.
+ * @wda_handle:        pointer to wma handle.
+ * @value:             value needs to set to firmware.
+ *
+ * Return: VOS_STATUS.
+ */
+VOS_STATUS wma_set_ac_txq_optimize(void *wda_handle, uint8_t *value)
+{
+	int32_t ret;
+	tp_wma_handle wma = (tp_wma_handle)wda_handle;
+
+	ret = wmi_unified_ac_txq_optimize_send(wma->wmi_handle, value);
+	if (ret) {
+		WMA_LOGE("Fail to Set AC queue, input 0x%02x", *value);
+		return VOS_STATUS_E_FAILURE;
+	}
+
+	WMA_LOGI("Successfully Set AC queue, input 0x%02x", *value);
 	return VOS_STATUS_SUCCESS;
 }
 
