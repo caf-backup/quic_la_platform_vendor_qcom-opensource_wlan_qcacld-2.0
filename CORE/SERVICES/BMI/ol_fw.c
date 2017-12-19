@@ -1201,7 +1201,7 @@ void ol_ramdump_handler(struct ol_softc *scn)
 			fw_ram_seg_addr[i] = (scn->ramdump[i])->mem;
 			pr_err("FW %s start addr = %#08x\n",
 				fw_ram_seg_name[i], *reg);
-			pr_err("Memory addr for %s = %p\n",
+			pr_err("Memory addr for %s = %pK\n",
 				fw_ram_seg_name[i],
 				(scn->ramdump[i])->mem);
 			(scn->ramdump[i])->start_addr = *reg;
