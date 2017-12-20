@@ -4797,6 +4797,8 @@ eHalStatus sme_GetConfigParam(tHalHandle hHal, tSmeConfigParams *pParam)
       pParam->enableSelfRecovery = pMac->sme.enableSelfRecovery;
       pParam->f_prefer_non_dfs_on_radar = pMac->f_prefer_non_dfs_on_radar;
       pParam->fine_time_meas_cap = pMac->fine_time_meas_cap;
+      pParam->csrConfig.gStaLocalEDCAEnable =
+              pMac->roam.configParam.gStaLocalEDCAEnable;
       sme_ReleaseGlobalLock( &pMac->sme );
    }
 
