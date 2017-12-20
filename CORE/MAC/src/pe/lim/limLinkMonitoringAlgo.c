@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -280,7 +280,7 @@ limTriggerSTAdeletion(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession pse
         (pStaDs->mlmStaContext.mlmState == eLIM_MLM_WT_DEL_BSS_RSP_STATE)) {
         /* Already in the process of deleting context for the peer */
         PELOGE(limLog(pMac, LOGE,
-                FL("Deletion is in progress for peer:%p"), pStaDs->staAddr);)
+                FL("Deletion is in progress for peer:%pK"), pStaDs->staAddr);)
         return;
     }
 
