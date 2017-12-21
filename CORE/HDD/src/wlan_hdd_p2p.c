@@ -2594,7 +2594,7 @@ void hdd_sendMgmtFrameOverMonitorIface( hdd_adapter_t *pMonAdapter,
      {
          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
                    "HDD [%d]: Insufficient headroom, "
-                   "head[%p], data[%p], req[%d]",
+                   "head[%pk], data[%pk], req[%d]",
                    __LINE__, skb->head, skb->data, nFrameLength);
          kfree_skb(skb);
          return ;
