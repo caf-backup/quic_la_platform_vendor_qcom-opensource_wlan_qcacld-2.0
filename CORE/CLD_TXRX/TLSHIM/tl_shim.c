@@ -646,6 +646,7 @@ static int tlshim_mgmt_rx_process(void *context, u_int8_t *data,
 	 * If the mpdu_data_len is greater than Max (2k), drop the frame
 	 */
 	if (rx_pkt->pkt_meta.mpdu_data_len > WMA_MAX_MGMT_MPDU_LEN) {
+		adf_os_spin_unlock_bh(&tl_shim->mgmt_lock);
 		TLSHIM_LOGE("Data Len %d greater than max, dropping frame",
 			 rx_pkt->pkt_meta.mpdu_data_len);
 		vos_mem_free(rx_pkt);
@@ -2162,7 +2163,7 @@ uint16_t tl_shim_get_sta_id_by_addr(void *vos_context, uint8_t *mac_addr)
 	uint8_t peer_id;
 
 	if (vos_context == NULL || mac_addr == NULL) {
-		TLSHIM_LOGE("Invalid argument %p, %p", vos_context, mac_addr);
+		TLSHIM_LOGE("Invalid argument %pK, %pK", vos_context, mac_addr);
 		return 0;
 	}
 
@@ -2193,7 +2194,7 @@ void *tl_shim_get_vdev_by_addr(void *vos_context, uint8_t *mac_addr)
 	uint8_t peer_id;
 
 	if (vos_context == NULL || mac_addr == NULL) {
-		TLSHIM_LOGE("Invalid argument %p, %p", vos_context, mac_addr);
+		TLSHIM_LOGE("Invalid argument %pK, %pK", vos_context, mac_addr);
 		return NULL;
 	}
 
