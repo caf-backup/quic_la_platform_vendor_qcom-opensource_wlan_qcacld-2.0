@@ -1137,7 +1137,7 @@ void csrAbortCommand( tpAniSirGlobal pMac, tSmeCmd *pCommand, tANI_BOOLEAN fStop
         {
         case eSmeCommandScan:
             // We need to inform the requester before dropping the scan command
-            smsLog( pMac, LOGW, "%s: Drop scan reason %d callback %p",
+            smsLog( pMac, LOGW, "%s: Drop scan reason %d callback %pK",
                     __func__, pCommand->u.scanCmd.reason,
                     pCommand->u.scanCmd.callback);
             if (NULL != pCommand->u.scanCmd.callback)
@@ -20560,7 +20560,7 @@ void csrInitOperatingClasses(tHalHandle hHal)
              if (!found) {
                  opClasses[i]= class;
                  i++;
-                 if (i == SIR_MAC_MAX_SUPP_OPER_CLASSES)
+                 if (i >= SIR_MAC_MAX_SUPP_OPER_CLASSES)
                      break;
              }
         }
