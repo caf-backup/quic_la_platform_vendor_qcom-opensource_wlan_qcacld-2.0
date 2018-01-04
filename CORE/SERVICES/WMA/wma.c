@@ -5458,6 +5458,12 @@ static void wma_send_bcn_buf_ll(tp_wma_handle wma,
 		WMA_LOGE("%s: Invalid beacon buffer", __func__);
 		return;
 	}
+	if (WMI_UNIFIED_NOA_ATTR_NUM_DESC_GET(p2p_noa_info) >
+			WMI_P2P_MAX_NOA_DESCRIPTORS) {
+		WMA_LOGE("%s: Too many descriptors %d", __func__,
+			 WMI_UNIFIED_NOA_ATTR_NUM_DESC_GET(p2p_noa_info));
+		return;
+	}
 
 	wmi_buf = wmi_buf_alloc(wma->wmi_handle, sizeof(*cmd));
 	if (!wmi_buf) {
@@ -31408,10 +31414,15 @@ static int wma_scan_event_callback(WMA_HANDLE handle, u_int8_t *data,
 	vos_msg_t vos_msg = {0};
 	VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
 
-        param_buf = (WMI_SCAN_EVENTID_param_tlvs *) data;
-        wmi_event = param_buf->fixed_param;
-        vdev_id = wmi_event->vdev_id;
-        scan_id = wma_handle->interfaces[vdev_id].scan_info.scan_id;
+	if (wmi_event->vdev_id >= wma_handle->max_bssid) {
+		WMA_LOGE("Invalid vdev id from firmware");
+		return -EINVAL;
+	}
+
+	param_buf = (WMI_SCAN_EVENTID_param_tlvs *) data;
+	wmi_event = param_buf->fixed_param;
+	vdev_id = wmi_event->vdev_id;
+	scan_id = wma_handle->interfaces[vdev_id].scan_info.scan_id;
 
 	adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
 	if (wma_handle->roam_preauth_scan_id == wmi_event->scan_id) {
@@ -35241,6 +35252,14 @@ wma_process_utf_event(WMA_HANDLE handle,
 				 " Seq %d got seq %d",
 				 wma_handle->utf_event_info.expectedSeq,
 				 currentSeq);
+	}
+
+	if ((datalen > MAX_UTF_EVENT_LENGTH) ||
+		(wma_handle->utf_event_info.offset >
+		(MAX_UTF_EVENT_LENGTH - datalen))) {
+		WMA_LOGE("Excess data from firmware, offset:%zu, len:%d",
+			wma_handle->utf_event_info.offset, datalen);
+		return -EINVAL;
 	}
 
 	memcpy(&wma_handle->utf_event_info.data[wma_handle->utf_event_info.offset],
