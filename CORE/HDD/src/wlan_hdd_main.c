@@ -11655,6 +11655,29 @@ hdd_adapter_t *hdd_open_adapter(hdd_context_t *hdd_ctx,
 	}
 
 	if (VOS_FTM_MODE != vos_get_conparam()) {
+		uint32_t cca_threshold;
+
+		cca_threshold = hdd_ctx->cfg_ini->cca_threshold_2g |
+				hdd_ctx->cfg_ini->cca_threshold_5g << 8;
+
+		if (hdd_ctx->cfg_ini->cca_threshold_enable) {
+			hddLog(VOS_TRACE_LEVEL_DEBUG,
+			       "%s: CCA Threshold is enabled.", __func__);
+			ret = process_wma_set_command((int)adapter->sessionId,
+					WMI_PDEV_PARAM_CCA_THRESHOLD,
+					cca_threshold,
+					PDEV_CMD);
+		} else {
+			ret = 0;
+		}
+
+		if (ret != 0) {
+			hddLog(VOS_TRACE_LEVEL_ERROR,
+			       "%s: WMI_PDEV_PARAM_CCA_THRESHOLD set failed %d",
+			       __func__, ret);
+			goto err_post_add_adapter;
+		}
+
 		ret = process_wma_set_command((int)adapter->sessionId,
 			      (int)WMI_PDEV_PARAM_HYST_EN,
 			      (int)hdd_ctx->cfg_ini->enableMemDeepSleep,
@@ -13157,10 +13180,10 @@ void hdd_dump_concurrency_info(hdd_context_t *pHddCtx)
 #endif
        pHddCtx->mcc_mode = mcc_mode;
    }
-   hddLog(VOS_TRACE_LEVEL_INFO, "wlan(%d) " MAC_ADDRESS_STR " %s",
+   hddLog(VOS_TRACE_LEVEL_ERROR, "wlan(%d) " MAC_ADDRESS_STR " %s",
                 staChannel, MAC_ADDR_ARRAY(staBssid), mcc_mode ? "MCC" : "SCC");
    if (p2pChannel > 0) {
-       hddLog(VOS_TRACE_LEVEL_INFO, "p2p-%s(%d) " MAC_ADDRESS_STR,
+       hddLog(VOS_TRACE_LEVEL_ERROR, "p2p-%s(%d) " MAC_ADDRESS_STR,
                      p2pMode, p2pChannel, MAC_ADDR_ARRAY(p2pBssid));
    }
    if (apChannel1 > 0) {
@@ -16515,6 +16538,10 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
       hdd_set_idle_ps_config(pHddCtx, TRUE);
    }
 
+   if ((pHddCtx->cfg_ini->enable_ac_txq_optimize >> 4) & 0x01)
+      sme_set_ac_txq_optimize(pHddCtx->hHal,
+                              &pHddCtx->cfg_ini->enable_ac_txq_optimize);
+
    if (pHddCtx->cfg_ini->enable_go_cts2self_for_sta)
        sme_set_cts2self_for_p2p_go(pHddCtx->hHal);
 
@@ -17033,6 +17060,9 @@ static int hdd_driver_init( void)
    do {
 
 #ifndef MODULE
+      /* For statically linked driver, call hdd_set_conparam to update curr_con_mode
+       */
+      hdd_set_conparam((v_UINT_t)con_mode);
       if (WLAN_IS_EPPING_ENABLED(con_mode)) {
          ret_status =  epping_driver_init(con_mode, &wlan_wake_lock,
                           WLAN_MODULE_NAME);
@@ -17071,12 +17101,6 @@ static int hdd_driver_init( void)
    MTRACE(hddTraceInit());
 #endif
    hdd_register_debug_callback();
-
-#ifndef MODULE
-      /* For statically linked driver, call hdd_set_conparam to update curr_con_mode
-       */
-      hdd_set_conparam((v_UINT_t)con_mode);
-#endif
 
    ret_status = hdd_hif_register_driver();
    vos_remove_pm_qos();
