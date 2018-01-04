@@ -3876,6 +3876,12 @@ static void wma_set_sta_keep_alive(tp_wma_handle wma, u_int8_t vdev_id,
 		 return;
 	}
 
+	if (timeperiod > WNI_CFG_INFRA_STA_KEEP_ALIVE_PERIOD_STAMAX) {
+		WMA_LOGE("Invalid period %d Max limit %d", timeperiod,
+			WNI_CFG_INFRA_STA_KEEP_ALIVE_PERIOD_STAMAX);
+		 return;
+	}
+
 	cmd = (WMI_STA_KEEPALIVE_CMD_fixed_param *) wmi_buf_data(buf);
 	buf_ptr = (u_int8_t *)cmd;
 	WMITLV_SET_HDR(&cmd->tlv_header,
