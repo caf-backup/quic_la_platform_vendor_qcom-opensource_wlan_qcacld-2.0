@@ -783,4 +783,13 @@ void sim_target_register_write(struct ol_softc *scn, u_int32_t addr, u_int32_t v
 }
 #endif
 
+#ifdef HIF_PCI
+int hif_addr_in_boundary(HIF_DEVICE *hif_device, A_UINT32 offset);
+#else
+static inline int hif_addr_in_boundary(HIF_DEVICE *hif_device, A_UINT32 offset)
+{
+	return 0;
+}
+#endif
+
 #endif /* _HIF_H_ */

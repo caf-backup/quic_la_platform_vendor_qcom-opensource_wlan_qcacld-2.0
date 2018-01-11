@@ -50,17 +50,21 @@ static ssize_t ath_procfs_diag_read(struct file *file, char __user *buf,
 	int rv;
 	A_UINT8 *read_buffer = NULL;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+	scn = (struct hif_pci_softc *)PDE_DATA(file_inode(file));
+#else
+	scn = (struct hif_pci_softc *)(PDE(file->f_path.dentry->d_inode)->data);
+#endif
+
+	if (hif_addr_in_boundary(scn->ol_sc->hif_hdl, (A_UINT32)(*pos)))
+		return -EINVAL;
+
 	read_buffer = (A_UINT8 *)vos_mem_malloc(count);
 	if (NULL == read_buffer) {
 		pr_debug("%s: vos_mem_alloc failed\n", __func__);
 		return -EINVAL;
 	}
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
-	scn = (struct hif_pci_softc *)PDE_DATA(file_inode(file));
-#else
-	scn = (struct hif_pci_softc *)(PDE(file->f_path.dentry->d_inode)->data);
-#endif
 	pr_debug("rd buff 0x%p cnt %zu offset 0x%x buf 0x%p\n",
 			read_buffer,count,
 			(int)*pos, buf);
@@ -94,6 +98,14 @@ static ssize_t ath_procfs_diag_write(struct file *file, const char __user *buf,
 	int rv;
 	A_UINT8 *write_buffer = NULL;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+	scn = (struct hif_pci_softc *)PDE_DATA(file_inode(file));
+#else
+	scn = (struct hif_pci_softc *)(PDE(file->f_path.dentry->d_inode)->data);
+#endif
+
+	if (hif_addr_in_boundary(scn->ol_sc->hif_hdl, (A_UINT32)(*pos)))
+		return -EINVAL;
 	write_buffer = (A_UINT8 *)vos_mem_malloc(count);
 	if (NULL == write_buffer) {
 		pr_debug("%s: vos_mem_alloc failed\n", __func__);
@@ -104,11 +116,6 @@ static ssize_t ath_procfs_diag_write(struct file *file, const char __user *buf,
 		return -EFAULT;
     }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
-	scn = (struct hif_pci_softc *)PDE_DATA(file_inode(file));
-#else
-	scn = (struct hif_pci_softc *)(PDE(file->f_path.dentry->d_inode)->data);
-#endif
 	pr_debug("wr buff 0x%p buf 0x%p cnt %d offset 0x%x value 0x%x\n",
 			write_buffer, buf, (int)count,
 			(int)*pos, *((A_UINT32 *)write_buffer));
