@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -4494,6 +4494,11 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_SUB_20_CHANNEL_WIDTH_MAX             (6)
 #define CFG_SUB_20_CHANNEL_WIDTH_DEFAULT         (0)
 
+#define CFG_STA_CHANGE_COUNTRYCODE_DYN_NAME     "g_sta_change_cc_via_beacon"
+#define CFG_STA_CHANGE_COUNTRYCODE_DYN_ENABLE   (1)
+#define CFG_STA_CHANGE_COUNTRYCODE_DYN_DISABLE  (0)
+#define CFG_STA_CHANGE_COUNTRYCODE_DYN_DEFAULT  (0)
+
 /*
  * 5G preference parameters for boosting RSSI
  * enable_band_specific_pref: Enable preference for 5G from INI.
@@ -4854,6 +4859,26 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_CCA_THRESHOLD_5G_MIN     (10)
 #define CFG_CCA_THRESHOLD_5G_MAX     (127)
 #define CFG_CCA_THRESHOLD_5G_DEFAULT (28)
+
+/*
+ * <ini>
+ * gEnableMonOnSta - extend the monitor capability for STA
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * this is used to control monitor feature for STA.
+ *
+ * Related: none
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_MONITOR_ON_STA	  "gEnableMonOnSta"
+#define CFG_ENABLE_MONITOR_ON_STA_MIN     (0)
+#define CFG_ENABLE_MONITOR_ON_STA_MAX     (1)
+#define CFG_ENABLE_MONITOR_ON_STA_DEFAULT (0)
 
 /*---------------------------------------------------------------------------
   Type declarations
@@ -5716,6 +5741,7 @@ struct hdd_config {
    uint8_t probe_req_ouis[MAX_PRB_REQ_VENDOR_OUI_INI_LEN];
    /* parameter for indicating sub20 channel width */
    uint8_t                     sub_20_channel_width;
+   bool                        sta_change_cc_via_beacon;
    uint32_t                    rx_wakelock_timeout;
    /* beacon count before channel switch */
    uint8_t                     sap_chanswitch_beacon_cnt;
@@ -5731,6 +5757,7 @@ struct hdd_config {
    bool      cca_threshold_enable;
    uint32_t  cca_threshold_2g;
    uint32_t  cca_threshold_5g;
+   uint8_t                     mon_on_sta_enable;
 };
 
 typedef struct hdd_config hdd_config_t;

@@ -5679,7 +5679,7 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 		}
 
 		if (total_array_len > (WMA_SVC_MSG_MAX_SIZE /
-		    (sizeof(uint16_t) * WLAN_MAX_AC))) {
+		    (sizeof(uint32_t) * WLAN_MAX_AC))) {
 			excess_data = true;
 			break;
 		} else {
@@ -5689,20 +5689,28 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 						(sizeof(struct sir_wifi_tx) +
 						sizeof(struct sir_wifi_rx)));
 		}
-		buf_len += peer_num *
-			   (sizeof(struct sir_wifi_ll_ext_peer_stats) +
-			   total_peer_len);
+		if (total_peer_len > WMA_SVC_MSG_MAX_SIZE) {
+			excess_data = true;
+			break;
+		}
+		if (peer_num > WMA_SVC_MSG_MAX_SIZE / (total_peer_len +
+		    sizeof(struct sir_wifi_ll_ext_peer_stats))) {
+			excess_data = true;
+			break;
+		} else {
+			buf_len += peer_num *
+				   (sizeof(struct sir_wifi_ll_ext_peer_stats) +
+				   total_peer_len);
+		}
 	} while (0);
 
-	if (excess_data) {
-		WMA_LOGE("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d ",
+	if (excess_data || (buf_len > WMA_SVC_MSG_MAX_SIZE)) {
+		WMA_LOGE("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d tx_succ%d tx_fail %d tx_ppdu %d rx_mpdu %d rx_mcs %d",
 			 __func__, peer_num, fixed_param->num_chan_cca_stats,
-			 fixed_param->tx_mpdu_aggr_array_len);
-		WMA_LOGE("tx_succ %d tx_fail %d tx_ppdu %d ",
+			 fixed_param->tx_mpdu_aggr_array_len,
 			 fixed_param->tx_succ_mcs_array_len,
 			 fixed_param->tx_fail_mcs_array_len,
-			 fixed_param->tx_ppdu_delay_array_len);
-		WMA_LOGE("rx_mpdu %d rx_mcs %d",
+			 fixed_param->tx_ppdu_delay_array_len,
 			 fixed_param->rx_mpdu_aggr_array_len,
 			 fixed_param->rx_mcs_array_len);
 		return NULL;
@@ -16934,6 +16942,44 @@ static void wma_set_modulated_dtim(tp_wma_handle wma,
 	}
 }
 
+static int32_t wma_send_pdev_monitor_mode_cmd(
+				tp_wma_handle wma,
+				wda_cli_set_cmd_t *privcmd)
+{
+	wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	int32_t len = sizeof(*cmd);
+
+	WMA_LOGD("Set pdev monitor mode value %d", privcmd->param_value);
+
+	buf = wmi_buf_alloc(wma->wmi_handle, len);
+	if (!buf) {
+		WMA_LOGP("%s: pdev monitor mode Mem Alloc Failed", __func__);
+		return -ENOMEM;
+	}
+
+	cmd = (wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param *)
+		wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+			wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param));
+
+	cmd->pdev_id = 0; /* default 0, pdev id */
+	cmd->rx_filter_promiscuous_enable = privcmd->param_value;
+
+	if (wmi_unified_cmd_send(wma->wmi_handle, buf, len,
+				 WMI_PDEV_SET_RX_FILTER_PROMISCUOUS_CMDID)) {
+		WMA_LOGE("set pdev monitor mode failed, val %d",
+			 privcmd->param_value);
+
+		wmi_buf_free(buf);
+		return -EIO;
+	}
+
+	return 0;
+}
+
 static void wma_process_cli_set_cmd(tp_wma_handle wma,
 				    wda_cli_set_cmd_t *privcmd)
 {
@@ -17059,6 +17105,9 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 #endif
 		case GEN_PARAM_MODULATED_DTIM:
 			wma_set_modulated_dtim(wma, privcmd);
+			break;
+		case GEN_PDEV_MONITOR_MODE:
+			wma_send_pdev_monitor_mode_cmd(wma, privcmd);
 			break;
 		default:
 			WMA_LOGE("Invalid param id 0x%x", privcmd->param_id);
