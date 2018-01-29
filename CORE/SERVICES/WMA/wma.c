@@ -548,7 +548,7 @@ static bool wma_is_vdev_in_ap_mode(tp_wma_handle wma, u_int8_t vdev_id)
 {
 	struct wma_txrx_node *intf = wma->interfaces;
 
-	if (vdev_id > wma->max_bssid) {
+	if (vdev_id >= wma->max_bssid) {
 		WMA_LOGP("%s: Invalid vdev_id %hu", __func__, vdev_id);
 		VOS_ASSERT(0);
 		return false;
@@ -574,7 +574,7 @@ static bool wma_is_vdev_in_ibss_mode(tp_wma_handle wma, u_int8_t vdev_id)
 {
 	struct wma_txrx_node *intf = wma->interfaces;
 
-	if (vdev_id > wma->max_bssid) {
+	if (vdev_id >= wma->max_bssid) {
 		WMA_LOGP("%s: Invalid vdev_id %hu", __func__, vdev_id);
 		VOS_ASSERT(0);
 		return false;
@@ -1345,9 +1345,15 @@ static int wma_vdev_start_rsp_ind(tp_wma_handle wma, u_int8_t *buf)
 		return -EINVAL;
 	}
 
+	if (resp_event->vdev_id >= wma->max_bssid) {
+		WMA_LOGE("%s: received invalid vdev_id %d",
+			__func__, resp_event->vdev_id);
+		return -EINVAL;
+	}
+
 	iface = &wma->interfaces[resp_event->vdev_id];
 
-	if ((resp_event->vdev_id <= wma->max_bssid) &&
+	if ((resp_event->vdev_id < wma->max_bssid) &&
 		(adf_os_atomic_read(
 		&wma->interfaces[resp_event->vdev_id].vdev_restart_params.hidden_ssid_restart_in_progress)) &&
 		(wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id) == true)) {
@@ -1955,7 +1961,7 @@ static void wma_delete_all_ibss_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 	ol_txrx_vdev_handle vdev;
 	ol_txrx_peer_handle peer, temp;
 
-	if (!wma || vdev_id > wma->max_bssid)
+	if (!wma || vdev_id >= wma->max_bssid)
 		return;
 
 	vdev = wma->interfaces[vdev_id].handle;
@@ -1997,7 +2003,7 @@ static void wma_delete_all_ap_remote_peers(tp_wma_handle wma, A_UINT32 vdev_id)
 	ol_txrx_vdev_handle vdev;
 	ol_txrx_peer_handle peer, temp;
 
-	if (!wma || vdev_id > wma->max_bssid)
+	if (!wma || vdev_id >= wma->max_bssid)
 		return;
 
 	vdev = wma->interfaces[vdev_id].handle;
@@ -2195,7 +2201,7 @@ static int wma_vdev_stop_ind(tp_wma_handle wma, u_int8_t *buf)
 
 	resp_event = (wmi_vdev_stopped_event_fixed_param *)buf;
 
-	if ((resp_event->vdev_id <= wma->max_bssid) &&
+	if ((resp_event->vdev_id < wma->max_bssid) &&
 	(adf_os_atomic_read(&wma->interfaces[resp_event->vdev_id].vdev_restart_params.hidden_ssid_restart_in_progress)) &&
 	((wma->interfaces[resp_event->vdev_id].type == WMI_VDEV_TYPE_AP) &&
 	(wma->interfaces[resp_event->vdev_id].sub_type == 0))) {
@@ -2234,7 +2240,7 @@ static int wma_vdev_stop_ind(tp_wma_handle wma, u_int8_t *buf)
 		tpDeleteBssParams params =
 			(tpDeleteBssParams)req_msg->user_data;
 		struct beacon_info *bcn;
-		if (resp_event->vdev_id > wma->max_bssid) {
+		if (resp_event->vdev_id >= wma->max_bssid) {
 			WMA_LOGE("%s: Invalid vdev_id %d", __func__,
 				resp_event->vdev_id);
 			vos_mem_free(params);
@@ -5315,8 +5321,23 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 		return -EINVAL;
 	}
 
+	if (radio_stats->num_channels >
+	    NUM_2_4GHZ_CHANNELS + NUM_5GHZ_CHANNELS) {
+		WMA_LOGE("%s: Too many channels %d",
+			 __func__, radio_stats->num_channels);
+		return -EINVAL;
+	}
+
 	radio_stats_size = sizeof(tSirWifiRadioStat);
 	chan_stats_size  = sizeof(tSirWifiChannelStats);
+
+	if (fixed_param->num_radio >
+	    (UINT_MAX - sizeof(*link_stats_results)) / radio_stats_size) {
+		WMA_LOGE("excess num_radio %d is leading to int overflow",
+			 fixed_param->num_radio);
+		return -EINVAL;
+	}
+
 	link_stats_results_size = sizeof(*link_stats_results) +
 			radio_stats_size +
 			(radio_stats->num_channels * chan_stats_size);
@@ -5658,7 +5679,7 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 		}
 
 		if (total_array_len > (WMA_SVC_MSG_MAX_SIZE /
-		    (sizeof(uint16_t) * WLAN_MAX_AC))) {
+		    (sizeof(uint32_t) * WLAN_MAX_AC))) {
 			excess_data = true;
 			break;
 		} else {
@@ -5668,20 +5689,28 @@ static tSirLLStatsResults *__wma_get_ll_stats_ext_buf(uint32_t *len,
 						(sizeof(struct sir_wifi_tx) +
 						sizeof(struct sir_wifi_rx)));
 		}
-		buf_len += peer_num *
-			   (sizeof(struct sir_wifi_ll_ext_peer_stats) +
-			   total_peer_len);
+		if (total_peer_len > WMA_SVC_MSG_MAX_SIZE) {
+			excess_data = true;
+			break;
+		}
+		if (peer_num > WMA_SVC_MSG_MAX_SIZE / (total_peer_len +
+		    sizeof(struct sir_wifi_ll_ext_peer_stats))) {
+			excess_data = true;
+			break;
+		} else {
+			buf_len += peer_num *
+				   (sizeof(struct sir_wifi_ll_ext_peer_stats) +
+				   total_peer_len);
+		}
 	} while (0);
 
-	if (excess_data) {
-		WMA_LOGE("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d ",
+	if (excess_data || (buf_len > WMA_SVC_MSG_MAX_SIZE)) {
+		WMA_LOGE("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d tx_succ%d tx_fail %d tx_ppdu %d rx_mpdu %d rx_mcs %d",
 			 __func__, peer_num, fixed_param->num_chan_cca_stats,
-			 fixed_param->tx_mpdu_aggr_array_len);
-		WMA_LOGE("tx_succ %d tx_fail %d tx_ppdu %d ",
+			 fixed_param->tx_mpdu_aggr_array_len,
 			 fixed_param->tx_succ_mcs_array_len,
 			 fixed_param->tx_fail_mcs_array_len,
-			 fixed_param->tx_ppdu_delay_array_len);
-		WMA_LOGE("rx_mpdu %d rx_mcs %d",
+			 fixed_param->tx_ppdu_delay_array_len,
 			 fixed_param->rx_mpdu_aggr_array_len,
 			 fixed_param->rx_mcs_array_len);
 		return NULL;
@@ -8148,6 +8177,7 @@ static int wma_roam_synch_event_handler(void *handle, u_int8_t *event, u_int32_t
 	wmi_key_material *key = NULL;
 	int size=0;
 	tSirRoamOffloadSynchInd *pRoamOffloadSynchInd;
+	uint32_t roam_synch_data_len;
 
 	WMA_LOGD("LFR3:%s", __func__);
 	if (!event) {
@@ -8167,6 +8197,12 @@ static int wma_roam_synch_event_handler(void *handle, u_int8_t *event, u_int32_t
 	 return -EINVAL;
 	}
 
+	if (synch_event->vdev_id >= wma->max_bssid) {
+		WMA_LOGE("%s: received invalid vdev_id %d",
+			 __func__, synch_event->vdev_id);
+		return -EINVAL;
+	}
+
 	DPTRACE(adf_dp_trace_record_event(ADF_DP_TRACE_EVENT_RECORD,
 		synch_event->vdev_id, ADF_PROTO_TYPE_EVENT, ADF_ROAM_SYNCH));
 
@@ -8176,29 +8212,44 @@ static int wma_roam_synch_event_handler(void *handle, u_int8_t *event, u_int32_t
 	  __func__);
 	  return -EINVAL;
 	}
-	/*
-	 * All below length fields are unsigned and hence positive numbers.
-	 * Maximum number during the addition would be (3 * MAX_LIMIT(UINT32) +
-	 * few fixed fields).
-	 */
-	if ((sizeof(*synch_event) + synch_event->bcn_probe_rsp_len +
-			synch_event->reassoc_rsp_len +
-			sizeof(wmi_channel) + sizeof(wmi_key_material) +
-			sizeof(uint32_t)) > WMA_SVC_MSG_MAX_SIZE) {
-		WMA_LOGE("excess synch payload: LEN bcn:%d, rsp:%d",
-				synch_event->bcn_probe_rsp_len,
-				synch_event->reassoc_rsp_len);
-		VOS_ASSERT(0);
+
+	WMA_LOGD("synch payload: LEN bcn:%d, req:%d, rsp:%d",
+		 synch_event->bcn_probe_rsp_len,
+		 synch_event->reassoc_req_len,
+		 synch_event->reassoc_rsp_len);
+
+	if (synch_event->bcn_probe_rsp_len > WMA_SVC_MSG_MAX_SIZE)
 		return -EINVAL;
-	}
+	if (synch_event->reassoc_rsp_len >
+	    (WMA_SVC_MSG_MAX_SIZE - synch_event->bcn_probe_rsp_len))
+		return -EINVAL;
+	if (synch_event->reassoc_req_len >
+	    WMA_SVC_MSG_MAX_SIZE - (synch_event->bcn_probe_rsp_len +
+	    synch_event->reassoc_rsp_len))
+		return -EINVAL;
+
+	roam_synch_data_len = synch_event->bcn_probe_rsp_len +
+				synch_event->reassoc_rsp_len +
+				synch_event->reassoc_req_len;
+	/*
+	 * Below is the check for the entire size of the message received from'
+	 * the firmware.
+	 */
+	if (roam_synch_data_len > WMA_SVC_MSG_MAX_SIZE -
+	    (sizeof(*synch_event) + sizeof(wmi_channel) +
+	    sizeof(wmi_key_material) + sizeof(uint32_t)))
+		return -EINVAL;
+
+	if (sizeof(tSirRoamOffloadSynchInd) >
+	    (WMA_SVC_MSG_MAX_SIZE - roam_synch_data_len))
+		return -EINVAL;
+	roam_synch_data_len += sizeof(tSirRoamOffloadSynchInd);
 
 	adf_os_spin_lock_bh(&wma->roam_synch_lock);
 	wma->interfaces[synch_event->vdev_id].roam_synch_in_progress = VOS_TRUE;
 	adf_os_spin_unlock_bh(&wma->roam_synch_lock);
-	len = sizeof(tSirRoamOffloadSynchInd) +
-		synch_event->bcn_probe_rsp_len +
-		synch_event->reassoc_rsp_len;
-	pRoamOffloadSynchInd = (tSirRoamOffloadSynchInd *)vos_mem_malloc(len);
+	pRoamOffloadSynchInd =
+		(tSirRoamOffloadSynchInd *)vos_mem_malloc(roam_synch_data_len);
 	if (!pRoamOffloadSynchInd) {
 	 WMA_LOGE("%s: failed to allocate memory for roam_synch_event", __func__);
 	 return -ENOMEM;
@@ -8622,6 +8673,14 @@ static int wma_rx_aggr_failure_event_handler(void *handle, u_int8_t *event_buf,
 
 	rx_aggr_failure_info = param_buf->fixed_param;
 	hole_info = param_buf->failure_info;
+
+	if (rx_aggr_failure_info->num_failure_info > ((WMA_SVC_MSG_MAX_SIZE -
+	    sizeof(*rx_aggr_hole_event)) /
+	    sizeof(rx_aggr_hole_event->hole_info_array[0]))) {
+		WMA_LOGE("%s: Excess data from WMI num_failure_info %d",
+			 __func__, rx_aggr_failure_info->num_failure_info);
+		return -EINVAL;
+	}
 
 	alloc_len = sizeof(*rx_aggr_hole_event) +
 		(rx_aggr_failure_info->num_failure_info)*
@@ -11915,7 +11974,7 @@ VOS_STATUS wma_start_scan(tp_wma_handle wma_handle,
 	int len;
 	tSirScanOffloadEvent *scan_event;
 
-	if (scan_req->sessionId > wma_handle->max_bssid) {
+	if (scan_req->sessionId >= wma_handle->max_bssid) {
 		WMA_LOGE("%s: Invalid vdev_id %d, msg_type : 0x%x", __func__,
 			scan_req->sessionId, msg_type);
 		vos_status = VOS_STATUS_E_FAILURE;
@@ -14896,7 +14955,7 @@ void wma_vdev_resp_timer(void *data)
 		struct beacon_info *bcn;
 		struct wma_txrx_node *iface;
 
-		if (tgt_req->vdev_id > wma->max_bssid) {
+		if (tgt_req->vdev_id >= wma->max_bssid) {
 			WMA_LOGE("%s: Invalid vdev_id %d", __func__,
 				tgt_req->vdev_id);
 			vos_mem_free(params);
@@ -16883,6 +16942,44 @@ static void wma_set_modulated_dtim(tp_wma_handle wma,
 	}
 }
 
+static int32_t wma_send_pdev_monitor_mode_cmd(
+				tp_wma_handle wma,
+				wda_cli_set_cmd_t *privcmd)
+{
+	wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	int32_t len = sizeof(*cmd);
+
+	WMA_LOGD("Set pdev monitor mode value %d", privcmd->param_value);
+
+	buf = wmi_buf_alloc(wma->wmi_handle, len);
+	if (!buf) {
+		WMA_LOGP("%s: pdev monitor mode Mem Alloc Failed", __func__);
+		return -ENOMEM;
+	}
+
+	cmd = (wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param *)
+		wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+			wmi_pdev_set_rx_filter_promiscuous_cmd_fixed_param));
+
+	cmd->pdev_id = 0; /* default 0, pdev id */
+	cmd->rx_filter_promiscuous_enable = privcmd->param_value;
+
+	if (wmi_unified_cmd_send(wma->wmi_handle, buf, len,
+				 WMI_PDEV_SET_RX_FILTER_PROMISCUOUS_CMDID)) {
+		WMA_LOGE("set pdev monitor mode failed, val %d",
+			 privcmd->param_value);
+
+		wmi_buf_free(buf);
+		return -EIO;
+	}
+
+	return 0;
+}
+
 static void wma_process_cli_set_cmd(tp_wma_handle wma,
 				    wda_cli_set_cmd_t *privcmd)
 {
@@ -17008,6 +17105,9 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 #endif
 		case GEN_PARAM_MODULATED_DTIM:
 			wma_set_modulated_dtim(wma, privcmd);
+			break;
+		case GEN_PDEV_MONITOR_MODE:
+			wma_send_pdev_monitor_mode_cmd(wma, privcmd);
 			break;
 		default:
 			WMA_LOGE("Invalid param id 0x%x", privcmd->param_id);
@@ -25775,7 +25875,7 @@ static VOS_STATUS wma_wow_enter(tp_wma_handle wma,
 
 	WMA_LOGD("wow enable req received for vdev id: %d", info->sessionId);
 
-	if (info->sessionId > wma->max_bssid) {
+	if (info->sessionId >= wma->max_bssid) {
 		WMA_LOGE("Invalid vdev id (%d)", info->sessionId);
 		vos_mem_free(info);
 		return VOS_STATUS_E_INVAL;
@@ -25802,7 +25902,7 @@ static VOS_STATUS wma_wow_exit(tp_wma_handle wma,
 
 	WMA_LOGD("wow disable req received for vdev id: %d", info->sessionId);
 
-	if (info->sessionId > wma->max_bssid) {
+	if (info->sessionId >= wma->max_bssid) {
 		WMA_LOGE("Invalid vdev id (%d)", info->sessionId);
 		vos_mem_free(info);
 		return VOS_STATUS_E_INVAL;
@@ -25835,7 +25935,7 @@ static VOS_STATUS wma_suspend_req(tp_wma_handle wma, tpSirWlanSuspendParam info)
 
 	wma->no_of_suspend_ind++;
 
-	if (info->sessionId > wma->max_bssid) {
+	if (info->sessionId >= wma->max_bssid) {
 		WMA_LOGE("Invalid vdev id (%d)", info->sessionId);
 		vos_mem_free(info);
 		return VOS_STATUS_E_INVAL;
@@ -34416,14 +34516,13 @@ static int wma_scan_event_callback(WMA_HANDLE handle, u_int8_t *data,
 	vos_msg_t vos_msg = {0};
 	VOS_STATUS vos_status = VOS_STATUS_SUCCESS;
 
+	param_buf = (WMI_SCAN_EVENTID_param_tlvs *) data;
+	wmi_event = param_buf->fixed_param;
+	vdev_id = wmi_event->vdev_id;
 	if (wmi_event->vdev_id >= wma_handle->max_bssid) {
 		WMA_LOGE("Invalid vdev id from firmware");
 		return -EINVAL;
 	}
-
-	param_buf = (WMI_SCAN_EVENTID_param_tlvs *) data;
-	wmi_event = param_buf->fixed_param;
-	vdev_id = wmi_event->vdev_id;
 	scan_id = wma_handle->interfaces[vdev_id].scan_info.scan_id;
 
 	adf_os_spin_lock_bh(&wma_handle->roam_preauth_lock);
