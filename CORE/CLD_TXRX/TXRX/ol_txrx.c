@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -288,6 +288,15 @@ ol_txrx_update_tx_queue_groups(
     u_int32_t group_vdev_bit_mask, vdev_bit_mask, group_vdev_id_mask;
     u_int32_t membership;
     struct ol_txrx_vdev_t *vdev;
+
+    if (group_id >= OL_TX_MAX_TXQ_GROUPS) {
+        TXRX_PRINT(TXRX_PRINT_LEVEL_WARN,
+            "%s: invalid group_id=%u, ignore update.\n",
+            __func__,
+            group_id);
+        return;
+    }
+
     group = &pdev->txq_grps[group_id];
 
     membership = OL_TXQ_GROUP_MEMBERSHIP_GET(vdev_id_mask,ac_mask);
@@ -376,6 +385,9 @@ ol_txrx_pdev_attach(
     TXRX_STATS_INIT(pdev);
 
     TAILQ_INIT(&pdev->vdev_list);
+    TAILQ_INIT(&pdev->req_list);
+    pdev->req_list_depth = 0;
+    adf_os_spinlock_init(&pdev->req_list_spinlock);
 
     /* do initial set up of the peer ID -> peer object lookup map */
     if (ol_txrx_peer_find_attach(pdev)) {
@@ -890,6 +902,7 @@ void
 ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
 {
     int i;
+    struct ol_txrx_stats_req_internal *req;
 
     /*checking to ensure txrx pdev structure is not NULL */
     if (!pdev) {
@@ -901,6 +914,16 @@ ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev, int force)
 
     /* check that the pdev has no vdevs allocated */
     TXRX_ASSERT1(TAILQ_EMPTY(&pdev->vdev_list));
+
+    adf_os_spin_lock_bh(&pdev->req_list_spinlock);
+    TAILQ_FOREACH(req, &pdev->req_list, req_list_elem) {
+        TAILQ_REMOVE(&pdev->req_list, req, req_list_elem);
+        pdev->req_list_depth--;
+        adf_os_mem_free(req);
+    }
+    adf_os_spin_unlock_bh(&pdev->req_list_spinlock);
+
+    adf_os_spinlock_destroy(&pdev->req_list_spinlock);
 
     OL_RX_REORDER_TIMEOUT_CLEANUP(pdev);
 
@@ -1270,6 +1293,25 @@ void ol_txrx_osif_vdev_register(ol_txrx_vdev_handle vdev,
     #ifdef QCA_LL_TX_FLOW_CT
     vdev->osif_flow_control_cb = txrx_ops->tx.flow_control_cb;
     #endif /* QCA_LL_TX_FLOW_CT */
+}
+
+/**
+ * ol_txrx_osif_pdev_mon_register_cbk() - register monitor rx callback
+ * @txrx_pdev: pdev handle
+ * @cbk: monitor rx callback function
+ *
+ * Return: none
+ */
+void ol_txrx_osif_pdev_mon_register_cbk(
+	ol_txrx_pdev_handle txrx_pdev,
+	ol_txrx_vir_mon_rx_fp cbk)
+{
+	TXRX_ASSERT2(txrx_pdev);
+
+	if (NULL == txrx_pdev)
+	    return;
+
+	txrx_pdev->osif_rx_mon_cb = cbk;
 }
 
 void
@@ -2122,12 +2164,6 @@ void ol_txrx_print_level_set(unsigned level)
 #endif
 }
 
-struct ol_txrx_stats_req_internal {
-    struct ol_txrx_stats_req base;
-    int serviced; /* state of this request */
-    int offset;
-};
-
 static inline
 u_int64_t OL_TXRX_STATS_PTR_TO_U64(struct ol_txrx_stats_req_internal *req)
 {
@@ -2190,6 +2226,13 @@ ol_txrx_fw_stats_get(
     /* use the non-volatile request object's address as the cookie */
     cookie = OL_TXRX_STATS_PTR_TO_U64(non_volatile_req);
 
+    if (response_expected) {
+        adf_os_spin_lock_bh(&pdev->req_list_spinlock);
+        TAILQ_INSERT_TAIL(&pdev->req_list, non_volatile_req, req_list_elem);
+        pdev->req_list_depth++;
+        adf_os_spin_unlock_bh(&pdev->req_list_spinlock);
+    }
+
     if (htt_h2t_dbg_stats_get(
             pdev->htt_pdev,
             req->stats_type_upload_mask,
@@ -2197,13 +2240,17 @@ ol_txrx_fw_stats_get(
             HTT_H2T_STATS_REQ_CFG_STAT_TYPE_INVALID, 0,
             cookie))
     {
+        if (response_expected) {
+            adf_os_spin_lock_bh(&pdev->req_list_spinlock);
+            TAILQ_REMOVE(&pdev->req_list, non_volatile_req, req_list_elem);
+            pdev->req_list_depth--;
+            adf_os_spin_unlock_bh(&pdev->req_list_spinlock);
+        }
+
         adf_os_mem_free(non_volatile_req);
         return A_ERROR;
     }
 
-    if (req->wait.blocking) {
-        while (adf_os_mutex_acquire(pdev->osdev, req->wait.sem_ptr)) {}
-    }
     if (response_expected == false)
         adf_os_mem_free(non_volatile_req);
 
@@ -2220,10 +2267,26 @@ ol_txrx_fw_stats_handler(
     enum htt_dbg_stats_status status;
     int length;
     u_int8_t *stats_data;
-    struct ol_txrx_stats_req_internal *req;
+    struct ol_txrx_stats_req_internal *req, *tmp;
     int more = 0;
+    int found = 0;
 
     req = OL_TXRX_U64_TO_STATS_PTR(cookie);
+
+    adf_os_spin_lock_bh(&pdev->req_list_spinlock);
+    TAILQ_FOREACH(tmp, &pdev->req_list, req_list_elem) {
+        if (req == tmp) {
+            found = 1;
+            break;
+        }
+    }
+    adf_os_spin_unlock_bh(&pdev->req_list_spinlock);
+
+    if (!found) {
+        TXRX_PRINT(TXRX_PRINT_LEVEL_ERR,
+            "req(%p) from firmware can't be found in the list\n", req);
+        return;
+    }
 
     do {
         htt_t2h_dbg_stats_hdr_parse(
@@ -2348,10 +2411,16 @@ ol_txrx_fw_stats_handler(
     } while (1);
 
     if (! more) {
-        if (req->base.wait.blocking) {
-            adf_os_mutex_release(pdev->osdev, req->base.wait.sem_ptr);
+        adf_os_spin_lock_bh(&pdev->req_list_spinlock);
+        TAILQ_FOREACH(tmp, &pdev->req_list, req_list_elem) {
+            if (req == tmp) {
+                TAILQ_REMOVE(&pdev->req_list, req, req_list_elem);
+                pdev->req_list_depth--;
+                adf_os_mem_free(req);
+                break;
+            }
         }
-        adf_os_mem_free(req);
+        adf_os_spin_unlock_bh(&pdev->req_list_spinlock);
     }
 }
 
