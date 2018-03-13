@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015,2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -167,11 +167,11 @@ limConvertSupportedChannels(tpAniSirGlobal pMac,
 \
 \param pMac - A pointer to Global MAC structure
 \param pHdr - A pointer to the MAC header
-\return None
+\return if sta entry already exists
 ------------------------------------------------------------------*/
-void lim_check_sta_in_pe_entries(tpAniSirGlobal pMac, tpSirMacMgmtHdr pHdr)
+uint8_t lim_check_sta_in_pe_entries(tpAniSirGlobal pMac, tpSirMacMgmtHdr pHdr)
 {
-    tANI_U8 i;
+    tANI_U8 i, sta_exists = 0;
     tANI_U16 assocId = 0;
     tpDphHashNode pStaDs = NULL;
     tpPESession psessionEntry=NULL;
@@ -191,6 +191,7 @@ void lim_check_sta_in_pe_entries(tpAniSirGlobal pMac, tpSirMacMgmtHdr pHdr)
                 && !pStaDs->rmfEnabled
 #endif
                ) {
+                sta_exists++;
                 limLog(pMac, LOGE,
                         FL("Sending Deauth and Deleting existing STA entry: "
                         MAC_ADDRESS_STR),
@@ -202,6 +203,8 @@ void lim_check_sta_in_pe_entries(tpAniSirGlobal pMac, tpSirMacMgmtHdr pHdr)
             }
         }
     }
+
+    return sta_exists;
 }
 
 /**---------------------------------------------------------------
@@ -296,7 +299,15 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
         return;
     }
 
-    lim_check_sta_in_pe_entries(pMac, pHdr);
+    if (lim_check_sta_in_pe_entries(pMac, pHdr))
+    {
+        limSendAssocRspMgmtFrame(pMac,
+                    eSIR_MAC_UNSPEC_FAILURE_STATUS,
+                    1,
+                    pHdr->sa,
+                    subType, 0,psessionEntry);
+        return;
+    }
 
     // Get pointer to Re/Association Request frame body
     pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
