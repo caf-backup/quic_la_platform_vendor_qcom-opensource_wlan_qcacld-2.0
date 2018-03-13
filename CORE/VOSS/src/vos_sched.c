@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1817,8 +1817,8 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     if (gpVosSchedContext == NULL)
     {
        VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
-           "%s: gpVosSchedContext == NULL",__func__);
-       return VOS_STATUS_E_FAILURE;
+           "%s: gpVosSchedContext == NULL, already closed", __func__);
+       return VOS_STATUS_SUCCESS;
     }
 
     // shut down MC Thread
@@ -1865,6 +1865,7 @@ VOS_STATUS vos_sched_close ( v_PVOID_t pVosContext )
     vos_free_tlshim_pkt_freeq(gpVosSchedContext);
     unregister_hotcpu_notifier(&vos_cpu_hotplug_notifier);
 #endif
+    gpVosSchedContext = NULL;
     return VOS_STATUS_SUCCESS;
 } /* vox_sched_close() */
 

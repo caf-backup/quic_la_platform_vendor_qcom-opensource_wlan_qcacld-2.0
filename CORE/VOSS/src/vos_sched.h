@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -435,6 +435,7 @@ typedef struct _VosContextType
 
    struct vos_log_complete log_complete;
    vos_spin_lock_t bug_report_lock;
+   bool is_closed;
 } VosContextType, *pVosContextType;
 
 
