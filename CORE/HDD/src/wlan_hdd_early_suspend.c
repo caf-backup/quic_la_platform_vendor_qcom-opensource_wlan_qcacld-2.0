@@ -1838,6 +1838,8 @@ VOS_STATUS hdd_wlan_shutdown(void)
 
    vos_clear_concurrent_session_count();
 
+   hdd_abort_mac_scan_all_adapters(pHddCtx);
+
 #ifdef MSM_PLATFORM
    if (VOS_TIMER_STATE_RUNNING ==
            vos_timer_getCurrentState(&pHddCtx->bus_bw_timer))
@@ -1996,7 +1998,11 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
       goto err_re_init;
    }
 
-   ((VosContextType*)pVosContext)->pHIFContext = hif_sc;
+   vosStatus = vos_set_context(VOS_MODULE_ID_HIF, hif_sc);
+   if (!VOS_IS_STATUS_SUCCESS(vosStatus)) {
+      hddLog(VOS_TRACE_LEVEL_FATAL, "%s: failed to set hif context", __func__);
+      goto err_re_init;
+   }
 
    /* The driver should always be initialized in STA mode after SSR */
    hdd_set_conparam(0);
@@ -2227,7 +2233,7 @@ err_re_init:
    /* Allow the phone to go to sleep */
    hdd_allow_suspend(WIFI_POWER_EVENT_WAKELOCK_DRIVER_REINIT);
    vos_set_reinit_in_progress(VOS_MODULE_ID_VOSS, FALSE);
-   VOS_BUG(0);
+   vos_set_context(VOS_MODULE_ID_HIF, NULL);
    return -EPERM;
 
 success:
@@ -2235,4 +2241,16 @@ success:
    send_btc_nlink_msg(WLAN_MODULE_DOWN_IND, 0);
    pHddCtx->isLogpInProgress = FALSE;
    return VOS_STATUS_SUCCESS;
+}
+
+void hdd_wlan_cleanup(void)
+{
+	ENTER();
+
+	/* Stop SSR timer */
+	hdd_ssr_timer_del();
+	vos_set_logp_in_progress(VOS_MODULE_ID_VOSS, FALSE);
+
+	__hdd_wlan_exit();
+	EXIT();
 }

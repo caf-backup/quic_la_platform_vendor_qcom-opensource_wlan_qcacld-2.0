@@ -98,6 +98,10 @@
 #define WLAN_SVC_WLAN_TP_IND        0x109
 #define WLAN_SVC_RPS_ENABLE_IND     0x10A
 #define WLAN_SVC_WLAN_TP_TX_IND     0x10B
+/* Message for indicating SSR failure, currently, it's only supported
+ * by 3rd party tools, and is not processed in wlan-service/scm.
+ */
+#define WLAN_SVC_SSR_FAIL_IND     0x110
 
 #define WLAN_SVC_MAX_SSID_LEN    32
 #define WLAN_SVC_MAX_BSSID_LEN   6

@@ -13098,7 +13098,8 @@ void __hdd_wlan_exit(void)
    }
 
    /* module exit should never proceed if SSR is not completed */
-   while(pHddCtx->isLogpInProgress){
+   while(!vos_is_ssr_failed() &&
+         pHddCtx->isLogpInProgress){
       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
             "%s:SSR in Progress; block rmmod for 1 second!!!",
             __func__);
@@ -15245,8 +15246,9 @@ static void hdd_driver_exit(void)
 #ifdef QCA_PKT_PROTO_TRACE
       vos_pkt_proto_trace_close();
 #endif /* QCA_PKT_PROTO_TRACE */
-      while(pHddCtx->isLogpInProgress ||
-            vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL)) {
+      while(!vos_is_ssr_failed() &&
+            (pHddCtx->isLogpInProgress ||
+             vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL))) {
          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
               "%s:SSR in Progress; block rmmod for 1 second!!!", __func__);
          msleep(1000);
@@ -16418,6 +16420,7 @@ void wlan_hdd_send_svc_nlink_msg(int type, void *data, int len)
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
     case WLAN_SVC_WLAN_AUTO_SHUTDOWN_IND:
 #endif
+    case WLAN_SVC_SSR_FAIL_IND:
         ani_hdr->length = 0;
         nlh->nlmsg_len = NLMSG_LENGTH((sizeof(tAniMsgHdr)));
         skb_put(skb, NLMSG_SPACE(sizeof(tAniMsgHdr)));
@@ -16437,7 +16440,6 @@ void wlan_hdd_send_svc_nlink_msg(int type, void *data, int len)
         memcpy(nl_data, data, len);
         skb_put(skb, NLMSG_SPACE(sizeof(tAniMsgHdr) + len));
         break;
-
     default:
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                 "WLAN SVC: Attempt to send unknown nlink message %d", type);
