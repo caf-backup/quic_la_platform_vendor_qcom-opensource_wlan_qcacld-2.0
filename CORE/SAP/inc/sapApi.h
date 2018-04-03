@@ -546,7 +546,10 @@ typedef struct sap_Config {
     v_U8_t          channel;         /* Operation channel */
     uint8_t         sec_ch;
     uint16_t         vht_channel_width;
-    uint16_t         ch_width_orig;
+    /* record value of "enum nl80211_chan_width" from usr */
+    uint32_t        ch_width_orig_usr;
+    /* convert to value of "tSirMacHTChannelWidth" per ch_width_orig_usr */
+    tSirMacHTChannelWidth ch_width_orig;
     v_U8_t          max_num_sta;     /* maximum number of STAs in station table */
     v_U8_t          dtim_period;     /* dtim interval */
     v_U8_t          num_accept_mac;
