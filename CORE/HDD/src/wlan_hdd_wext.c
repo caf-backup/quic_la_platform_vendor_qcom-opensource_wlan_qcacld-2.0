@@ -3681,6 +3681,12 @@ struct class_a_stats {
 	tCsrGlobalClassAStatsInfo class_a_stats;
 };
 
+struct station_stats {
+	tCsrSummaryStatsInfo summary_stats;
+	tCsrGlobalClassAStatsInfo class_a_stats;
+	struct csr_per_chain_rssi_stats_info per_chain_rssi_stats;
+};
+
 /**
  * hdd_get_class_a_statistics_cb() - Get Class A stats callback function
  * @stats: pointer to Class A stats
