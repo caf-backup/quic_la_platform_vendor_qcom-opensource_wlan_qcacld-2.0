@@ -4970,10 +4970,11 @@ static int hdd_extscan_passpoint_fill_network_list(
 				  SIR_PASSPOINT_REALM_LEN);
 		/* Don't send partial realm to firmware */
 		if (len >= SIR_PASSPOINT_REALM_LEN) {
-			hdd_err("user passed invalid realm, len:%zu", len);
+			hddLog(LOGE, FL("user passed invalid realm, len:%zu"),
+					len);
 			return -EINVAL;
 		}
-		hdd_debug("realm: %s", req_msg->networks[index].realm);
+		hddLog(LOG1, FL("realm: %s"), req_msg->networks[index].realm);
 
 			/* Parse and fetch roaming consortium ids */
 		if (!network[PARAM_ROAM_ID]) {
