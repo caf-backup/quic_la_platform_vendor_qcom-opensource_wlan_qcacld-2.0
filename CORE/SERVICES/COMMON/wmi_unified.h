@@ -243,6 +243,7 @@ typedef enum {
     WMI_GRP_HW_DATA_FILTER,      /* 0x3b */
     WMI_GRP_WLM,                 /* 0x3c WLAN Latency Manager */
     WMI_GRP_11K_OFFLOAD,         /* 0x3d */
+    WMI_GRP_TWT,                 /* 0x3e TWT (Target Wake Time) for STA and AP */
 } WMI_GRP_ID;
 
 #define WMI_CMD_GRP_START_ID(grp_id) (((grp_id) << 12) | 0x1)
@@ -1101,6 +1102,13 @@ typedef enum {
     /** WMI commands related to WLAN latency module **/
     WMI_WLM_CONFIG_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_WLM),
 
+    /** WMI commands related to STA & AP TWT module **/
+    WMI_TWT_ENABLE_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_TWT),
+    WMI_TWT_DISABLE_CMDID,
+    WMI_TWT_ADD_DIALOG_CMDID,
+    WMI_TWT_DEL_DIALOG_CMDID,
+    WMI_TWT_PAUSE_DIALOG_CMDID,
+    WMI_TWT_RESUME_DIALOG_CMDID,
 } WMI_CMD_ID;
 
 typedef enum {
@@ -1602,6 +1610,14 @@ typedef enum {
     WMI_11D_NEW_COUNTRY_EVENTID,
 
     _place_holder_evt_1 = WMI_EVT_GRP_START_ID(WMI_GRP_RMC),
+
+    /** Events for TWT(Target Wake Time) of STA and AP  */
+    WMI_TWT_ENABLE_COMPLETE_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_TWT),
+    WMI_TWT_DISABLE_COMPLETE_EVENTID,
+    WMI_TWT_ADD_DIALOG_COMPLETE_EVENTID,
+    WMI_TWT_DEL_DIALOG_COMPLETE_EVENTID,
+    WMI_TWT_PAUSE_DIALOG_COMPLETE_EVENTID,
+    WMI_TWT_RESUME_DIALOG_COMPLETE_EVENTID,
 
     /** Events in Prototyping phase */
     WMI_NDI_CAP_RSP_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_PROTOTYPE),
@@ -2199,6 +2215,15 @@ typedef struct {
      * bits 31:28 -> CRM sub ID
      */
       A_UINT32 fw_build_vers_ext;
+    /* max_nlo_ssids - dynamically negotiated maximum number of SSIDS for NLO
+     * This limit is the maximum number of SSIDs that can be configured in the
+     * target for Network List Offload (i.e. scanning for a preferred network).
+     * If this value is 0x0, the target supports WMI_NLO_MAX_SSIDS (16).
+     * If this value is non-zero, the host should send back in the
+     * WMI_INIT message's wmi_resource_config.max_nlo_ssids a value that
+     * is equal to or less than the target capability limit reported here.
+     */
+    A_UINT32 max_nlo_ssids;
 } wmi_service_ready_ext_event_fixed_param;
 
 typedef enum {
@@ -2706,6 +2731,33 @@ typedef struct {
      * For regular use, this field should be set to 0x0.
      */
     A_UINT32 sched_params;
+
+    /* Number of MAC on which AP TWT feature is supported */
+    A_UINT32 twt_ap_pdev_count;
+
+    /* Max no of STA with which TWT sessions can be formed by the AP */
+    A_UINT32 twt_ap_sta_count;
+
+    /* max_nlo_ssids - dynamically negotiated maximum number of SSIDS for NLO
+     * This parameter provides the final specification for the maximum number
+     * of SSIDs for the target to support for Network List Offload's scanning
+     * for preferred networks.
+     * This wmi_resource_config.max_nlo_ssids must be <= the max_nlo_ssids
+     * field from the target's WMI_SERVICE_READY_EXT_EVENT message.
+     * (If the target didn't provide a max_nlo_ssids field in the
+     * WMI_SERVICE_READY_EXT message, or if the SERVICE_READY_EXT msg's
+     * max_nlo_ssids value was 0x0, the target doesn't support dynamic
+     * negotiation of max NLO SSIDs, and WMI_NLO_MAX_SSIDS (=16) applies.)
+     * If this wmi_resource_config.max_nlo_ssids field is absent or 0x0,
+     * the host does not support dynamic negotiation of max NLO SSIDs.
+     * In such a case, the target will respond as follows:
+     * If the target supports at least WMI_NLO_MAX_SSIDS, the target will
+     * use the statically-configured WMI_NLO_MAX_SSIDS value.
+     * If the target supports less than WMI_NLO_MAX_SSIDS, the target will
+     * abort its boot-up, due to receiving an invalid/unsupported
+     * configuration specification.
+     */
+    A_UINT32 max_nlo_ssids;
 } wmi_resource_config;
 
 #define WMI_RSRC_CFG_FLAG_SET(word32, flag, value) \
@@ -7884,6 +7936,13 @@ typedef enum {
     /* pause adjust enable/disable */
     WMI_VDEV_PARAM_EARLY_RX_ADJUST_PAUSE,                     /* 0x37 */
 
+    /** Parameter to configure BA mode.
+     * Default: Auto mode.
+     * Valid values: 0- Auto mode,
+     *               1- Manual mode(addba req not sent).
+     */
+    WMI_VDEV_PARAM_BA_MODE,                                 /* 0x7e */
+
 
     /* Set channel pwr limit value of the vdev the minimal value of all
      * vdevs operating on this channel will be set as channel tx power
@@ -10284,6 +10343,8 @@ enum {
     WMI_AUTH_CCKM_RSNA,
     WMI_AUTH_RSNA_FILS_SHA256,
     WMI_AUTH_RSNA_FILS_SHA384,
+    WMI_AUTH_RSNA_SUITE_B_8021X_SHA256,
+    WMI_AUTH_RSNA_SUITE_B_8021X_SHA384,
 };
 
 typedef enum {
@@ -21365,6 +21426,12 @@ static INLINE A_UINT8 *wmi_id_to_name(A_UINT32 wmi_command)
                 WMI_RETURN_STRING(WMI_BSS_COLOR_CHANGE_ENABLE_CMDID);
                 WMI_RETURN_STRING(WMI_OBSS_COLOR_COLLISION_DET_CONFIG_CMDID);
                 WMI_RETURN_STRING(WMI_RUNTIME_DPD_RECAL_CMDID);
+                WMI_RETURN_STRING(WMI_TWT_ENABLE_CMDID);
+                WMI_RETURN_STRING(WMI_TWT_DISABLE_CMDID);
+                WMI_RETURN_STRING(WMI_TWT_ADD_DIALOG_CMDID);
+                WMI_RETURN_STRING(WMI_TWT_DEL_DIALOG_CMDID);
+                WMI_RETURN_STRING(WMI_TWT_PAUSE_DIALOG_CMDID);
+                WMI_RETURN_STRING(WMI_TWT_RESUME_DIALOG_CMDID);
 	}
 
 	return "Invalid WMI cmd";
@@ -21518,7 +21585,10 @@ typedef struct {
     /** TLV tag and len; tag equals
      * WMITLV_TAG_STRUC_wmi_pdev_get_nfcal_power_fixed_param */
     A_UINT32 tlv_header;
-    /* Currently there are no parameters for this message. */
+    /** pdev_id for identifying the MAC
+     * See macros starting with WMI_PDEV_ID_ for values.
+     */
+    A_UINT32 pdev_id;
 } wmi_pdev_get_nfcal_power_fixed_param;
 
 typedef struct {
@@ -21839,12 +21909,21 @@ typedef enum {
 /*
 * Lay out of flags in wmi_wlm_config_cmd_fixed_param
 *
-* |31  12|  11  |  10  |9    8|7    6|5    4|3    2|  1  |  0  |
-* +------+------+------+------+------+------+------+-----+-----+
-* | RSVD | SSLP | CSLP | RSVD | Roam | RSVD | DWLT | DFS | SUP |
-* +------+-------------+-------------+-------------------------+
-* |  WAL |      PS     |     Roam    |         Scan            |
+* |31  17|16 14| 13 | 12 |  11  |  10  |9    8|7    6|5    4|3    2|  1  |  0  |
+* +------+-----+----+----+------+------+------+------+------+------+-----+-----+
+* | RSVD | NSS |EDCA| TRY| SSLP | CSLP | RSVD | Roam | RSVD | DWLT | DFS | SUP |
+* +----------------------+-------------+-------------+-------------------------+
+* |          WAL         |      PS     |     Roam    |         Scan            |
 *
+* Flag values:
+*     TRY: (1) enable short limit for retrying unacked tx, where the limit is
+*              based on the traffic's latency level
+*          (0) default tx retry behavior
+*    EDCA: (1) Apply VO parameters on BE
+*          (0) default behavior
+*     NSS: (0) no Nss limits, other than those negotiatied during association
+*          (1) during 2-chain operation, tx only a single spatial stream
+*          (2) - (7) reserved / invalid
 */
 /* bit 0-3 of flags is used for scan operation */
 /* bit 0: WLM_FLAGS_SCAN_SUPPRESS, suppress all scan and other bits would be ignored if bit is set */
@@ -21896,7 +21975,7 @@ typedef enum {
 #define WLM_FLAGS_PS_DISABLE_SYS_SLEEP  1  /* disable sys sleep */
 
 
-/* bit 12-31 of flags is reserved for powersave and WAL */
+/* bit 17-31 of flags is reserved for powersave and WAL */
 
 #define WLM_FLAGS_SCAN_IS_SUPPRESS(flag)                  WMI_GET_BITS(flag, 0, 1)
 #define WLM_FLAGS_SCAN_SET_SUPPRESS(flag, val)            WMI_SET_BITS(flag, 0, 1, val)
@@ -21910,6 +21989,12 @@ typedef enum {
 #define WLM_FLAGS_PS_SET_CSS_CLPS_DISABLE(flag, val)      WMI_SET_BITS(flag, 10, 1, val)
 #define WLM_FLAGS_PS_IS_SYS_SLP_DISABLED(flag)            WMI_GET_BITS(flag, 11, 1)
 #define WLM_FLAGS_PS_SET_SYS_SLP_DISABLE(flag, val)       WMI_SET_BITS(flag, 11, 1, val)
+#define WLM_FLAGS_WAL_LIMIT_TRY_ENABLED(flag)             WMI_GET_BITS(flag, 12, 1)
+#define WLM_FLAGS_WAL_LIMIT_TRY_SET(flag, val)            WMI_SET_BITS(flag, 12, 1, val)
+#define WLM_FLAGS_WAL_ADJUST_EDCA_ENABLED(flag)           WMI_GET_BITS(flag, 13, 1)
+#define WLM_FLAGS_WAL_ADJUST_EDCA_SET(flag, val)          WMI_SET_BITS(flag, 13, 1, val)
+#define WLM_FLAGS_WAL_1NSS_ENABLED(flag)                 (WMI_GET_BITS(flag, 14, 3) & 0x1)
+#define WLM_FLAGS_WAL_NSS_SET(flag, val)                  WMI_SET_BITS(flag, 14, 3, val)
 
 typedef struct {
     /** TLV tag and len; tag equals
@@ -21936,6 +22021,223 @@ typedef struct {
     /* flags for each client of WLM, refer to WLM_FLAGS_ definitions above */
     A_UINT32 flags;
 } wmi_wlm_config_cmd_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_enable_cmd_fixed_param  */
+    /** pdev_id for identifying the MAC.  See macros starting with WMI_PDEV_ID_ for values. In non-DBDC case host should set it to 0
+     * The host should never set this pdev_id to WMI_PDEV_ID_SOC,
+     * because the configuration parameters herein will be different
+     * for each MAC instance.
+     */
+    A_UINT32 pdev_id;
+    A_UINT32 sta_cong_timer_ms;     /* STA TWT congestion timer TO value in terms of ms */
+    A_UINT32 mbss_support;          /* Flag indicating if AP TWT feature supported in MBSS mode or not */
+    A_UINT32 default_slot_size;              /* This is the default value for the TWT slot setup by AP (units = microseconds) */
+    A_UINT32 congestion_thresh_setup;        /* Minimum congestion required to start setting up TWT sessions */
+    /*
+     * The congestion parameters below are in percent of occupied airtime.
+     */
+    A_UINT32 congestion_thresh_teardown;     /* Minimum congestion below which TWT will be torn down */
+    A_UINT32 congestion_thresh_critical;     /* Threshold above which TWT will not be active */
+    /*
+     * The interference parameters below use an abstract method of evaluating
+     * interference.  The parameters are in percent, ranging from 0 for no
+     * interference, to 100 for interference extreme enough to completely
+     * block the signal of interest.
+     */
+    A_UINT32 interference_thresh_teardown;   /* Minimum interference above that TWT will not be active */
+    A_UINT32 interference_thresh_setup;      /* Minimum interference below that TWT session can be setup */
+    A_UINT32 min_no_sta_setup;               /* Minimum no of STA required to start TWT setup */
+    A_UINT32 min_no_sta_teardown;            /* Minimum no of STA below which TWT will be torn down */
+    A_UINT32 no_of_bcast_mcast_slots;        /* Number of default slot sizes reserved for BCAST/MCAST delivery */
+    A_UINT32 min_no_twt_slots;               /* Minimum no of available slots for TWT to be operational */
+    A_UINT32 max_no_sta_twt;                 /* Max no of STA with which TWT is possible (must be <= the wmi_resource_config's twt_ap_sta_count value) */
+    /*
+     * The below interval parameters have units of milliseconds.
+     */
+    A_UINT32 mode_check_interval;            /* Interval between two successive check to decide the mode of TWT */
+    A_UINT32 add_sta_slot_interval;          /* Interval between decisions making to create TWT slots for STAs */
+    A_UINT32 remove_sta_slot_interval;       /* Inrerval between decisions making to remove TWT slot of STAs */
+} wmi_twt_enable_cmd_fixed_param;
+
+/* status code of enabling TWT */
+typedef enum _WMI_ENABLE_TWT_STATUS_T {
+    WMI_ENABLE_TWT_STATUS_OK,              /* enabling TWT successfully completed */
+    WMI_ENABLE_TWT_STATUS_ALREADY_ENABLED, /* TWT already enabled */
+    WMI_ENABLE_TWT_STATUS_NOT_READY,       /* FW not ready for enabling TWT */
+    WMI_ENABLE_TWT_INVALID_PARAM,          /* invalid parameters */
+    WMI_ENABLE_TWT_STATUS_UNKNOWN_ERROR,   /* enabling TWT failed with an unknown reason */
+} WMI_ENABLE_TWT_STATUS_T;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_enable_complete_event_fixed_param */
+    /** pdev_id for identifying the MAC.  See macros starting with WMI_PDEV_ID_ for values. In non-DBDC case host should set it to 0 */
+    A_UINT32 pdev_id;
+    A_UINT32 status;        /* WMI_ENABLE_TWT_STATUS_T */
+} wmi_twt_enable_complete_event_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_disable_cmd_fixed_param  */
+    /** pdev_id for identifying the MAC.  See macros starting with WMI_PDEV_ID_ for values. In non-DBDC case host should set it to 0 */
+    A_UINT32 pdev_id;               /* host should never set it to WMI_PDEV_ID_SOC  */
+} wmi_twt_disable_cmd_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_disable_complete_event_fixed_param */
+    A_UINT32 reserved0;     /* unused right now */
+} wmi_twt_disable_complete_event_fixed_param;
+
+/* from IEEE 802.11ah section 9.4.2.200 */
+typedef enum _WMI_TWT_COMMAND_T {
+    WMI_TWT_COMMAND_REQUEST_TWT    = 0,
+    WMI_TWT_COMMAND_SUGGEST_TWT    = 1,
+    WMI_TWT_COMMAND_DEMAND_TWT     = 2,
+    WMI_TWT_COMMAND_TWT_GROUPING   = 3,
+    WMI_TWT_COMMAND_ACCEPT_TWT     = 4,
+    WMI_TWT_COMMAND_ALTERNATE_TWT  = 5,
+    WMI_TWT_COMMAND_DICTATE_TWT    = 6,
+    WMI_TWT_COMMAND_REJECT_TWT     = 7,
+} WMI_TWT_COMMAND_T;
+
+/* TWT command, refer to WMI_TWT_COMMAND_T */
+#define TWT_FLAGS_GET_CMD(flag)                 WMI_GET_BITS(flag, 0, 8)
+#define TWT_FLAGS_SET_CMD(flag, val)            WMI_SET_BITS(flag, 0, 8, val)
+
+/* 0 means Individual TWT, 1 means Broadcast TWT */
+#define TWT_FLAGS_GET_BROADCAST(flag)           WMI_GET_BITS(flag, 8, 1)
+#define TWT_FLAGS_SET_BROADCAST(flag, val)      WMI_SET_BITS(flag, 8, 1, val)
+
+/* 0 means non-Trigger-enabled TWT, 1 means  means Trigger-enabled TWT */
+#define TWT_FLAGS_GET_TRIGGER(flag)             WMI_GET_BITS(flag, 9, 1)
+#define TWT_FLAGS_SET_TRIGGER(flag, val)        WMI_SET_BITS(flag, 9, 1, val)
+
+/* flow type 0 means announced TWT, 1 means un-announced TWT */
+#define TWT_FLAGS_GET_FLOW_TYPE(flag)           WMI_GET_BITS(flag, 10, 1)
+#define TWT_FLAGS_SET_FLOW_TYPE(flag, val)      WMI_SET_BITS(flag, 10, 1, val)
+
+/* 0 means TWT protection is required, 1 means TWT protection is not required */
+#define TWT_FLAGS_GET_PROTECTION(flag)          WMI_GET_BITS(flag, 11, 1)
+#define TWT_FLAGS_SET_PROTECTION(flag, val)     WMI_SET_BITS(flag, 11, 1, val)
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_add_dialog_cmd_fixed_param  */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    wmi_mac_addr peer_macaddr;      /* peer MAC address when vdev is AP VDEV */
+    /* diaglog_id (TWT dialog ID)
+     * This dialog ID must be unique within its vdev.
+     */
+    A_UINT32 dialog_id;
+
+    /* 1. wake_intvl_mantis must be <= 0xFFFF
+     * 2. wake_intvl_us must be divided evenly by wake_intvl_mantis,
+     *    i.e., wake_intvl_us % wake_intvl_mantis == 0
+     * 2. the quotient of wake_intvl_us/wake_intvl_mantis must be 2 to N-th(0<=N<=31) power,
+          i.e., wake_intvl_us/wake_intvl_mantis == 2^N, 0<=N<=31
+     */
+    A_UINT32 wake_intvl_us;         /* TWT Wake Interval in units of us */
+    A_UINT32 wake_intvl_mantis;     /* TWT Wake Interval Mantissa */
+
+    /* wake_dura_us must be divided evenly by 256, i.e., wake_dura_us % 256 == 0 */
+    A_UINT32 wake_dura_us;          /* TWT Wake Duration in units of us, must be <= 0xFFFF  */
+
+    A_UINT32 sp_offset_us;          /* this long time after TWT setup the 1st SP will start */
+    A_UINT32 flags;                 /* TWT flags, refer to MACROs TWT_FLAGS_*(TWT_FLAGS_GET_CMD etc) */
+} wmi_twt_add_dialog_cmd_fixed_param;
+
+/* status code of adding TWT dialog */
+typedef enum _WMI_ADD_TWT_STATUS_T {
+    WMI_ADD_TWT_STATUS_OK,                  /* adding TWT dialog successfully completed */
+    WMI_ADD_TWT_STATUS_TWT_NOT_ENABLED,     /* TWT not enabled */
+    WMI_ADD_TWT_STATUS_USED_DIALOG_ID,      /* TWT dialog ID is already used */
+    WMI_ADD_TWT_STATUS_INVALID_PARAM,       /* invalid parameters */
+    WMI_ADD_TWT_STATUS_NOT_READY,           /* FW not ready */
+    WMI_ADD_TWT_STATUS_NO_RESOURCE,         /* FW resource exhausted */
+    WMI_ADD_TWT_STATUS_NO_ACK,              /* peer AP/STA did not ACK the request/response frame */
+    WMI_ADD_TWT_STATUS_NO_RESPONSE,         /* peer AP did not send the response frame */
+    WMI_ADD_TWT_STATUS_DENIED,              /* AP did not accept the request */
+    WMI_ADD_TWT_STATUS_UNKNOWN_ERROR,       /* adding TWT dialog failed with an unknown reason */
+} WMI_ADD_TWT_STATUS_T;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_add_dialog_complete_event_fixed_param */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    A_UINT32 dialog_id;     /* TWT dialog ID */
+    A_UINT32 status;        /* refer to WMI_ADD_TWT_STATUS_T */
+} wmi_twt_add_dialog_complete_event_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_del_dialog_cmd_fixed_param  */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    A_UINT32 dialog_id;     /* TWT dialog ID */
+} wmi_twt_del_dialog_cmd_fixed_param;
+
+/* status code of deleting TWT dialog */
+typedef enum _WMI_DEL_TWT_STATUS_T {
+    WMI_DEL_TWT_STATUS_OK,                  /* deleting TWT dialog successfully completed */
+    WMI_DEL_TWT_STATUS_DIALOG_ID_NOT_EXIST, /* TWT dialog ID not exists */
+    WMI_DEL_TWT_STATUS_INVALID_PARAM,       /* invalid parameters */
+    WMI_DEL_TWT_STATUS_DIALOG_ID_BUSY,      /* FW is in the process of handling this dialog */
+    WMI_DEL_TWT_STATUS_NO_RESOURCE,         /* FW resource exhausted */
+    WMI_DEL_TWT_STATUS_NO_ACK,              /* peer AP/STA did not ACK the request/response frame */
+    WMI_DEL_TWT_STATUS_UNKNOWN_ERROR,       /* deleting TWT dialog failed with an unknown reason */
+} WMI_DEL_TWT_STATUS_T;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_del_dialog_complete_event_fixed_param */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    A_UINT32 dialog_id;     /* TWT dialog ID */
+    A_UINT32 status;        /* refer to WMI_DEL_TWT_STATUS_T */
+} wmi_twt_del_dialog_complete_event_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_pause_dialog_cmd_fixed_param  */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    A_UINT32 dialog_id;     /* TWT dialog ID */
+} wmi_twt_pause_dialog_cmd_fixed_param;
+
+/* status code of pausing TWT dialog */
+typedef enum _WMI_PAUSE_TWT_STATUS_T {
+    WMI_PAUSE_TWT_STATUS_OK,                  /* pausing TWT dialog successfully completed */
+    WMI_PAUSE_TWT_STATUS_DIALOG_ID_NOT_EXIST, /* TWT dialog ID not exists */
+    WMI_PAUSE_TWT_STATUS_INVALID_PARAM,       /* invalid parameters */
+    WMI_PAUSE_TWT_STATUS_DIALOG_ID_BUSY,      /* FW is in the process of handling this dialog */
+    WMI_PAUSE_TWT_STATUS_NO_RESOURCE,         /* FW resource exhausted */
+    WMI_PAUSE_TWT_STATUS_NO_ACK,              /* peer AP/STA did not ACK the request/response frame */
+    WMI_PAUSE_TWT_STATUS_UNKNOWN_ERROR,       /* pausing TWT dialog failed with an unknown reason */
+} WMI_PAUSE_TWT_STATUS_T;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_pause_dialog_complete_event_fixed_param */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    A_UINT32 dialog_id;     /* TWT dialog ID */
+    A_UINT32 status;        /* refer to WMI_PAUSE_TWT_STATUS_T */
+} wmi_twt_pause_dialog_complete_event_fixed_param;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_resume_dialog_cmd_fixed_param  */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    A_UINT32 dialog_id;     /* TWT dialog ID */
+    A_UINT32 sp_offset_us;  /* this long time after TWT resumed the 1st SP will start */
+} wmi_twt_resume_dialog_cmd_fixed_param;
+
+/* status code of resuming TWT dialog */
+typedef enum _WMI_RESUME_TWT_STATUS_T {
+    WMI_RESUME_TWT_STATUS_OK,                  /* resuming TWT dialog successfully completed */
+    WMI_RESUME_TWT_STATUS_DIALOG_ID_NOT_EXIST, /* TWT dialog ID not exists */
+    WMI_RESUME_TWT_STATUS_INVALID_PARAM,       /* invalid parameters */
+    WMI_RESUME_TWT_STATUS_DIALOG_ID_BUSY,      /* FW is in the process of handling this dialog */
+    WMI_RESUME_TWT_STATUS_NOT_PAUSED,          /* dialog not paused currently */
+    WMI_RESUME_TWT_STATUS_NO_RESOURCE,         /* FW resource exhausted */
+    WMI_RESUME_TWT_STATUS_NO_ACK,              /* peer AP/STA did not ACK the request/response frame */
+    WMI_RESUME_TWT_STATUS_UNKNOWN_ERROR,       /* resuming TWT dialog failed with an unknown reason */
+} WMI_RESUME_TWT_STATUS_T;
+
+typedef struct {
+    A_UINT32 tlv_header;    /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_twt_resume_dialog_complete_event_fixed_param */
+    A_UINT32 vdev_id;       /* VDEV identifier */
+    A_UINT32 dialog_id;     /* TWT dialog ID */
+    A_UINT32 status;        /* refer to WMI_RESUME_TWT_STATUS_T */
+} wmi_twt_resume_dialog_complete_event_fixed_param;
 
 typedef enum {
      WMI_DMA_RING_CONFIG_MODULE_SPECTRAL,
