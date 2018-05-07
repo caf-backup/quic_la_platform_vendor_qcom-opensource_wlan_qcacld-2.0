@@ -4843,7 +4843,8 @@ static int wma_passpoint_match_event_handler(void *handle,
 	struct wifi_passpoint_match  *dest_match;
 	tSirWifiScanResult      *dest_ap;
 	uint8_t *buf_ptr;
-
+	uint32_t buf_len = 0;
+	bool excess_data = false;
 	tpAniSirGlobal pMac = (tpAniSirGlobal )vos_get_context(
 					VOS_MODULE_ID_PE, wma->vos_context);
 	if (!pMac) {
@@ -4862,14 +4863,28 @@ static int wma_passpoint_match_event_handler(void *handle,
 	event = param_buf->fixed_param;
 	buf_ptr = (uint8_t *)param_buf->fixed_param;
 
-	/*
-	 * All the below lengths are UINT32 and summing up and checking
-	 * against a constant should not be an issue.
-	 */
-	if ((sizeof(*event) + event->ie_length + event->anqp_length) >
-			WMA_SVC_MSG_MAX_SIZE) {
-		WMA_LOGE("IE Length: %d or ANQP Length: %d is huge",
-				event->ie_length, event->anqp_length);
+	do {
+		if (event->ie_length > (WMA_SVC_MSG_MAX_SIZE)) {
+			excess_data = true;
+			break;
+		} else {
+			buf_len = event->ie_length;
+		}
+
+		if (event->anqp_length > (WMA_SVC_MSG_MAX_SIZE)) {
+			excess_data = true;
+			break;
+		} else {
+			buf_len += event->anqp_length;
+		}
+	} while (0);
+
+	if (excess_data || buf_len > (WMA_SVC_MSG_MAX_SIZE - sizeof(*event)) ||
+	    buf_len > (WMA_SVC_MSG_MAX_SIZE - sizeof(*dest_match)) ||
+	    (event->ie_length + event->anqp_length) > param_buf->num_bufp) {
+		WMA_LOGE("IE Length: %d or ANQP Length: %d is huge, num_bufp %d",
+			 event->ie_length, event->anqp_length,
+			 param_buf->num_bufp);
 		return -EINVAL;
 	}
 	if (event->ssid.ssid_len > SIR_MAC_MAX_SSID_LENGTH) {
@@ -4877,8 +4892,7 @@ static int wma_passpoint_match_event_handler(void *handle,
 			__func__, event->ssid.ssid_len);
 		event->ssid.ssid_len = SIR_MAC_MAX_SSID_LENGTH;
 	}
-	dest_match = vos_mem_malloc(sizeof(*dest_match) +
-				event->ie_length + event->anqp_length);
+	dest_match = vos_mem_malloc(sizeof(*dest_match) + buf_len);
 	if (!dest_match) {
 		WMA_LOGE("%s: vos_mem_malloc failed", __func__);
 		return -EINVAL;
@@ -4967,7 +4981,7 @@ static int wma_unified_link_iface_stats_event_handler(void *handle,
 		WMA_LOGA("%s: Invalid param_tlvs for Iface Stats", __func__);
 		return -EINVAL;
 	}
-	if (link_stats->num_ac >= WIFI_AC_MAX) {
+	if (link_stats->num_ac > WIFI_AC_MAX) {
 		WMA_LOGE("%s: Excess data received from firmware num_ac %d",
 			__func__, link_stats->num_ac);
 		return -EINVAL;
@@ -10825,6 +10839,7 @@ static ol_txrx_vdev_handle wma_vdev_attach(tp_wma_handle wma_handle,
 	tSirMacHTCapabilityInfo *phtCapInfo;
 	u_int8_t vdev_id;
 	struct sir_set_tx_rx_aggregation_size tx_rx_aggregation_size;
+	struct sir_set_tx_sw_retry_threshhold tx_sw_retry_threshhold;
 
 	if (NULL == mac) {
 		WMA_LOGE("%s: Failed to get mac",__func__);
@@ -10912,6 +10927,36 @@ static ol_txrx_vdev_handle wma_vdev_attach(tp_wma_handle wma_handle,
 	status = wma_set_tx_rx_aggregation_size(&tx_rx_aggregation_size);
 	if (status != VOS_STATUS_SUCCESS)
 		WMA_LOGE("failed to set aggregation sizes(err=%d)", status);
+
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_be =
+				self_sta_req->tx_aggr_sw_retry_threshhold_be;
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_bk =
+				self_sta_req->tx_aggr_sw_retry_threshhold_bk;
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_vi =
+				self_sta_req->tx_aggr_sw_retry_threshhold_vi;
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_vo =
+				self_sta_req->tx_aggr_sw_retry_threshhold_vo;
+	tx_sw_retry_threshhold.vdev_id = self_sta_req->sessionId;
+	tx_sw_retry_threshhold.retry_type = WMI_VDEV_CUSTOM_SW_RETRY_TYPE_AGGR;
+
+	status = wma_set_sw_retry_threshhold(&tx_sw_retry_threshhold);
+	if (status != VOS_STATUS_SUCCESS)
+		WMA_LOGE("failed to set aggregation retry threshhold(err=%d)", status);
+
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_be =
+				self_sta_req->tx_non_aggr_sw_retry_threshhold_be;
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_bk =
+				self_sta_req->tx_non_aggr_sw_retry_threshhold_bk;
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_vi =
+				self_sta_req->tx_non_aggr_sw_retry_threshhold_vi;
+	tx_sw_retry_threshhold.tx_sw_retry_threshhold_vo =
+				self_sta_req->tx_non_aggr_sw_retry_threshhold_vo;
+	tx_sw_retry_threshhold.vdev_id = self_sta_req->sessionId;
+	tx_sw_retry_threshhold.retry_type = WMI_VDEV_CUSTOM_SW_RETRY_TYPE_NONAGGR;
+
+	status = wma_set_sw_retry_threshhold(&tx_sw_retry_threshhold);
+	if (status != VOS_STATUS_SUCCESS)
+		WMA_LOGE("failed to set non aggregation retry threshhold(err=%d)", status);
 
 	switch (self_sta_req->type) {
 	case WMI_VDEV_TYPE_STA:
@@ -32944,6 +32989,92 @@ VOS_STATUS wma_set_tx_rx_aggregation_size
 }
 
 /**
+ * wma_set_sw_retry_threshhold() - set sw retry threshhold per AC for tx
+ * @tx_sw_retry_threshhold: value needs to set to firmware
+ *
+ * This function sends WMI command to set the sw retry threshhold per AC
+ * for Tx.
+ *
+ * Return: VOS_STATUS_SUCCESS on success, error number otherwise
+ */
+VOS_STATUS wma_set_sw_retry_threshhold(
+	struct sir_set_tx_sw_retry_threshhold *tx_sw_retry_threshhold)
+{
+	tp_wma_handle wma_handle;
+	wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param *cmd;
+	int32_t len;
+	wmi_buf_t buf;
+	u_int8_t *buf_ptr;
+	int ret;
+	int queue_num;
+	uint32_t tx_retry[WMI_AC_MAX];
+
+	wma_handle = vos_get_context(VOS_MODULE_ID_WDA,
+			vos_get_global_context(VOS_MODULE_ID_WDA, NULL));
+
+	if (!tx_sw_retry_threshhold) {
+		WMA_LOGE("%s: invalid pointer", __func__);
+		return VOS_STATUS_E_INVAL;
+	}
+
+	if (!wma_handle) {
+		WMA_LOGE("%s: WMA context is invald!", __func__);
+		return VOS_STATUS_E_INVAL;
+	}
+
+	tx_retry[0] =
+		tx_sw_retry_threshhold->tx_sw_retry_threshhold_be;
+	tx_retry[1] =
+		tx_sw_retry_threshhold->tx_sw_retry_threshhold_bk;
+	tx_retry[2] =
+		tx_sw_retry_threshhold->tx_sw_retry_threshhold_vi;
+	tx_retry[3] =
+		tx_sw_retry_threshhold->tx_sw_retry_threshhold_vo;
+
+	for (queue_num = 0; queue_num < WMI_AC_MAX; queue_num++) {
+		if (tx_retry[queue_num] == 0)
+			continue;
+
+		len = sizeof(*cmd);
+		buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+
+		if (!buf) {
+			WMA_LOGE("%s: Failed allocate wmi buffer", __func__);
+			return VOS_STATUS_E_NOMEM;
+		}
+
+		buf_ptr = (u_int8_t *)wmi_buf_data(buf);
+		cmd =
+		    (wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param *)buf_ptr;
+
+		WMITLV_SET_HDR(&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+			wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param));
+
+		cmd->vdev_id = tx_sw_retry_threshhold->vdev_id;
+		cmd->ac_type = queue_num;
+		cmd->sw_retry_type = tx_sw_retry_threshhold->retry_type;
+		cmd->sw_retry_th = tx_retry[queue_num];
+
+		WMA_LOGD("queue: %d type: %d threadhold: %d vdev: %d",
+			 queue_num, cmd->sw_retry_type,
+			 cmd->sw_retry_th, cmd->vdev_id);
+
+		ret = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
+					WMI_VDEV_SET_CUSTOM_SW_RETRY_TH_CMDID);
+		if (ret) {
+			WMA_LOGE("%s: Failed to send retry threashhold command",
+				 __func__);
+			wmi_buf_free(buf);
+			return VOS_STATUS_E_FAILURE;
+		}
+	}
+
+	return VOS_STATUS_SUCCESS;
+}
+
+/**
  * wma_set_powersave_config() - update power save config in wma
  * @val: new power save value
  * @vdev_id: vdev id
@@ -35968,17 +36099,18 @@ int wma_scpc_event_handler(void *handle, u_int8_t *event_buf, u_int32_t len)
 	buf += sizeof(u_int32_t);
 
 	i = n = 0;
-	bd_data = (struct _bd *)&buf[n];
-	n += roundup((sizeof(struct _bd) + bd_data->length), 4);
 
 	while ((n < length) && (i < scpc_event->num_patch)) {
 		bd_data = (struct _bd *)&buf[n];
 
 		WMA_LOGD("%s: board data patch%i, offset= %d, length= %d.\n",
 			__func__, i, bd_data->offset, bd_data->length);
+		if (bd_data->length + n > length)
+			break;
+
 		/* cache the data section */
 		vos_cache_boarddata(bd_data->offset,
-				bd_data->length, bd_data->data);
+				    bd_data->length, bd_data->data);
 
 		n += roundup((sizeof(struct _bd) + bd_data->length), 4);
 		i++;
