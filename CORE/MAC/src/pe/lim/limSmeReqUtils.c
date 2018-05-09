@@ -365,7 +365,7 @@ limSetRSNieWPAiefromSmeStartBSSReqMessage(tpAniSirGlobal pMac,
 
                 return false;
             }
-            else
+            else if ((wpaIndex + pRSNie->rsnIEdata[wpaIndex + 1]) <= SIR_MAC_MAX_IE_LENGTH)
             {
                 /* Both RSN and WPA IEs are present */
                 dot11fUnpackIeRSN(pMac,&pRSNie->rsnIEdata[2],
