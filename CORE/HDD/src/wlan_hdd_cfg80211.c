@@ -14270,21 +14270,21 @@ static int wlan_hdd_get_txrx_rate(hdd_adapter_t *adapter,
 								&staid)) {
 				hddLog(VOS_TRACE_LEVEL_ERROR,
 				   FL("Station MAC address does not matching"));
-				return -EFAULT;
-			}
-
-			adapter->aStaInfo[staid].tx_rate =
+				ret = -EFAULT;
+			} else {
+				adapter->aStaInfo[staid].tx_rate =
 						priv->peer_info_ext.tx_rate;
-			adapter->aStaInfo[staid].rx_rate =
+				adapter->aStaInfo[staid].rx_rate =
 						priv->peer_info_ext.rx_rate;
 
-			hddLog(VOS_TRACE_LEVEL_INFO,
-				"%s %pM tx rate %u rx rate %u",
-				__func__,
-				peer_macaddr,
-				adapter->aStaInfo[staid].tx_rate,
-				adapter->aStaInfo[staid].rx_rate);
-			ret = 0;
+				hddLog(VOS_TRACE_LEVEL_INFO,
+					"%s %pM tx rate %u rx rate %u",
+					__func__,
+					peer_macaddr,
+					adapter->aStaInfo[staid].tx_rate,
+					adapter->aStaInfo[staid].rx_rate);
+				ret = 0;
+			}
 		}
 	}
 
@@ -16541,13 +16541,22 @@ static bool wlan_hdd_get_sap_obss(hdd_adapter_t *pHostapdAdapter)
     hdd_context_t *hdd_ctx = WLAN_HDD_GET_CTX(pHostapdAdapter);
     beacon_data_t *beacon = pHostapdAdapter->sessionCtx.ap.beacon;
     uint8_t *ie = NULL;
+    uint32_t status;
 
     ie = wlan_hdd_cfg80211_get_ie_ptr(beacon->tail, beacon->tail_len,
                                                         WLAN_EID_HT_CAPABILITY);
     if (ie && ie[1]) {
         vos_mem_copy(ht_cap_ie, &ie[2], DOT11F_IE_HTCAPS_MAX_LEN);
-        dot11fUnpackIeHTCaps((tpAniSirGlobal)hdd_ctx->hHal, ht_cap_ie, ie[1],
+        status = dot11fUnpackIeHTCaps((tpAniSirGlobal)hdd_ctx->hHal, ht_cap_ie, ie[1],
                                                            &dot11_ht_cap_ie);
+        if (DOT11F_FAILED(status))
+        {
+            hddLog(LOGE,
+            FL("unpack failed for HT Caps status:(0x%08x)"),
+               status);
+            return false;
+        }
+
         return dot11_ht_cap_ie.supportedChannelWidthSet;
     }
 
@@ -24620,6 +24629,7 @@ static int wlan_hdd_cfg80211_set_privacy_ibss(
                                          )
 {
     int status = 0;
+    tANI_U32 ret;
     hdd_wext_state_t *pWextState = WLAN_HDD_GET_WEXT_STATE_PTR(pAdapter);
     eCsrEncryptionType encryptionType = eCSR_ENCRYPT_TYPE_NONE;
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
@@ -24658,10 +24668,18 @@ static int wlan_hdd_cfg80211_set_privacy_ibss(
 		}
                 // Unpack the WPA IE
                 //Skip past the EID byte and length byte - and four byte WiFi OUI
-                dot11fUnpackIeWPA((tpAniSirGlobal) halHandle,
+                ret = dot11fUnpackIeWPA((tpAniSirGlobal) halHandle,
                                 &ie[2+4],
                                 ie[1] - 4,
                                 &dot11WPAIE);
+                if (DOT11F_FAILED(ret))
+                {
+                    hddLog(LOGE,
+                    FL("unpack failed status:(0x%08x)"),
+                       ret);
+                    return -EINVAL;
+                }
+
                 /*Extract the multicast cipher, the encType for unicast
                                cipher for wpa-none is none*/
                 encryptionType =
