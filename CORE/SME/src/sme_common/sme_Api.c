@@ -5075,6 +5075,10 @@ eHalStatus sme_GetConfigParam(tHalHandle hHal, tSmeConfigParams *pParam)
       pParam->sub20_config_info = pMac->sub20_config_info;
       pParam->sub20_channelwidth = pMac->sub20_channelwidth;
       pParam->sub20_dynamic_channelwidth = pMac->sub20_dynamic_channelwidth;
+#if defined WLAN_FEATURE_VOWIFI
+      vos_mem_copy(&pParam->rrmConfig, &pMac->rrm.rrmSmeContext.rrmConfig,
+                   sizeof(struct rrm_config_param));
+#endif
       sme_ReleaseGlobalLock( &pMac->sme );
    }
 
