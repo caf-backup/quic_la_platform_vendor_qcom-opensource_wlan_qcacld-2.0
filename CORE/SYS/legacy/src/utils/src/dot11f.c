@@ -22315,11 +22315,7 @@ static tANI_U32 UnpackCore(tpAniSirGlobal pCtx,
                         status |= dot11fUnpackIeMobilityDomain(pCtx, pBufRemaining, len, ( tDot11fIEMobilityDomain* )(pFrm + pIe->offset + sizeof(tDot11fIEMobilityDomain)*countOffset) );
                             break;
                 case SigIeNeighborReport:
-                        if (countOffset < MAX_SUPPORTED_NEIGHBOR_RPT) {
-                            status |= dot11fUnpackIeNeighborReport(pCtx, pBufRemaining, len, ( tDot11fIENeighborReport* )(pFrm + pIe->offset + sizeof(tDot11fIENeighborReport)*countOffset) );
-                        } else {
-                            status |= DOT11F_BUFFER_OVERFLOW;
-                        }
+                        status |= dot11fUnpackIeNeighborReport(pCtx, pBufRemaining, len, ( tDot11fIENeighborReport* )(pFrm + pIe->offset + sizeof(tDot11fIENeighborReport)*countOffset) );
                             break;
                 case SigIeOBSSScanParameters:
                         status |= dot11fUnpackIeOBSSScanParameters(pCtx, pBufRemaining, len, ( tDot11fIEOBSSScanParameters* )(pFrm + pIe->offset + sizeof(tDot11fIEOBSSScanParameters)*countOffset) );
@@ -23537,11 +23533,8 @@ tANI_U32 dot11fGetPackedIERSN(tpAniSirGlobal pCtx, tDot11fIERSN *pIe, tANI_U32 *
         }
         else break;
         *pnNeeded += ( pIe->akm_suite_count * 4 );
-        if ( pIe->RSN_Cap )
-        {
-            *pnNeeded += 2;
-        }
-        else break;
+        /* RSN_Cap */
+        *pnNeeded += 2;
         if ( pIe->pmkid_count )
         {
             *pnNeeded += 2;
@@ -24274,7 +24267,7 @@ static tANI_U32 GetPackedSizeCore(tpAniSirGlobal pCtx,
     (void)pCtx; /* Shutup the compiler if we have no FFs nor IEs... */
     i=0; n=0;
     pIe = &( IEs[0] );
-    while ( 0xff != pIe->eid || pIe->extn_eid)
+    while (0xff != pIe->eid || pIe->extn_eid)
     {
         pfFound = (tFRAMES_BOOL*)(pFrm + pIe->offset +
                                   pIe->presenceOffset);
@@ -31684,12 +31677,10 @@ tANI_U32 dot11fPackIeRSN(tpAniSirGlobal pCtx,
         DOT11F_MEMCPY(pCtx, pBuf, &( pSrc->akm_suites ), ( pSrc->akm_suite_count * 4 ));
         *pnConsumed += ( pSrc->akm_suite_count * 4 );
         pBuf += ( pSrc->akm_suite_count * 4 );
-        if ( pSrc->RSN_Cap )        {
-            DOT11F_MEMCPY(pCtx, pBuf, pSrc->RSN_Cap, 2);
-            *pnConsumed += 2;
-            pBuf += 2;
-        }
-        else break;
+        /* RSN_Cap */
+        DOT11F_MEMCPY(pCtx, pBuf, pSrc->RSN_Cap, 2);
+        *pnConsumed += 2;
+        pBuf += 2;
         if ( pSrc->pmkid_count )        {
             frameshtons(pCtx, pBuf, pSrc->pmkid_count, 0);
             *pnConsumed += 2;
@@ -46942,7 +46933,7 @@ static tANI_U32 PackCore(tpAniSirGlobal pCtx,
     }
 
     pIe = &( IEs[0] );
-    while ( 0xff != pIe->eid || pIe->extn_eid)
+    while (0xff != pIe->eid || pIe->extn_eid)
     {
         pfFound = (tFRAMES_BOOL*)(pSrc + pIe->offset +
                                   pIe->presenceOffset);
