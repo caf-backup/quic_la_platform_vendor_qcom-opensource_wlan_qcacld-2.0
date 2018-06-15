@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013, 2015-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013, 2015-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -871,4 +871,42 @@ v_TIME_t vos_timer_get_system_time( v_VOID_t )
    struct timeval tv;
    do_gettimeofday(&tv);
    return tv.tv_sec*1000 + tv.tv_usec/1000;
+}
+
+/*--------------------------------------------------------------------------
+
+  \brief vos_timer_deinit() - De-init a vOSS Timer
+
+  The \a vos_timer_deinit() function stop (if the timer is in running state)
+  and destroy a timer.
+
+  \param timer - the timer object to be stopped
+
+  \return VOS_STATUS_SUCCESS - timer was successfully de-initialized.
+
+          VOS_STATUS_E_INVAL - The value specified by timer is invalid.
+
+          VOS_STATUS_E_FAULT  - timer is an invalid pointer.
+  \sa
+
+  ------------------------------------------------------------------------*/
+VOS_STATUS vos_timer_deinit(vos_timer_t *timer)
+{
+	VOS_TIMER_STATE vos_timer_state;
+	VOS_STATUS status = VOS_STATUS_SUCCESS;
+
+	if (!timer)
+		return VOS_STATUS_E_FAULT;
+
+	vos_timer_state = vos_timer_getCurrentState(timer);
+	if (VOS_TIMER_STATE_UNUSED == vos_timer_state)
+		return VOS_STATUS_SUCCESS;
+
+	if (VOS_TIMER_STATE_RUNNING == vos_timer_state)
+		status = vos_timer_stop(timer);
+
+	if (VOS_IS_STATUS_SUCCESS(status))
+		status = vos_timer_destroy(timer);
+
+	return status;
 }
