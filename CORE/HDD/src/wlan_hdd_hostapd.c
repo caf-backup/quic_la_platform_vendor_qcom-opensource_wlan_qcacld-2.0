@@ -2956,17 +2956,18 @@ int hdd_softap_unpackIE(
 
     tANI_U8 *pRsnIe;
     tANI_U16 RSNIeLen;
+    tANI_U32 status;
 
     if (NULL == halHandle)
     {
         hddLog(LOGE, FL("Error haHandle returned NULL"));
-        return -EINVAL;
+        return VOS_STATUS_E_FAILURE;
     }
 
     // Validity checks
     if ((gen_ie_len < VOS_MIN(DOT11F_IE_RSN_MIN_LEN, DOT11F_IE_WPA_MIN_LEN)) ||
         (gen_ie_len > VOS_MAX(DOT11F_IE_RSN_MAX_LEN, DOT11F_IE_WPA_MAX_LEN)) )
-        return -EINVAL;
+        return VOS_STATUS_E_FAILURE;
     // Type check
     if ( gen_ie[0] ==  DOT11F_EID_RSN)
     {
@@ -2981,10 +2982,18 @@ int hdd_softap_unpackIE(
         RSNIeLen = gen_ie_len - 2;
         // Unpack the RSN IE
         memset(&dot11RSNIE, 0, sizeof(tDot11fIERSN));
-        dot11fUnpackIeRSN((tpAniSirGlobal) halHandle,
+        status = dot11fUnpackIeRSN((tpAniSirGlobal) halHandle,
                             pRsnIe,
                             RSNIeLen,
                             &dot11RSNIE);
+        if (DOT11F_FAILED(status))
+        {
+            hddLog(LOGE,
+            FL("unpack failed for RSN IE status:(0x%08x)"),
+               status);
+            return VOS_STATUS_E_FAILURE;
+        }
+
         // Copy out the encryption and authentication types
         hddLog(LOG1, FL("%s: pairwise cipher suite count: %d"),
                 __func__, dot11RSNIE.pwise_cipher_suite_count );
@@ -3017,11 +3026,19 @@ int hdd_softap_unpackIE(
         RSNIeLen = gen_ie_len - (2 + 4);
         // Unpack the WPA IE
         memset(&dot11WPAIE, 0, sizeof(tDot11fIEWPA));
-        dot11fUnpackIeWPA((tpAniSirGlobal) halHandle,
+        status = dot11fUnpackIeWPA((tpAniSirGlobal) halHandle,
                             pRsnIe,
                             RSNIeLen,
                             &dot11WPAIE);
-        // Copy out the encryption and authentication types
+        if (DOT11F_FAILED(status))
+        {
+             hddLog(LOGE,
+                    FL("unpack failed for WPA IE status:(0x%08x)"),
+                    status);
+             return VOS_STATUS_E_FAILURE;
+        }
+
+       // Copy out the encryption and authentication types
         hddLog(LOG1, FL("%s: WPA unicast cipher suite count: %d"),
                 __func__, dot11WPAIE.unicast_cipher_count );
         hddLog(LOG1, FL("%s: WPA authentication suite count: %d"),
@@ -6036,58 +6053,6 @@ static int iw_get_ap_freq(struct net_device *dev,
 	return ret;
 }
 
-/**
- * __iw_get_mode() - get mode
- * @dev - Pointer to the net device.
- * @info - Pointer to the iw_request_info.
- * @wrqu - Pointer to the iwreq_data.
- * @extra - Pointer to the data.
- *
- * Return: 0 for success, non zero for failure.
- */
-static int __iw_get_mode(struct net_device *dev,
-                         struct iw_request_info *info,
-                         union iwreq_data *wrqu,
-                         char *extra)
-{
-    hdd_adapter_t *adapter;
-    hdd_context_t *hdd_ctx;
-    int ret;
-
-    adapter = WLAN_HDD_GET_PRIV_PTR(dev);
-    hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-    ret = wlan_hdd_validate_context(hdd_ctx);
-    if (0 != ret)
-        return ret;
-
-    wrqu->mode = IW_MODE_MASTER;
-
-    return ret;
-}
-
-/**
- * iw_get_mode() - Wrapper function to protect __iw_get_mode from the SSR.
- * @dev - Pointer to the net device.
- * @info - Pointer to the iw_request_info.
- * @wrqu - Pointer to the iwreq_data.
- * @extra - Pointer to the data.
- *
- * Return: 0 for success, non zero for failure.
- */
-static int iw_get_mode(struct net_device *dev,
-                       struct iw_request_info *info,
-                       union iwreq_data *wrqu, char *extra)
-{
-        int ret;
-
-        vos_ssr_protect(__func__);
-        ret = __iw_get_mode(dev, info, wrqu, extra);
-        vos_ssr_unprotect(__func__);
-
-        return ret;
-}
-
-
 static int __iw_softap_stopbss(struct net_device *dev,
                              struct iw_request_info *info,
                              union iwreq_data *wrqu,
@@ -6397,69 +6362,99 @@ iw_set_ap_genie(struct net_device *dev,
 	return ret;
 }
 
+struct linkspeed_priv {
+	tSirLinkSpeedInfo linkspeed_info;
+};
+
+static void
+hdd_get_link_speed_cb(tSirLinkSpeedInfo *linkspeed_info, void *cookie)
+{
+	struct hdd_request *request;
+	struct linkspeed_priv *priv;
+
+	if (NULL == linkspeed_info)
+	{
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+		       "%s: Bad param, linkspeed_info [%pK] cookie [%pK]",
+		       __func__, linkspeed_info, cookie);
+		return;
+	}
+
+	request = hdd_request_get(cookie);
+	if (!request) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,"Obsolete request");
+		return;
+	}
+
+	priv = hdd_request_priv(request);
+	priv->linkspeed_info = *linkspeed_info;
+	hdd_request_complete(request);
+	hdd_request_put(request);
+}
 
 VOS_STATUS  wlan_hdd_get_linkspeed_for_peermac(hdd_adapter_t *pAdapter,
                                                tSirMacAddr macAddress)
 {
    eHalStatus hstatus;
-   unsigned long rc;
-   struct linkspeedContext context;
-   tSirLinkSpeedInfo *linkspeed_req;
+   VOS_STATUS status = VOS_STATUS_SUCCESS;
+   void *cookie;
+   tSirLinkSpeedInfo *linkspeed_info;
+   int ret;
+   struct hdd_request *request;
+   struct linkspeed_priv *priv;
+   static const struct hdd_request_params params = {
+      .priv_size = sizeof(*priv),
+      .timeout_ms = WLAN_WAIT_TIME_STATS,
+   };
 
    if (NULL == pAdapter)
    {
       hddLog(VOS_TRACE_LEVEL_ERROR, "%s: pAdapter is NULL", __func__);
       return VOS_STATUS_E_FAULT;
    }
-   linkspeed_req = (tSirLinkSpeedInfo *)vos_mem_malloc(sizeof(*linkspeed_req));
-   if (NULL == linkspeed_req)
-   {
+
+   request = hdd_request_alloc(&params);
+   if (!request) {
       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                           "%s Request Buffer Alloc Fail", __func__);
       return VOS_STATUS_E_INVAL;
    }
-   init_completion(&context.completion);
-   context.pAdapter = pAdapter;
-   context.magic = LINK_CONTEXT_MAGIC;
+   cookie = hdd_request_cookie(request);
+   priv = hdd_request_priv(request);
 
-   vos_mem_copy(linkspeed_req->peer_macaddr, macAddress, sizeof(tSirMacAddr) );
-   hstatus = sme_GetLinkSpeed( WLAN_HDD_GET_HAL_CTX(pAdapter),
-                                  linkspeed_req,
-                                  &context,
-                                  hdd_GetLink_SpeedCB);
+   linkspeed_info = &priv->linkspeed_info;
+   vos_mem_copy(linkspeed_info->peer_macaddr, macAddress, sizeof(tSirMacAddr) );
+   hstatus = sme_GetLinkSpeed(WLAN_HDD_GET_HAL_CTX(pAdapter),
+                              linkspeed_info,
+                              cookie,
+                              hdd_get_link_speed_cb);
+
    if (eHAL_STATUS_SUCCESS != hstatus)
    {
       hddLog(VOS_TRACE_LEVEL_ERROR,
-            "%s: Unable to retrieve statistics for link speed",
-            __func__);
-      vos_mem_free(linkspeed_req);
+            "%s: Unable to retrieve statistics for link speed, ret(%d)",
+            __func__, hstatus);
+      status = VOS_STATUS_E_INVAL;
+      goto cleanup;
    }
-   else
-   {
-      rc = wait_for_completion_timeout(&context.completion,
-            msecs_to_jiffies(WLAN_WAIT_TIME_STATS));
-      if (!rc) {
-         hddLog(VOS_TRACE_LEVEL_ERROR,
-               "%s: SME timed out while retrieving link speed",
-              __func__);
-      }
+   ret = hdd_request_wait_for_response(request);
+   if (ret) {
+      hddLog(VOS_TRACE_LEVEL_ERROR,
+             "%s: SME timed out while retrieving link speed,ret(%d)",
+             __func__, ret);
+      status = VOS_STATUS_E_INVAL;
+      goto cleanup;
    }
+   pAdapter->ls_stats.estLinkSpeed = linkspeed_info->estLinkSpeed;
 
-   /* either we never sent a request, we sent a request and received a
-     response or we sent a request and timed out.  if we never sent a
-     request or if we sent a request and got a response, we want to
-     clear the magic out of paranoia.  if we timed out there is a
-     race condition such that the callback function could be
-     executing at the same time we are. of primary concern is if the
-     callback function had already verified the "magic" but had not
-     yet set the completion variable when a timeout occurred. we
-     serialize these activities by invalidating the magic while
-     holding a shared spinlock which will cause us to block if the
-     callback is currently executing */
-   spin_lock(&hdd_context_lock);
-   context.magic = 0;
-   spin_unlock(&hdd_context_lock);
-   return VOS_STATUS_SUCCESS;
+cleanup:
+   /*
+    * either we never sent a request, we sent a request and
+    * received a response or we sent a request and timed out.
+    * regardless we are done with the request.
+    */
+   hdd_request_put(request);
+   return status;
 }
 
 
@@ -6833,7 +6828,7 @@ static const iw_handler      hostapd_handler[] =
    (iw_handler) NULL,           /* SIOCSIWFREQ */
    (iw_handler) iw_get_ap_freq,    /* SIOCGIWFREQ */
    (iw_handler) NULL,           /* SIOCSIWMODE */
-   (iw_handler) iw_get_mode,    /* SIOCGIWMODE */
+   (iw_handler) NULL,           /* SIOCGIWMODE */
    (iw_handler) NULL,           /* SIOCSIWSENS */
    (iw_handler) NULL,           /* SIOCGIWSENS */
    (iw_handler) NULL,           /* SIOCSIWRANGE */

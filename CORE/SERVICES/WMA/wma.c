@@ -4585,7 +4585,7 @@ static int wma_extscan_cached_results_event_handler(void *handle,
 	struct extscan_cached_scan_results empty_cachelist;
 	wmi_extscan_wlan_descriptor  *src_hotlist;
 	wmi_extscan_rssi_info  *src_rssi;
-	int numap, i, moredata, scan_ids_cnt;
+	int i, moredata, scan_ids_cnt;
 	int buf_len;
 	u_int32_t total_len;
 	bool excess_data = false;
@@ -4599,7 +4599,7 @@ static int wma_extscan_cached_results_event_handler(void *handle,
 	if (!pMac->sme.pExtScanIndCb) {
 		WMA_LOGE("%s: Callback not registered", __func__);
 		return -EINVAL;
-        }
+	}
 	param_buf = (WMI_EXTSCAN_CACHED_RESULTS_EVENTID_param_tlvs *)
 						cmd_param_info;
 	if (!param_buf) {
@@ -4610,39 +4610,16 @@ static int wma_extscan_cached_results_event_handler(void *handle,
 	event = param_buf->fixed_param;
 	src_hotlist = param_buf->bssid_list;
 	src_rssi = param_buf->rssi_list;
-	numap = event->num_entries_in_page;
 	WMA_LOGI("Total_entries: %u first_entry_index: %u num_entries_in_page: %u",
-		 event->total_entries, event->first_entry_index, numap);
-	if (!src_hotlist || !src_rssi || !numap) {
+		 event->total_entries, event->first_entry_index, event->num_entries_in_page);
+	if (!src_hotlist || !src_rssi || !event->num_entries_in_page) {
 		WMA_LOGW("%s: Cached results empty, send 0 results", __func__);
 		goto noresults;
-        }
-
-	if (event->first_entry_index +
-		event->num_entries_in_page < event->total_entries)
-		moredata = 1;
-	else
-		moredata = 0;
-
-	dest_cachelist = vos_mem_malloc(sizeof(*dest_cachelist));
-	if (!dest_cachelist) {
-		WMA_LOGE("%s: vos_mem_malloc failed", __func__);
-		return -ENOMEM;
 	}
-	vos_mem_zero(dest_cachelist, sizeof(*dest_cachelist));
-	dest_cachelist->request_id = event->request_id;
-	dest_cachelist->more_data = moredata;
-
-	scan_ids_cnt = wma_extscan_find_unique_scan_ids(cmd_param_info);
-	WMA_LOGI("scan_ids_cnt %d", scan_ids_cnt);
-	dest_cachelist->num_scan_ids = scan_ids_cnt;
-
 	if (event->num_entries_in_page >
 		(WMA_SVC_MSG_MAX_SIZE - sizeof(*event))/sizeof(*src_hotlist)) {
 		WMA_LOGE("%s:excess num_entries_in_page %d in WMI event",
 				__func__, event->num_entries_in_page);
-		vos_mem_free(dest_cachelist);
-		VOS_ASSERT(0);
 		return -EINVAL;
 	} else {
 		total_len = sizeof(*event) +
@@ -4669,10 +4646,27 @@ static int wma_extscan_cached_results_event_handler(void *handle,
 	}
 	if (excess_data) {
 		WMA_LOGE("%s:excess data in WMI event", __func__);
-		vos_mem_free(dest_cachelist);
-		VOS_ASSERT(0);
 		return -EINVAL;
 	}
+
+	if (event->first_entry_index +
+		event->num_entries_in_page < event->total_entries)
+		moredata = 1;
+	else
+		moredata = 0;
+
+	dest_cachelist = vos_mem_malloc(sizeof(*dest_cachelist));
+	if (!dest_cachelist) {
+		WMA_LOGE("%s: vos_mem_malloc failed", __func__);
+		return -ENOMEM;
+	}
+	vos_mem_zero(dest_cachelist, sizeof(*dest_cachelist));
+	dest_cachelist->request_id = event->request_id;
+	dest_cachelist->more_data = moredata;
+
+	scan_ids_cnt = wma_extscan_find_unique_scan_ids(cmd_param_info);
+	WMA_LOGD("scan_ids_cnt %d", scan_ids_cnt);
+	dest_cachelist->num_scan_ids = scan_ids_cnt;
 
 	buf_len = sizeof(*dest_result) * scan_ids_cnt;
 	dest_cachelist->result = vos_mem_malloc(buf_len);
@@ -5383,7 +5377,8 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 	chan_stats_size  = sizeof(tSirWifiChannelStats);
 
 	if (fixed_param->num_radio >
-	    (UINT_MAX - sizeof(*link_stats_results)) / radio_stats_size) {
+	    (WMA_SVC_MSG_MAX_SIZE -
+	     sizeof(*link_stats_results)) / radio_stats_size) {
 		WMA_LOGE("excess num_radio %d is leading to int overflow",
 			 fixed_param->num_radio);
 		return -EINVAL;
@@ -21248,7 +21243,7 @@ static int wma_tbttoffset_update_event_handler(void *handle, u_int8_t *event,
 	tbtt_offset_event = param_buf->fixed_param;
 
 	if (param_buf->num_tbttoffset_list >
-			(UINT_MAX - sizeof(u_int32_t) -
+			(WMA_SVC_MSG_MAX_SIZE - sizeof(u_int32_t) -
 				sizeof(wmi_tbtt_offset_event_fixed_param))/
 			 sizeof(u_int32_t)) {
 		WMA_LOGE("%s: Received offset list  %d greater than maximum limit",
@@ -32277,8 +32272,10 @@ static VOS_STATUS wma_send_udp_resp_offload_cmd(tp_wma_handle wma_handle,
 
 	WMA_LOGD("%s: Enter", __func__);
 	if (1 == udp_response->enable) {
-		pattern_len = strlen(udp_response->udp_payload_filter);
-		response_len = strlen(udp_response->udp_response_payload);
+		pattern_len = strnlen(udp_response->udp_payload_filter,
+				      MAX_LEN_UDP_RESP_OFFLOAD);
+		response_len = strnlen(udp_response->udp_response_payload,
+				       MAX_LEN_UDP_RESP_OFFLOAD);
 	}
 
 	udp_len = (pattern_len % 4) ?
