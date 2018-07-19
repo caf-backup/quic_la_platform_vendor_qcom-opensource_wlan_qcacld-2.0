@@ -5741,6 +5741,9 @@ tANI_U32 dot11fUnpackIeRICDataDesc(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 i
 tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tDot11fIERSN *pDst)
 {
     tANI_U32 status = DOT11F_PARSE_SUCCESS;
+    tANI_U8 def_cipher_suite[4] = {0x00, 0x0f, 0xac, 0x04};
+    tANI_U8 def_akm_suite[4] = {0x00, 0x0f, 0xac, 0x01};
+
     (void) pBuf; (void)ielen; /* Shutup the compiler */
     if (pDst->present) status = DOT11F_DUPLICATE_IE;
     pDst->present = 1;
@@ -5757,18 +5760,41 @@ tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
             pDst->present = 0;
             return ( status | DOT11F_BAD_FIXED_VALUE );
     }
-    if (unlikely(ielen < 4)) {
-        pDst->present = 0;
-        return DOT11F_INCOMPLETE_IE;
-    }
-
-    DOT11F_MEMCPY(pCtx, pDst->gp_cipher_suite, pBuf, 4);
-    pBuf += 4;
-    ielen -= (tANI_U8)4;
     if ( ! ielen )
     {
-        pDst->pwise_cipher_suite_count = 0U;
-        pDst->akm_suite_count = 0U;
+        pDst->RSN_Cap_present = 0U;
+        pDst->gp_mgmt_cipher_suite_present = 0U;
+        pDst->gp_cipher_suite_present = 1;
+        DOT11F_MEMCPY(pCtx, pDst->gp_cipher_suite, def_cipher_suite, 4);
+        pDst->pwise_cipher_suite_count = 1;
+        DOT11F_MEMCPY(pCtx,
+                pDst->pwise_cipher_suites, def_cipher_suite, 4);
+        pDst->akm_suite_cnt = 1;
+        DOT11F_MEMCPY(pCtx, pDst->akm_suite, def_akm_suite, 4);
+        pDst->pmkid_count = 0U;
+        return 0U;
+    }
+    else
+    {
+        pDst->gp_cipher_suite_present = 1;
+        if (unlikely(ielen < 4)) {
+            pDst->present = 0;
+            return DOT11F_INCOMPLETE_IE;
+        }
+
+        DOT11F_MEMCPY(pCtx, pDst->gp_cipher_suite, pBuf, 4);
+        pBuf += 4;
+        ielen -= (tANI_U8)4;
+    }
+    if ( ! ielen )
+    {
+        pDst->RSN_Cap_present = 0U;
+        pDst->gp_mgmt_cipher_suite_present = 0U;
+        pDst->pwise_cipher_suite_count = 1;
+        DOT11F_MEMCPY(pCtx,
+                pDst->pwise_cipher_suites, def_cipher_suite, 4);
+        pDst->akm_suite_cnt = 1;
+        DOT11F_MEMCPY(pCtx, pDst->akm_suite, def_akm_suite, 4);
         pDst->pmkid_count = 0U;
         return 0U;
     }
@@ -5788,7 +5814,8 @@ tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->pwise_cipher_suite_count > 4){
+    if (!pDst->pwise_cipher_suite_count ||
+        pDst->pwise_cipher_suite_count > 4){
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
@@ -5798,7 +5825,10 @@ tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
     ielen -= ( pDst->pwise_cipher_suite_count * 4 );
     if ( ! ielen )
     {
-        pDst->akm_suite_count = 0U;
+        pDst->RSN_Cap_present = 0U;
+        pDst->gp_mgmt_cipher_suite_present = 0U;
+        pDst->akm_suite_cnt = 1;
+        DOT11F_MEMCPY(pCtx, pDst->akm_suite, def_akm_suite, 4);
         pDst->pmkid_count = 0U;
         return 0U;
     }
@@ -5809,30 +5839,34 @@ tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
             return DOT11F_INCOMPLETE_IE;
         }
 
-        framesntohs(pCtx, &pDst->akm_suite_count, pBuf, 0);
+        framesntohs(pCtx, &pDst->akm_suite_cnt, pBuf, 0);
         pBuf += 2;
         ielen -= (tANI_U8)2;
     }
-    if (unlikely(ielen < pDst->akm_suite_count * 4)) {
+    if (unlikely(ielen < pDst->akm_suite_cnt * 4)) {
         pDst->present = 0;
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->akm_suite_count > 4){
+    if (!pDst->akm_suite_cnt ||
+        pDst->akm_suite_cnt > 4){
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
 
-    DOT11F_MEMCPY(pCtx, pDst->akm_suites, pBuf, ( pDst->akm_suite_count * 4 ) );
-    pBuf += ( pDst->akm_suite_count * 4 );
-    ielen -= ( pDst->akm_suite_count * 4 );
+    DOT11F_MEMCPY(pCtx, pDst->akm_suite, pBuf, ( pDst->akm_suite_cnt * 4 ) );
+    pBuf += ( pDst->akm_suite_cnt * 4 );
+    ielen -= ( pDst->akm_suite_cnt * 4 );
     if ( ! ielen )
     {
+        pDst->RSN_Cap_present = 0U;
+        pDst->gp_mgmt_cipher_suite_present = 0U;
         pDst->pmkid_count = 0U;
         return 0U;
     }
     else
     {
+        pDst->RSN_Cap_present = 1;
         if (unlikely(ielen < 2)) {
             pDst->present = 0;
             return DOT11F_INCOMPLETE_IE;
@@ -5844,6 +5878,8 @@ tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
     }
     if ( ! ielen )
     {
+        pDst->RSN_Cap_present = 0U;
+        pDst->gp_mgmt_cipher_suite_present = 0U;
         pDst->pmkid_count = 0U;
         return 0U;
     }
@@ -5863,7 +5899,7 @@ tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->pmkid_count > 4){
+    if (pDst->pmkid_count > 4) {
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
@@ -5877,6 +5913,7 @@ tANI_U32 dot11fUnpackIeRSN(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
     }
     else
     {
+        pDst->gp_mgmt_cipher_suite_present = 1;
         if (unlikely(ielen < 4)) {
             pDst->present = 0;
             return DOT11F_INCOMPLETE_IE;
@@ -6333,7 +6370,7 @@ tANI_U32 dot11fUnpackIeWAPI(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, t
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->akm_suite_count > 4){
+    if (pDst->akm_suite_count > 4) {
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
@@ -6354,7 +6391,7 @@ tANI_U32 dot11fUnpackIeWAPI(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, t
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->unicast_cipher_suite_count > 4){
+    if (pDst->unicast_cipher_suite_count > 4) {
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
@@ -6401,7 +6438,7 @@ tANI_U32 dot11fUnpackIeWAPI(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, t
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->bkid_count > 4){
+    if (pDst->bkid_count > 4) {
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
@@ -6813,7 +6850,7 @@ tANI_U32 dot11fUnpackIeWPA(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->unicast_cipher_count > 4){
+    if (pDst->unicast_cipher_count > 4) {
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
@@ -6842,7 +6879,7 @@ tANI_U32 dot11fUnpackIeWPA(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U8 ielen, tD
         return DOT11F_INCOMPLETE_IE;
     }
 
-    if (pDst->auth_suite_count > 4){
+    if (pDst->auth_suite_count > 4) {
         pDst->present = 0;
         return DOT11F_SKIPPED_BAD_IE;
     }
@@ -9618,7 +9655,7 @@ tANI_U32 dot11fUnpackAuthentication(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32
         {offsetof(tDot11fBeacon, TPCReport), offsetof(tDot11fIETPCReport, present), 0, "TPCReport" , 0, 4, 4, SigIeTPCReport, {0, 0, 0, 0, 0}, 0, DOT11F_EID_TPCREPORT, 0, },
         {offsetof(tDot11fBeacon, ERPInfo), offsetof(tDot11fIEERPInfo, present), 0, "ERPInfo" , 0, 3, 3, SigIeERPInfo, {0, 0, 0, 0, 0}, 0, DOT11F_EID_ERPINFO, 0, },
         {offsetof(tDot11fBeacon, ExtSuppRates), offsetof(tDot11fIEExtSuppRates, present), 0, "ExtSuppRates" , 0, 3, 14, SigIeExtSuppRates, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTSUPPRATES, 0, },
-        {offsetof(tDot11fBeacon, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 8, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
+        {offsetof(tDot11fBeacon, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 4, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
         {offsetof(tDot11fBeacon, QBSSLoad), offsetof(tDot11fIEQBSSLoad, present), 0, "QBSSLoad" , 0, 7, 7, SigIeQBSSLoad, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QBSSLOAD, 0, },
         {offsetof(tDot11fBeacon, EDCAParamSet), offsetof(tDot11fIEEDCAParamSet, present), 0, "EDCAParamSet" , 0, 20, 20, SigIeEDCAParamSet, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EDCAPARAMSET, 0, },
         {offsetof(tDot11fBeacon, QOSCapsAp), offsetof(tDot11fIEQOSCapsAp, present), 0, "QOSCapsAp" , 0, 3, 3, SigIeQOSCapsAp, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QOSCAPSAP, 0, },
@@ -9884,8 +9921,8 @@ tANI_U32 dot11fUnpackBeacon(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 nBuf, t
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -11495,7 +11532,7 @@ tANI_U32 dot11fUnpackBeacon2(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 nBuf, 
         {offsetof(tDot11fBeaconIEs, TPCReport), offsetof(tDot11fIETPCReport, present), 0, "TPCReport" , 0, 4, 4, SigIeTPCReport, {0, 0, 0, 0, 0}, 0, DOT11F_EID_TPCREPORT, 0, },
         {offsetof(tDot11fBeaconIEs, ERPInfo), offsetof(tDot11fIEERPInfo, present), 0, "ERPInfo" , 0, 3, 3, SigIeERPInfo, {0, 0, 0, 0, 0}, 0, DOT11F_EID_ERPINFO, 0, },
         {offsetof(tDot11fBeaconIEs, ExtSuppRates), offsetof(tDot11fIEExtSuppRates, present), 0, "ExtSuppRates" , 0, 3, 14, SigIeExtSuppRates, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTSUPPRATES, 0, },
-        {offsetof(tDot11fBeaconIEs, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 8, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
+        {offsetof(tDot11fBeaconIEs, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 4, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
         {offsetof(tDot11fBeaconIEs, QBSSLoad), offsetof(tDot11fIEQBSSLoad, present), 0, "QBSSLoad" , 0, 7, 7, SigIeQBSSLoad, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QBSSLOAD, 0, },
         {offsetof(tDot11fBeaconIEs, EDCAParamSet), offsetof(tDot11fIEEDCAParamSet, present), 0, "EDCAParamSet" , 0, 20, 20, SigIeEDCAParamSet, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EDCAPARAMSET, 0, },
         {offsetof(tDot11fBeaconIEs, QOSCapsAp), offsetof(tDot11fIEQOSCapsAp, present), 0, "QOSCapsAp" , 0, 3, 3, SigIeQOSCapsAp, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QOSCAPSAP, 0, },
@@ -11740,8 +11777,8 @@ tANI_U32 dot11fUnpackBeaconIEs(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 nBuf
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -18166,7 +18203,7 @@ tANI_U32 dot11fUnpackTDLSDisReq(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 nBu
         {offsetof(tDot11fTDLSDisRsp, ExtSuppRates), offsetof(tDot11fIEExtSuppRates, present), 0, "ExtSuppRates" , 0, 3, 14, SigIeExtSuppRates, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTSUPPRATES, 0, },
         {offsetof(tDot11fTDLSDisRsp, SuppChannels), offsetof(tDot11fIESuppChannels, present), 0, "SuppChannels" , 0, 4, 98, SigIeSuppChannels, {0, 0, 0, 0, 0}, 0, DOT11F_EID_SUPPCHANNELS, 0, },
         {offsetof(tDot11fTDLSDisRsp, SuppOperatingClasses), offsetof(tDot11fIESuppOperatingClasses, present), 0, "SuppOperatingClasses" , 0, 3, 34, SigIeSuppOperatingClasses, {0, 0, 0, 0, 0}, 0, DOT11F_EID_SUPPOPERATINGCLASSES, 0, },
-        {offsetof(tDot11fTDLSDisRsp, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 8, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
+        {offsetof(tDot11fTDLSDisRsp, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 4, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
         {offsetof(tDot11fTDLSDisRsp, ExtCap), offsetof(tDot11fIEExtCap, present), 0, "ExtCap" , 0, 3, 11, SigIeExtCap, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTCAP, 0, },
         {offsetof(tDot11fTDLSDisRsp, FTInfo), offsetof(tDot11fIEFTInfo, present), 0, "FTInfo" , 0, 84, 222, SigIeFTInfo, {0, 0, 0, 0, 0}, 0, DOT11F_EID_FTINFO, 0, },
         {offsetof(tDot11fTDLSDisRsp, TimeoutInterval), offsetof(tDot11fIETimeoutInterval, present), 0, "TimeoutInterval" , 0, 7, 7, SigIeTimeoutInterval, {0, 0, 0, 0, 0}, 0, DOT11F_EID_TIMEOUTINTERVAL, 0, },
@@ -18264,8 +18301,8 @@ tANI_U32 dot11fUnpackTDLSDisRsp(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 nBu
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -18610,7 +18647,7 @@ tANI_U32 dot11fUnpackTDLSPeerTrafficRsp(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI
     };
 
     static const tIEDefn IES_TDLSSetupCnf[] = {
-        {offsetof(tDot11fTDLSSetupCnf, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 8, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
+        {offsetof(tDot11fTDLSSetupCnf, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 4, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
         {offsetof(tDot11fTDLSSetupCnf, EDCAParamSet), offsetof(tDot11fIEEDCAParamSet, present), 0, "EDCAParamSet" , 0, 20, 20, SigIeEDCAParamSet, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EDCAPARAMSET, 0, },
         {offsetof(tDot11fTDLSSetupCnf, FTInfo), offsetof(tDot11fIEFTInfo, present), 0, "FTInfo" , 0, 84, 222, SigIeFTInfo, {0, 0, 0, 0, 0}, 0, DOT11F_EID_FTINFO, 0, },
         {offsetof(tDot11fTDLSSetupCnf, TimeoutInterval), offsetof(tDot11fIETimeoutInterval, present), 0, "TimeoutInterval" , 0, 7, 7, SigIeTimeoutInterval, {0, 0, 0, 0, 0}, 0, DOT11F_EID_TIMEOUTINTERVAL, 0, },
@@ -18653,8 +18690,8 @@ tANI_U32 dot11fUnpackTDLSSetupCnf(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 n
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -18888,7 +18925,7 @@ tANI_U32 dot11fUnpackTDLSSetupCnf(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 n
         {offsetof(tDot11fTDLSSetupReq, Country), offsetof(tDot11fIECountry, present), 0, "Country" , 0, 5, 257, SigIeCountry, {0, 0, 0, 0, 0}, 0, DOT11F_EID_COUNTRY, 0, },
         {offsetof(tDot11fTDLSSetupReq, ExtSuppRates), offsetof(tDot11fIEExtSuppRates, present), 0, "ExtSuppRates" , 0, 3, 14, SigIeExtSuppRates, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTSUPPRATES, 0, },
         {offsetof(tDot11fTDLSSetupReq, SuppChannels), offsetof(tDot11fIESuppChannels, present), 0, "SuppChannels" , 0, 4, 98, SigIeSuppChannels, {0, 0, 0, 0, 0}, 0, DOT11F_EID_SUPPCHANNELS, 0, },
-        {offsetof(tDot11fTDLSSetupReq, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 8, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
+        {offsetof(tDot11fTDLSSetupReq, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 4, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
         {offsetof(tDot11fTDLSSetupReq, ExtCap), offsetof(tDot11fIEExtCap, present), 0, "ExtCap" , 0, 3, 11, SigIeExtCap, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTCAP, 0, },
         {offsetof(tDot11fTDLSSetupReq, SuppOperatingClasses), offsetof(tDot11fIESuppOperatingClasses, present), 0, "SuppOperatingClasses" , 0, 3, 34, SigIeSuppOperatingClasses, {0, 0, 0, 0, 0}, 0, DOT11F_EID_SUPPOPERATINGCLASSES, 0, },
         {offsetof(tDot11fTDLSSetupReq, QOSCapsStation), offsetof(tDot11fIEQOSCapsStation, present), 0, "QOSCapsStation" , 0, 3, 3, SigIeQOSCapsStation, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QOSCAPSSTATION, 0, },
@@ -18991,8 +19028,8 @@ tANI_U32 dot11fUnpackTDLSSetupReq(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 n
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -19273,7 +19310,7 @@ tANI_U32 dot11fUnpackTDLSSetupReq(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 n
         {offsetof(tDot11fTDLSSetupRsp, Country), offsetof(tDot11fIECountry, present), 0, "Country" , 0, 5, 257, SigIeCountry, {0, 0, 0, 0, 0}, 0, DOT11F_EID_COUNTRY, 0, },
         {offsetof(tDot11fTDLSSetupRsp, ExtSuppRates), offsetof(tDot11fIEExtSuppRates, present), 0, "ExtSuppRates" , 0, 3, 14, SigIeExtSuppRates, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTSUPPRATES, 0, },
         {offsetof(tDot11fTDLSSetupRsp, SuppChannels), offsetof(tDot11fIESuppChannels, present), 0, "SuppChannels" , 0, 4, 98, SigIeSuppChannels, {0, 0, 0, 0, 0}, 0, DOT11F_EID_SUPPCHANNELS, 0, },
-        {offsetof(tDot11fTDLSSetupRsp, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 8, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
+        {offsetof(tDot11fTDLSSetupRsp, RSN), offsetof(tDot11fIERSN, present), 0, "RSN" , 0, 4, 116, SigIeRSN, {0, 0, 0, 0, 0}, 0, DOT11F_EID_RSN, 0, },
         {offsetof(tDot11fTDLSSetupRsp, ExtCap), offsetof(tDot11fIEExtCap, present), 0, "ExtCap" , 0, 3, 11, SigIeExtCap, {0, 0, 0, 0, 0}, 0, DOT11F_EID_EXTCAP, 0, },
         {offsetof(tDot11fTDLSSetupRsp, SuppOperatingClasses), offsetof(tDot11fIESuppOperatingClasses, present), 0, "SuppOperatingClasses" , 0, 3, 34, SigIeSuppOperatingClasses, {0, 0, 0, 0, 0}, 0, DOT11F_EID_SUPPOPERATINGCLASSES, 0, },
         {offsetof(tDot11fTDLSSetupRsp, QOSCapsStation), offsetof(tDot11fIEQOSCapsStation, present), 0, "QOSCapsStation" , 0, 3, 3, SigIeQOSCapsStation, {0, 0, 0, 0, 0}, 0, DOT11F_EID_QOSCAPSSTATION, 0, },
@@ -19379,8 +19416,8 @@ tANI_U32 dot11fUnpackTDLSSetupRsp(tpAniSirGlobal pCtx, tANI_U8 *pBuf, tANI_U32 n
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -21745,28 +21782,35 @@ tANI_U32 dot11fGetPackedIERSN(tpAniSirGlobal pCtx, tDot11fIERSN *pIe, tANI_U32 *
     while ( pIe->present )
     {
         *pnNeeded += 2;
-        *pnNeeded += 4;
+        if ( pIe->gp_cipher_suite_present)
+        {
+            *pnNeeded += 4;
+        }
+        else break;
         if ( pIe->pwise_cipher_suite_count )
         {
             *pnNeeded += 2;
         }
         else break;
         *pnNeeded += ( pIe->pwise_cipher_suite_count * 4 );
-        if ( pIe->akm_suite_count )
+        if ( pIe->akm_suite_cnt )
         {
             *pnNeeded += 2;
         }
         else break;
-        *pnNeeded += ( pIe->akm_suite_count * 4 );
-        /* RSN_Cap */
-        *pnNeeded += 2;
+        *pnNeeded += ( pIe->akm_suite_cnt * 4 );
+        if ( pIe->RSN_Cap_present)
+        {
+            *pnNeeded += 2;
+        }
+        else break;
         if ( pIe->pmkid_count )
         {
             *pnNeeded += 2;
         }
         else break;
         *pnNeeded += ( pIe->pmkid_count * 16 );
-        if ( pIe->gp_mgmt_cipher_suite )
+        if ( pIe->gp_mgmt_cipher_suite_present)
         {
             *pnNeeded += 4;
         }
@@ -21807,7 +21851,7 @@ tANI_U32 dot11fGetPackedIEWPA(tpAniSirGlobal pCtx, tDot11fIEWPA *pIe, tANI_U32 *
     while ( pIe->present )
     {
         *pnNeeded += 2;
-        if ( pIe->multicast_cipher_present )
+        if ( pIe->multicast_cipher_present)
         {
             *pnNeeded += 4;
         }
@@ -29522,9 +29566,12 @@ tANI_U32 dot11fPackIeRSN(tpAniSirGlobal pCtx,
         frameshtons(pCtx, pBuf, pSrc->version, 0);
         *pnConsumed += 2;
         pBuf += 2;
-        DOT11F_MEMCPY(pCtx, pBuf, pSrc->gp_cipher_suite, 4);
-        *pnConsumed += 4;
-        pBuf += 4;
+        if ( pSrc->gp_cipher_suite_present )        {
+            DOT11F_MEMCPY(pCtx, pBuf, pSrc->gp_cipher_suite, 4);
+            *pnConsumed += 4;
+            pBuf += 4;
+        }
+        else break;
         if ( pSrc->pwise_cipher_suite_count )        {
             frameshtons(pCtx, pBuf, pSrc->pwise_cipher_suite_count, 0);
             *pnConsumed += 2;
@@ -29534,19 +29581,21 @@ tANI_U32 dot11fPackIeRSN(tpAniSirGlobal pCtx,
         DOT11F_MEMCPY(pCtx, pBuf, &( pSrc->pwise_cipher_suites ), ( pSrc->pwise_cipher_suite_count * 4 ));
         *pnConsumed += ( pSrc->pwise_cipher_suite_count * 4 );
         pBuf += ( pSrc->pwise_cipher_suite_count * 4 );
-        if ( pSrc->akm_suite_count )        {
-            frameshtons(pCtx, pBuf, pSrc->akm_suite_count, 0);
+        if ( pSrc->akm_suite_cnt )        {
+            frameshtons(pCtx, pBuf, pSrc->akm_suite_cnt, 0);
             *pnConsumed += 2;
             pBuf += 2;
         }
         else break;
-        DOT11F_MEMCPY(pCtx, pBuf, &( pSrc->akm_suites ), ( pSrc->akm_suite_count * 4 ));
-        *pnConsumed += ( pSrc->akm_suite_count * 4 );
-        pBuf += ( pSrc->akm_suite_count * 4 );
-        /* RSN_Cap */
-        DOT11F_MEMCPY(pCtx, pBuf, pSrc->RSN_Cap, 2);
-        *pnConsumed += 2;
-        pBuf += 2;
+        DOT11F_MEMCPY(pCtx, pBuf, &( pSrc->akm_suite ), ( pSrc->akm_suite_cnt * 4 ));
+        *pnConsumed += ( pSrc->akm_suite_cnt * 4 );
+        pBuf += ( pSrc->akm_suite_cnt * 4 );
+        if ( pSrc->RSN_Cap_present )        {
+            DOT11F_MEMCPY(pCtx, pBuf, pSrc->RSN_Cap, 2);
+            *pnConsumed += 2;
+            pBuf += 2;
+        }
+        else break;
         if ( pSrc->pmkid_count )        {
             frameshtons(pCtx, pBuf, pSrc->pmkid_count, 0);
             *pnConsumed += 2;
@@ -29556,7 +29605,7 @@ tANI_U32 dot11fPackIeRSN(tpAniSirGlobal pCtx,
         DOT11F_MEMCPY(pCtx, pBuf, &( pSrc->pmkid ), ( pSrc->pmkid_count * 16 ));
         *pnConsumed += ( pSrc->pmkid_count * 16 );
         pBuf += ( pSrc->pmkid_count * 16 );
-        if ( pSrc->gp_mgmt_cipher_suite )        {
+        if ( pSrc->gp_mgmt_cipher_suite_present )        {
             DOT11F_MEMCPY(pCtx, pBuf, pSrc->gp_mgmt_cipher_suite, 4);
             *pnConsumed += 4;
             // fieldsEndFlag = 1
@@ -33653,8 +33702,8 @@ tANI_U32 dot11fPackBeacon(tpAniSirGlobal pCtx, tDot11fBeacon *pFrm, tANI_U8 *pBu
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACON), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -35395,8 +35444,8 @@ tANI_U32 dot11fPackBeaconIEs(tpAniSirGlobal pCtx, tDot11fBeaconIEs *pFrm, tANI_U
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_BEACONIES), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -41397,8 +41446,8 @@ tANI_U32 dot11fPackTDLSDisRsp(tpAniSirGlobal pCtx, tDot11fTDLSDisRsp *pFrm, tANI
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSDISRSP), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -41745,8 +41794,8 @@ tANI_U32 dot11fPackTDLSSetupCnf(tpAniSirGlobal pCtx, tDot11fTDLSSetupCnf *pFrm, 
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPCNF), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -42056,8 +42105,8 @@ tANI_U32 dot11fPackTDLSSetupReq(tpAniSirGlobal pCtx, tDot11fTDLSSetupReq *pFrm, 
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPREQ), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
@@ -42415,8 +42464,8 @@ tANI_U32 dot11fPackTDLSSetupRsp(tpAniSirGlobal pCtx, tDot11fTDLSSetupRsp *pFrm, 
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.gp_cipher_suite, 4);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.pwise_cipher_suite_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.pwise_cipher_suites, 4 * pFrm->RSN.pwise_cipher_suite_count);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_count, 2);
-            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.akm_suites, 4 * pFrm->RSN.akm_suite_count);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.akm_suite_cnt, 2);
+            FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.akm_suite, 4 * pFrm->RSN.akm_suite_cnt);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.RSN_Cap, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* )&pFrm->RSN.pmkid_count, 2);
             FRAMES_DUMP(pCtx, FRAMES_SEV_FOR_FRAME(pCtx, DOT11F_TDLSSETUPRSP), ( tANI_U8* ) pFrm->RSN.pmkid, 16 * pFrm->RSN.pmkid_count);
