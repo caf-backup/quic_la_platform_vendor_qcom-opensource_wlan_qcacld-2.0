@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016,2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -17627,4 +17627,13 @@ VOS_STATUS sme_is_session_valid(tHalHandle hal_handle, uint8_t session_id)
 	        return VOS_STATUS_SUCCESS;
 
 	return VOS_STATUS_E_FAILURE;
+}
+
+uint32_t sme_unpack_rsn_ie(tHalHandle hal, uint8_t *buf,
+                           uint8_t buf_len,
+                           tDot11fIERSN *rsn_ie)
+{
+         tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
+
+         return dot11fUnpackIeRSN(mac_ctx, buf, buf_len, rsn_ie);
 }
