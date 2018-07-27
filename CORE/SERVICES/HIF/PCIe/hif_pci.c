@@ -2857,13 +2857,17 @@ HIFTargetSleepStateAdjust(A_target_id_t targid,
 
                     printk("%s:error, can't wakeup target\n", __func__);
                     hif_msm_pcie_debug_info(sc);
-                    if (!sc->ol_sc->enable_self_recovery)
-                            VOS_BUG(0);
-                    sc->recovery = true;
-                    vos_set_logp_in_progress(VOS_MODULE_ID_VOSS, TRUE);
+
+                    if (!vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL)) {
+                        sc->recovery = true;
+                        vos_set_logp_in_progress(VOS_MODULE_ID_VOSS, TRUE);
 #ifdef CONFIG_CNSS
-                    cnss_wlan_pci_link_down();
+                        cnss_wlan_pci_link_down();
 #endif
+                    } else {
+                        adf_os_print("%s- %d: SSR is in progress!!!!\n",
+                                     __func__, __LINE__);
+                    }
                     return -EACCES;
                 }
 
