@@ -675,6 +675,9 @@ VOS_STATUS vos_open( v_CONTEXT_t *pVosContext, v_SIZE_t hddContextSize )
     macOpenParms.max_mgmt_tx_fail_count =
                      pHddCtx->cfg_ini->max_mgmt_tx_fail_count;
 
+    macOpenParms.keep_dwell_time_passive =
+                     pHddCtx->cfg_ini->keeppassivedwelltime;
+
 #ifdef WLAN_FEATURE_LPSS
     macOpenParms.is_lpass_enabled = pHddCtx->cfg_ini->enablelpasssupport;
 #endif
@@ -3355,7 +3358,7 @@ v_BOOL_t vos_is_ch_switch_with_csa_enabled(void)
 }
 #endif//#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
 
-#ifdef FEATURE_WLAN_CARPLAY_CHANNEL_SWITCH
+#ifdef FEATURE_WLAN_DISABLE_CHANNEL_SWITCH
 /**
  * vos_is_chan_ok_for_dnbs() - check if the channel is valid for dnbs
  *
