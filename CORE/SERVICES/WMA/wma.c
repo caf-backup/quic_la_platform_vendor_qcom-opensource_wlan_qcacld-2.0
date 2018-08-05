@@ -4521,12 +4521,14 @@ static int wma_extscan_change_results_event_handler(void *handle,
 							src_rssi[count++];
 			}
 		}
-		dest_ap += dest_ap->numOfRssi * sizeof(tANI_S32);
+		dest_ap = (tSirWifiSignificantChange *)((char *)dest_ap +
+				dest_ap->numOfRssi * sizeof(tANI_S32) +
+				sizeof(*dest_ap));
 		src_chglist++;
 	}
 	dest_chglist->requestId = event->request_id;
 	dest_chglist->moreData = moredata;
-	dest_chglist->numResults = event->total_entries;
+	dest_chglist->numResults = numap;
 
 	pMac->sme.pExtScanIndCb(pMac->hHdd,
 				eSIR_EXTSCAN_SIGNIFICANT_WIFI_CHANGE_RESULTS_IND,
@@ -29757,8 +29759,10 @@ static VOS_STATUS wma_send_udp_resp_offload_cmd(tp_wma_handle wma_handle,
 
 	WMA_LOGD("%s: Enter", __func__);
 	if (1 == udp_response->enable) {
-		pattern_len = strlen(udp_response->udp_payload_filter);
-		response_len = strlen(udp_response->udp_response_payload);
+		pattern_len = strnlen(udp_response->udp_payload_filter,
+				      MAX_LEN_UDP_RESP_OFFLOAD);
+		response_len = strnlen(udp_response->udp_response_payload,
+				       MAX_LEN_UDP_RESP_OFFLOAD);
 	}
 
 	udp_len = (pattern_len % 4) ?
