@@ -2404,7 +2404,8 @@ static int __iw_set_bitrate(struct net_device *dev,
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
     hdd_wext_state_t *pWextState;
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
-    v_U8_t supp_rates[WNI_CFG_SUPPORTED_RATES_11A_LEN];
+    uint8_t supp_rates[WNI_CFG_SUPPORTED_RATES_11A_LEN +
+			WNI_CFG_SUPPORTED_RATES_11B_LEN];
     v_U32_t a_len = WNI_CFG_SUPPORTED_RATES_11A_LEN;
     v_U32_t b_len = WNI_CFG_SUPPORTED_RATES_11B_LEN;
     v_U32_t i, rate;
@@ -2444,7 +2445,7 @@ static int __iw_set_bitrate(struct net_device *dev,
                         supp_rates, &a_len) == eHAL_STATUS_SUCCESS) &&
                 (ccmCfgGetStr(WLAN_HDD_GET_HAL_CTX(pAdapter),
                         WNI_CFG_SUPPORTED_RATES_11B,
-                        supp_rates, &b_len) == eHAL_STATUS_SUCCESS))
+                        supp_rates + a_len, &b_len) == eHAL_STATUS_SUCCESS))
             {
                 for (i = 0; i < (b_len + a_len); ++i)
                 {
@@ -4016,12 +4017,6 @@ VOS_STATUS  wlan_hdd_set_powersave(hdd_adapter_t *pAdapter, int mode)
 {
    hdd_context_t *pHddCtx;
    eHalStatus status;
-   void *cookie;
-   struct hdd_request *request;
-   static const struct hdd_request_params params = {
-       .priv_size = 0,
-       .timeout_ms = WLAN_WAIT_TIME_POWER,
-   };
 
    if (NULL == pAdapter)
    {
@@ -4029,20 +4024,27 @@ VOS_STATUS  wlan_hdd_set_powersave(hdd_adapter_t *pAdapter, int mode)
        return VOS_STATUS_E_FAULT;
    }
 
-   request = hdd_request_alloc(&params);
-   if (!request) {
-       hddLog(VOS_TRACE_LEVEL_ERROR,
-              "%s: Request allocation failure", __func__);
-       return VOS_STATUS_E_NOMEM;
-   }
-   cookie = hdd_request_cookie(request);
-
    hddLog(VOS_TRACE_LEVEL_INFO_HIGH, "power mode=%d", mode);
 
    pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
 
    if (DRIVER_POWER_MODE_ACTIVE == mode)
    {
+       void *cookie;
+       struct hdd_request *request;
+       static const struct hdd_request_params params = {
+           .priv_size = 0,
+           .timeout_ms = WLAN_WAIT_TIME_POWER,
+       };
+
+       request = hdd_request_alloc(&params);
+       if (!request) {
+           hddLog(VOS_TRACE_LEVEL_ERROR,
+                  "%s: Request allocation failure", __func__);
+           return VOS_STATUS_E_NOMEM;
+       }
+       cookie = hdd_request_cookie(request);
+
        hddLog(VOS_TRACE_LEVEL_INFO_HIGH, "%s:Wlan driver Entering "
                "Full Power", __func__);
 
