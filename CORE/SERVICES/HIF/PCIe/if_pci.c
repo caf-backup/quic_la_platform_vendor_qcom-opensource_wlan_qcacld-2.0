@@ -3024,6 +3024,39 @@ out:
     return ret;
 }
 
+#ifdef CONFIG_MSM_GVM_QUIN
+/* WAR: force to set target suspend to trigger SSR when resume */
+static int hif_force_set_target_suspend(void)
+{
+	void *vos = vos_get_global_context(VOS_MODULE_ID_HIF, NULL);
+	void * temp_module;
+	tp_wma_handle wma_handle;
+	int ret = -EBUSY;
+
+	if (vos_is_logp_in_progress(VOS_MODULE_ID_HIF, NULL)) {
+		pr_err("%s: LOGP in progress\n", __func__);
+		return ret;
+	}
+
+	if (vos_is_load_unload_in_progress(VOS_MODULE_ID_HIF, NULL)) {
+		pr_err("%s: load/unload in progress\n", __func__);
+		return ret;
+	}
+
+	temp_module = vos_get_context(VOS_MODULE_ID_WDA, vos);
+	if (!temp_module) {
+		pr_err("%s: WDA module is NULL\n", __func__);
+		return ret;
+	}
+
+	wma_handle = (tp_wma_handle)temp_module;
+	wmi_set_target_suspend(wma_handle->wmi_handle, TRUE);
+	wma_handle->wow.wow_enable_cmd_sent = TRUE;
+
+	return 0;
+}
+#endif
+
 static int hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
 {
     int ret;
@@ -3031,6 +3064,14 @@ static int hif_pci_suspend(struct pci_dev *pdev, pm_message_t state)
     vos_ssr_protect(__func__);
 
     ret = __hif_pci_suspend(pdev, state, false);
+#ifdef CONFIG_MSM_GVM_QUIN
+    if (ret != 0) {
+        if (0 == hif_force_set_target_suspend()) {
+            /* WAR: Force cnss wlan suspend return 0 for msm virtual platform */
+            ret = 0;
+        }
+    }
+#endif
 
     vos_ssr_unprotect(__func__);
 
