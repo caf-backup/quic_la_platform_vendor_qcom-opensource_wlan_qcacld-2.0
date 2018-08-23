@@ -16390,6 +16390,12 @@ VOS_STATUS hdd_mt_host_ev_cb(void *pcb_cxt, tSirMtEvent *pevent)
 
 	adapter = hdd_get_adapter_by_vdev(hddctx, pevent->vdev_id);
 
+	if (adapter == NULL) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+			FL("adapter is NULL!"));
+		return VOS_STATUS_E_INVAL;
+	}
+
 	hddLog(VOS_TRACE_LEVEL_INFO,
 		FL("hdd_mt_host_ev_cb vdev_id=%u, status=%u"),
 		pevent->vdev_id, pevent->status);
