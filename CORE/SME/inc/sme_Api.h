@@ -55,6 +55,7 @@
 #include "p2p_Api.h"
 #include "smeInternal.h"
 #include "regdomain.h"
+#include "dot11f.h"
 
 #ifdef FEATURE_OEM_DATA_SUPPORT
 #include "oemDataApi.h"
