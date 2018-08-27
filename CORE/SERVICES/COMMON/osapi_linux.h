@@ -415,7 +415,33 @@ static inline void *A_ALIGN_TO_CACHE_LINE(void *ptr) {
 #include "ath_carr_pltfrm.h"
 
 #else
-#define A_PCI_READ32(addr)         ioread32((void __iomem *)addr)
+/* #define A_PCI_READ32(addr)         ioread32((void __iomem *)addr) */
+/*
+ * Replace the ioread32 API with IO_READ32_FILTER as a workaround to
+ * decrease the probability of the read value is 0xFFFFFFFF issue
+ */
+
+static __inline__
+u32 IO_READ32_FILTER(void __iomem *addr)
+{
+    u32 retry = 0;
+    u32 read_val;
+    do {
+        read_val = ioread32(addr);
+        if (read_val == 0xFFFFFFFF && retry++ < 3) {
+            printk("----------read_val-0x%x, retry-%d----------\n",
+                read_val, retry);
+            udelay(1000);
+            continue;
+        }
+        else
+            break;
+    } while (1);
+    return read_val;
+}
+
+#define A_PCI_READ32(addr)         IO_READ32_FILTER((void __iomem *)addr)
+
 #define A_PCI_WRITE32(addr, value) iowrite32((u32)(value), (void __iomem *)(addr))
 #endif /* QCA_PARTNER_PLATFORM */
 
