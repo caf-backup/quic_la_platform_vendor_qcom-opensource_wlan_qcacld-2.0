@@ -5544,6 +5544,28 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_IS_SAE_ENABLED_MIN     (0)
 #define CFG_IS_SAE_ENABLED_MAX     (1)
 
+/*
+ * <ini>
+ * g_enable_bcast_probe_rsp - Enable Broadcast probe response.
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable/disable broadcast probe response
+ *
+ * Related: None
+ *
+ * Supported Feature: FILS
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_BCAST_PROBE_RESP_NAME    "g_enable_bcast_probe_rsp"
+#define CFG_ENABLE_BCAST_PROBE_RESP_MIN     (0)
+#define CFG_ENABLE_BCAST_PROBE_RESP_MAX     (1)
+#define CFG_ENABLE_BCAST_PROBE_RESP_DEFAULT (0)
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -6471,6 +6493,7 @@ struct hdd_config {
 #ifdef WLAN_FEATURE_SAE
    bool is_sae_enabled;
 #endif
+   bool enable_bcast_probe_rsp;
 };
 
 typedef struct hdd_config hdd_config_t;

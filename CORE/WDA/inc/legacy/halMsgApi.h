@@ -1304,6 +1304,7 @@ typedef struct sAddStaSelfParams
    uint32_t tx_non_aggr_sw_retry_threshhold_bk;
    uint32_t tx_non_aggr_sw_retry_threshhold_vi;
    uint32_t tx_non_aggr_sw_retry_threshhold_vo;
+   bool            enable_bcast_probe_rsp;
 }tAddStaSelfParams, *tpAddStaSelfParams;
 
 /**
