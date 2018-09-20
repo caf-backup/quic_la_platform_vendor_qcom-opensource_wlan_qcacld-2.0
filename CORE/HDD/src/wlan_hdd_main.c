@@ -242,7 +242,11 @@ DEFINE_SPINLOCK(hdd_context_lock);
  */
 #define NUM_OF_STA_DATA_TO_PRINT 16
 
+#ifdef MULTI_IF_NAME
+#define WLAN_NLINK_CESIUM 29
+#else
 #define WLAN_NLINK_CESIUM 30
+#endif
 
 /*Nss - 1, (Nss = 2 for 2x2)*/
 #define NUM_OF_SOUNDING_DIMENSIONS 1
