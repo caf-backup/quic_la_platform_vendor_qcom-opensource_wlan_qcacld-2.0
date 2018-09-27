@@ -5837,6 +5837,80 @@ static int __iw_setint_getnone(struct net_device *dev,
 #endif
               case  14://reset wlan (power down/power up)
                  break;
+
+              case  15://enable bmps dyn
+                  if (NULL == hHal) {
+                      hddLog(VOS_TRACE_LEVEL_ERROR,
+                             "%s: mac ptr NULL when setpwr param 15", __func__);
+                      return -EINVAL;
+                  }
+
+                  if (!(pHddCtx->cfg_ini->enablePowersaveOffload &&
+                      (false == pHddCtx->is_mon_enable) &&
+                      ((WLAN_HDD_INFRA_STATION == pAdapter->device_mode) ||
+                      (WLAN_HDD_P2P_CLIENT == pAdapter->device_mode)))) {
+                      hddLog(LOGE, "device mode not support enable bmps dyn");
+                      return -EIO;
+                  }
+
+                  sme_EnablePowerSave(hHal, ePMC_BEACON_MODE_POWER_SAVE);
+                  sme_ConfigEnablePowerSave(pHddCtx->hHal, ePMC_BEACON_MODE_POWER_SAVE);
+
+                  if (hdd_connIsConnected(pHddStaCtx))
+                      sme_PsOffloadEnablePowerSave(hHal, pAdapter->sessionId);
+	          break;
+              case  16://disable bmps dyn
+              {
+                  struct hdd_request *request;
+                  void *cookie;
+                  static const struct hdd_request_params params = {
+                      .priv_size = 0,
+                      .timeout_ms = WLAN_WAIT_TIME_POWER,
+                  };
+                  eHalStatus status = eHAL_STATUS_FAILURE;
+
+                  if (NULL == hHal) {
+                      hddLog(VOS_TRACE_LEVEL_ERROR,
+                             "%s: mac ptr NULL when setpwr param 16", __func__);
+                      return -EINVAL;
+                  }
+
+                  if (!(pHddCtx->cfg_ini->enablePowersaveOffload &&
+                      ((WLAN_HDD_INFRA_STATION == pAdapter->device_mode) ||
+                      (WLAN_HDD_P2P_CLIENT == pAdapter->device_mode)))) {
+                     hddLog(LOGE, "device mode not support disable bmps dyn");
+                     return -EIO;
+                  }
+
+                  request = hdd_request_alloc(&params);
+                  if (!request) {
+                      hddLog(VOS_TRACE_LEVEL_ERROR,
+                             "%s: Request allocation failure for disable bmps dyn", __func__);
+                      return VOS_STATUS_E_NOMEM;
+                  }
+
+                  cookie = hdd_request_cookie(request);
+                  status = sme_PsOffloadDisablePowerSave(hHal,
+                                                         iw_power_offload_callback_fn, cookie,
+                                                         pAdapter->sessionId);
+                  if (eHAL_STATUS_PMC_PENDING == status) {
+                      if (hdd_request_wait_for_response(request)) {
+                          hddLog(VOS_TRACE_LEVEL_ERROR,
+                                 FL("SME timed out while requesting full power"));
+                      }
+                  }
+
+                  /*
+                   * either we never sent a request, we sent a request and
+                   * received a response or we sent a request and timed out.
+                   * regardless we are done with the request.
+                   */
+                  hdd_request_put(request);
+                  sme_DisablePowerSave(hHal, ePMC_BEACON_MODE_POWER_SAVE);
+                  sme_ConfigDisablePowerSave(pHddCtx->hHal, ePMC_BEACON_MODE_POWER_SAVE);
+                  hddLog(LOGE, "iwpriv req Full Power completed");
+                  break;
+              }
               default:
                  hddLog(LOGE, "Invalid arg  %d in WE_SET_POWER IOCTL", set_value);
                  ret = -EINVAL;

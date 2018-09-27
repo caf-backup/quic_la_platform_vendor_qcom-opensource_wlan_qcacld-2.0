@@ -1340,6 +1340,12 @@ extern eHalStatus sme_RequestFullPower (
    void *callbackContext,
    tRequestFullPowerReason fullPowerReason);
 
+extern eHalStatus sme_OffloadRequestFullPower(
+   tHalHandle hHal,
+   void (*callbackRoutine) (void *callbackContext, uint32_t sessionId, eHalStatus status),
+   void *callbackContext,
+   tRequestFullPowerReason fullPowerReason, tANI_U32 sessionId);
+
 /* ---------------------------------------------------------------------------
     \fn sme_RequestBmps
     \brief  Request that the device be put in BMPS state. Request will be
