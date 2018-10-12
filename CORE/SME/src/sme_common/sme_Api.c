@@ -5569,6 +5569,27 @@ eHalStatus sme_RequestFullPower (
    return (status);
 }
 
+eHalStatus sme_OffloadRequestFullPower (
+   tHalHandle hHal,
+   void (*callbackRoutine) (void *callbackContext, uint32_t sessionId, eHalStatus status),
+   void *callbackContext,
+   tRequestFullPowerReason fullPowerReason,tANI_U32 sessionId)
+{
+   eHalStatus status = eHAL_STATUS_FAILURE;
+   tpAniSirGlobal pMac = PMAC_STRUCT( hHal );
+
+   MTRACE(vos_trace(VOS_MODULE_ID_SME,
+         TRACE_CODE_SME_RX_HDD_REQUEST_FULLPOWER, NO_SESSION, fullPowerReason));
+   status = sme_AcquireGlobalLock( &pMac->sme );
+   if ( HAL_STATUS_SUCCESS( status ) )
+   {
+       status = pmcOffloadRequestFullPower (hHal, sessionId, callbackRoutine,callbackContext, fullPowerReason);
+       sme_ReleaseGlobalLock( &pMac->sme );
+   }
+
+   return (status);
+}
+
 /* ---------------------------------------------------------------------------
     \fn sme_RequestBmps
     \brief  Request that the device be put in BMPS state. Request will be
