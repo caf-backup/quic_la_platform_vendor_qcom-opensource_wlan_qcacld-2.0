@@ -17105,6 +17105,16 @@ int wlan_hdd_cfg80211_update_apies(hdd_adapter_t* pHostapdAdapter)
     pConfig = &pHostapdAdapter->sessionCtx.ap.sapConfig;
     pBeacon = pHostapdAdapter->sessionCtx.ap.beacon;
 
+    /* FIx CR2299453 that the pHostapdAdapter->sessionCtx.ap.beacon will be
+     * set NULL during ap stop at function wlan_hdd_cfg80211_stop_ap()
+     * but then received fw indicator 0x6 and trigger driver reset, and then
+     * cause this NULL pointer operation when re-init.
+     */
+    if (pBeacon == NULL) {
+        hddLog(LOGE, FL("Invalid pointer pBeacon = NULL!"));
+        return -EINVAL;
+    }
+
     genie = vos_mem_malloc(MAX_GENIE_LEN);
 
     if(genie == NULL) {
@@ -26708,6 +26718,7 @@ static int wlan_hdd_get_station_remote(struct wiphy *wiphy,
 	return status;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0))
 /*
  * wlan_hdd_fill_summary_stats() - populate station_info summary stats
  * @stats: summary stats to use as a source
@@ -26736,7 +26747,36 @@ static void wlan_hdd_fill_summary_stats(tCsrSummaryStatsInfo *stats,
 			STATION_INFO_TX_FAILED |
 			STATION_INFO_RX_PACKETS;
 }
+#else
+/*
+ * wlan_hdd_fill_summary_stats() - populate station_info summary stats
+ * @stats: summary stats to use as a source
+ * @info: kernel station_info struct to use as a destination
+ *
+ * Return: None
+ */
+static void wlan_hdd_fill_summary_stats(tCsrSummaryStatsInfo *stats,
+					struct station_info *info)
+{
+	int i;
 
+	info->rx_packets = stats->rx_frm_cnt;
+	info->tx_packets = 0;
+	info->tx_retries = 0;
+	info->tx_failed = 0;
+
+	for (i = 0; i < 4; ++i) {
+		info->tx_packets += stats->tx_frm_cnt[i];
+		info->tx_retries += stats->multiple_retry_cnt[i];
+		info->tx_failed += stats->fail_cnt[i];
+	}
+
+	info->filled |= BIT(NL80211_STA_INFO_TX_PACKETS) |
+			BIT(NL80211_STA_INFO_TX_RETRIES) |
+			BIT(NL80211_STA_INFO_TX_FAILED) |
+			BIT(NL80211_STA_INFO_RX_PACKETS);
+}
+#endif
 /**
  * wlan_hdd_get_sap_stats() - get aggregate SAP stats
  * @adapter: sap adapter to get stats for
@@ -30767,7 +30807,8 @@ static int wlan_hdd_thermal_resume(hdd_context_t *pHddCtx, bool thermal)
 	}
 
 	/* send auto shutdown timer val 1 to fw as resume */
-	sme_set_auto_shutdown_timer(pHddCtx->hHal, 1);
+	if (thermal)
+		sme_set_auto_shutdown_timer(pHddCtx->hHal, 1);
 
 	return 0;
 }
