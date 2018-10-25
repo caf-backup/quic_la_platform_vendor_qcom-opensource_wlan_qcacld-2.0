@@ -79,15 +79,18 @@ limProcessDeauthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession p
     tpDphHashNode     pStaDs;
     tpPESession       pRoamSessionEntry=NULL;
     tANI_U8           roamSessionId;
-#ifdef WLAN_FEATURE_11W
     tANI_U32          frameLen;
-#endif
-
 
     pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
 
     pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
 
+    frameLen = WDA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
+    if (frameLen < sizeof(reasonCode)) {
+        PELOGE(limLog(pMac, LOGE,
+                      FL("Invalid framelen received %d"), frameLen);)
+        return;
+    }
 
     if (LIM_IS_STA_ROLE(psessionEntry) &&
         ((eLIM_SME_WT_DISASSOC_STATE == psessionEntry->limSmeState) ||
