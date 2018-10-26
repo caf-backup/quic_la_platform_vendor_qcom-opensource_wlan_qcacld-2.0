@@ -3998,6 +3998,11 @@ static int hdd_extscan_start_fill_bucket_channel_spec(
 			total_channels++;
 		}
 
+		if (j != pReqMsg->buckets[bktIndex].numChannels) {
+			hddLog(LOG1, FL("Input parameters didn't match"));
+			return -EINVAL;
+		}
+
 		hdd_extscan_update_dwell_time_limits(
 					pReqMsg, bktIndex,
 					min_dwell_time_active_bucket,
@@ -24091,6 +24096,12 @@ static int wlan_hdd_cfg80211_set_privacy_ibss(
             if (NULL != ie)
             {
                 pWextState->wpaVersion = IW_AUTH_WPA_VERSION_WPA;
+		if (ie[1] < DOT11F_IE_WPA_MIN_LEN ||
+		    ie[1] > DOT11F_IE_WPA_MAX_LEN) {
+			hddLog(VOS_TRACE_LEVEL_ERROR, FL("invalid ie len:%d"),
+				ie[1]);
+			return -EINVAL;
+		}
                 // Unpack the WPA IE
                 //Skip past the EID byte and length byte - and four byte WiFi OUI
                 dot11fUnpackIeWPA((tpAniSirGlobal) halHandle,

@@ -1358,10 +1358,20 @@ static int wma_vdev_start_rsp_ind(tp_wma_handle wma, u_int8_t *buf)
 
 	iface = &wma->interfaces[resp_event->vdev_id];
 
+	req_msg = wma_find_vdev_req(wma, resp_event->vdev_id,
+				    WMA_TARGET_REQ_TYPE_VDEV_START);
+
+	if (!req_msg) {
+		WMA_LOGE("%s: Failed to lookup request message for vdev %d",
+			 __func__, resp_event->vdev_id);
+		return -EINVAL;
+	}
+
 	if ((resp_event->vdev_id < wma->max_bssid) &&
 		(adf_os_atomic_read(
 		&wma->interfaces[resp_event->vdev_id].vdev_restart_params.hidden_ssid_restart_in_progress)) &&
-		(wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id) == true)) {
+		(wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id) == true) &&
+		(req_msg->msg_type == WDA_HIDDEN_SSID_VDEV_RESTART)) {
 		WMA_LOGE(
 			"%s: vdev restart event recevied for hidden ssid set using IOCTL",
 			__func__);
@@ -1384,15 +1394,6 @@ static int wma_vdev_start_rsp_ind(tp_wma_handle wma, u_int8_t *buf)
 		                            OL_TXQ_PAUSE_REASON_VDEV_STOP);
 		iface->pause_bitmap &= ~(1 << PAUSE_TYPE_HOST);
 
-	}
-
-	req_msg = wma_find_vdev_req(wma, resp_event->vdev_id,
-				    WMA_TARGET_REQ_TYPE_VDEV_START);
-
-	if (!req_msg) {
-		WMA_LOGE("%s: Failed to lookup request message for vdev %d",
-			 __func__, resp_event->vdev_id);
-		return -EINVAL;
 	}
 
 	vos_timer_stop(&req_msg->event_timeout);
@@ -2609,6 +2610,11 @@ static void wma_vdev_stats_lost_link_helper(tp_wma_handle wma,
 	uint8_t zero_mac[ETH_ALEN] = {0};
 	int8_t bcn_snr, dat_snr;
 
+	if (vdev_stats->vdev_id >= wma->max_bssid) {
+		WMA_LOGE("%s: Invalid vdev_id %hu",
+		 __func__, vdev_stats->vdev_id);
+		return;
+	}
 	node = &wma->interfaces[vdev_stats->vdev_id];
 	if (node->vdev_up &&
 	    vos_mem_compare(node->bssid, zero_mac, ETH_ALEN)) {
@@ -2653,6 +2659,11 @@ static void wma_update_vdev_stats(tp_wma_handle wma,
 	vos_msg_t sme_msg = {0};
 	int8_t bcn_snr, dat_snr;
 
+	if (vdev_stats->vdev_id >= wma->max_bssid) {
+		WMA_LOGE("%s: Invalid vdev_id %hu",
+		 __func__, vdev_stats->vdev_id);
+		return;
+	}
 	node = &wma->interfaces[vdev_stats->vdev_id];
 	stats_rsp_params = node->stats_rsp;
 	if (stats_rsp_params) {
@@ -2912,6 +2923,11 @@ static void wma_update_rssi_stats(tp_wma_handle wma,
 	uint32_t temp_mask;
 	uint8_t vdev_id;
 
+	if (rssi_stats->vdev_id >= wma->max_bssid) {
+		WMA_LOGE("%s: Invalid vdev_id %hu",
+		 __func__, rssi_stats->vdev_id);
+		return;
+	}
 	vdev_id = rssi_stats->vdev_id;
 	node = &wma->interfaces[vdev_id];
 	if (node->stats_rsp) {
