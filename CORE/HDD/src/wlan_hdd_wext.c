@@ -1908,8 +1908,60 @@ static int __iw_get_name(struct net_device *dev,
 			 struct iw_request_info *info,
 			 char *wrqu, char *extra)
 {
+	hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR(dev);
+
 	ENTER();
-	strlcpy(wrqu, "Qcom:802.11n", IFNAMSIZ);
+	/*Customer's requirement : adding the feature to show
+	what kind of AP connected in the STA mode when run iwconfig*/
+	if (pAdapter && (pAdapter->device_mode == WLAN_HDD_INFRA_STATION)) {
+
+		hdd_station_ctx_t *pHddStaCtx;
+		hdd_context_t *hdd_ctx;
+		int ret;
+
+		pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
+		hdd_ctx = WLAN_HDD_GET_CTX(pAdapter);
+		ret = wlan_hdd_validate_context(hdd_ctx);
+		if (0 != ret)
+			return ret;
+
+		if (pHddStaCtx && (eConnectionState_Associated ==
+				   pHddStaCtx->conn_info.connState)) {
+			switch (pHddStaCtx->conn_info.dot11Mode) {
+			case eCSR_CFG_DOT11_MODE_ABG:
+				strlcpy(wrqu, "Qcom:802.11abg", IFNAMSIZ);
+				break;
+			case eCSR_CFG_DOT11_MODE_11A:
+				strlcpy(wrqu, "Qcom:802.11a", IFNAMSIZ);
+				break;
+			case eCSR_CFG_DOT11_MODE_11B:
+				strlcpy(wrqu, "Qcom:802.11b", IFNAMSIZ);
+				break;
+			case eCSR_CFG_DOT11_MODE_11G:
+			case eCSR_CFG_DOT11_MODE_11G_ONLY:
+				strlcpy(wrqu, "Qcom:802.11g", IFNAMSIZ);
+				break;
+			case eCSR_CFG_DOT11_MODE_11N:
+			case eCSR_CFG_DOT11_MODE_11N_ONLY:
+				strlcpy(wrqu, "Qcom:802.11n", IFNAMSIZ);
+				break;
+#ifdef WLAN_FEATURE_11AC
+			case eCSR_CFG_DOT11_MODE_11AC:
+			case eCSR_CFG_DOT11_MODE_11AC_ONLY:
+				strlcpy(wrqu, "Qcom:802.11ac", IFNAMSIZ);
+				break;
+#endif
+			case eCSR_CFG_DOT11_MODE_AUTO:
+			default:
+				strlcpy(wrqu, "Qcom:802.11ac", IFNAMSIZ);
+				break;
+			}
+		} else {
+			strlcpy(wrqu, "Qcom:802.11ac", IFNAMSIZ);
+		}
+	} else {
+		strlcpy(wrqu, "Qcom:802.11n", IFNAMSIZ);
+	}
 	EXIT();
 	return 0;
 }
