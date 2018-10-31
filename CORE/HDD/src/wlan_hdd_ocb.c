@@ -1755,14 +1755,14 @@ static void hdd_dcc_get_stats_callback(void *context, void *response_ptr)
 
 	priv = hdd_request_priv(request);
 
-	priv->response = vos_mem_malloc(sizeof(*response) +
-					response->channel_stats_array_len);
-	if (!priv->response) {
-		priv->status = -ENOMEM;
-		goto end;
-	}
-
 	if (response) {
+		priv->response = vos_mem_malloc(sizeof(*response) +
+					response->channel_stats_array_len);
+		if (!priv->response) {
+			priv->status = -ENOMEM;
+			goto end;
+		}
+
 		hdd_resp = priv->response;
 		*hdd_resp = *response;
 		hdd_resp->channel_stats_array = (uint8_t *)hdd_resp +
