@@ -1722,9 +1722,9 @@ eHalStatus sme_SetPlmRequest(tHalHandle hHal, tpSirPlmReq pPlmReq)
                   ch_list[valid_count] = pPlmReq->plmChList[count];
                   valid_count++;
                 } /* End of for () */
+                /* Copying back the valid channel list to plm struct */
+                vos_mem_set((void *)pPlmReq->plmChList, pPlmReq->plmNumCh, 0);
            }
-           /* Copying back the valid channel list to plm struct */
-           vos_mem_set((void *)pPlmReq->plmChList, pPlmReq->plmNumCh, 0);
            if (valid_count)
               vos_mem_copy(pPlmReq->plmChList, ch_list, valid_count);
            /* All are invalid channels, FW need to send the PLM
