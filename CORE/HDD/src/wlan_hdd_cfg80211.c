@@ -31148,39 +31148,6 @@ resume_tx:
     return -ETIME;
 }
 
-#ifdef CONFIG_MSM_GVM_QUIN
-/* WAR: Force cfg80211 suspend return 0 for msm virtual platform */
-static int wlan_hdd_suspend_return_status_check(struct wiphy *wiphy)
-{
-	hdd_context_t *pHddCtx = wiphy_priv(wiphy);
-	struct device *dev;
-	int rc;
-
-	rc = wlan_hdd_validate_context(pHddCtx);
-	if (0 != rc)
-		return rc;
-
-	dev = pHddCtx->parent_dev;
-	if (VOS_FTM_MODE == hdd_get_conparam()) {
-		hddLog(LOGE, FL("Command not allowed in FTM mode"));
-		return -EINVAL;
-	}
-
-	if (true == vos_is_mon_enable()) {
-		hddLog(LOGE, FL("command not allowed in FTM mode"));
-		return -EINVAL;
-	}
-
-	if (pHddCtx->prevent_suspend) {
-		hddLog(LOGE, FL("WOW is enabled in host while not supported in FW."
-			"Prevent suspend"));
-		return -EOPNOTSUPP;
-	}
-
-	return 0;
-}
-#endif
-
 int wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
                                    struct cfg80211_wowlan *wow)
 {
@@ -31190,14 +31157,6 @@ int wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
     vos_ssr_protect(__func__);
     ret = __wlan_hdd_cfg80211_suspend_wlan(wiphy, wow, false);
     hdd_system_suspend_state_set(hdd_ctx, true);
-#ifdef CONFIG_MSM_GVM_QUIN
-    if (ret != 0) {
-        if (0 == wlan_hdd_suspend_return_status_check(wiphy)) {
-            /* WAR: Force cfg80211 suspend return 0 for msm virtual platform */
-            ret = 0;
-        }
-    }
-#endif
     vos_ssr_unprotect(__func__);
 
     return ret;
