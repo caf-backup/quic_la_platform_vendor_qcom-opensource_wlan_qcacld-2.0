@@ -547,12 +547,6 @@ ol_tx_completion_handler(
         tx_desc = td_array[tx_desc_id].tx_desc;
         tx_desc->status = status;
         netbuf = tx_desc->netbuf;
-        NBUF_UPDATE_TX_PKT_COUNT(netbuf, NBUF_TX_PKT_FREE);
-        DPTRACE(adf_dp_trace_ptr(netbuf,
-                                 ADF_DP_TRACE_FREE_PACKET_PTR_RECORD,
-                                 adf_nbuf_data_addr(netbuf),
-                                 sizeof(adf_nbuf_data(netbuf)),
-                                 tx_desc->id, status));
         if (pdev->cfg.is_high_latency) {
             OL_TX_DESC_UPDATE_GROUP_CREDIT(pdev, tx_desc_id, 1, 0, status);
         }
