@@ -15185,7 +15185,7 @@ static void hdd_populate_random_mac_addr(hdd_context_t *hdd_ctx, uint32_t num)
  *
  * Return: int
  */
-static int hdd_cnss_wlan_mac(hdd_context_t *hdd_ctx)
+int hdd_cnss_wlan_mac(hdd_context_t *hdd_ctx)
 {
 	uint32_t no_of_mac_addr, iter;
 	uint32_t max_mac_addr = VOS_MAX_CONCURRENCY_PERSONA;
@@ -15236,7 +15236,7 @@ static int hdd_cnss_wlan_mac(hdd_context_t *hdd_ctx)
  *
  * Return: 0 if success, errno otherwise
  */
-static int hdd_initialize_mac_address(hdd_context_t *hdd_ctx)
+int hdd_initialize_mac_address(hdd_context_t *hdd_ctx)
 {
 	VOS_STATUS status;
 	int ret;

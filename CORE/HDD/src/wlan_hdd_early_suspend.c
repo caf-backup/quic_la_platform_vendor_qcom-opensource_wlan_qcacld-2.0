@@ -2258,6 +2258,47 @@ static void hdd_wlan_ssr_reinit_event(void)
 
 };
 #endif
+VOS_STATUS hdd_reset_sta_mac_addr(hdd_context_t *pHddCtx)
+{
+	hdd_adapter_list_node_t *pAdapterNode = NULL, *pNext = NULL;
+	VOS_STATUS status;
+	hdd_adapter_t      *pAdapter;
+	v_BYTE_t *mac_addr;
+	hdd_config_t *pConfig = pHddCtx->cfg_ini;
+
+	ENTER();
+	status = hdd_get_front_adapter(pHddCtx, &pAdapterNode);
+
+	while (NULL != pAdapterNode && VOS_STATUS_SUCCESS == status) {
+		pAdapter = pAdapterNode->pAdapter;
+		switch (pAdapter->device_mode) {
+		case WLAN_HDD_INFRA_STATION: {
+			int i = 0;
+			v_BYTE_t tmp[VOS_MAC_ADDR_SIZE];
+
+			vos_mem_set(tmp, VOS_MAC_ADDR_SIZE, 0);
+			vos_mem_copy(tmp, pAdapter->macAddressCurrent.bytes,
+				     VOS_MAC_ADDR_SIZE);
+			tmp[0] |= 0x02;
+			for (i = 0; i < VOS_MAX_CONCURRENCY_PERSONA; i++) {
+				mac_addr = &pConfig->intfMacAddr[i].bytes[0];
+				if (!memcmp(tmp, mac_addr, VOS_MAC_ADDR_SIZE)) {
+					mac_addr[0] &= 0xFD;
+					break;
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+
+		status = hdd_get_next_adapter(pHddCtx, pAdapterNode, &pNext);
+		pAdapterNode = pNext;
+	}
+	EXIT();
+	return VOS_STATUS_SUCCESS;
+}
 
 /* the HDD interface to WLAN driver re-init.
  * This is called to initialize/start WLAN driver after a shutdown.
@@ -2271,6 +2312,8 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
    bool             bug_on_reinit_failure = 0;
    hdd_adapter_t *pAdapter;
    int i;
+   int ret;
+
    hdd_prevent_suspend(WIFI_POWER_EVENT_WAKELOCK_DRIVER_REINIT);
 
    vos_set_reinit_in_progress(VOS_MODULE_ID_VOSS, TRUE);
@@ -2358,7 +2401,12 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: config update failed",__func__ );
       goto err_vosclose;
    }
-
+   ret = hdd_initialize_mac_address(pHddCtx);
+   if (!pHddCtx->cfg_ini->g_use_otpmac && ret) {
+      hddLog(LOGE,
+             FL("Failed to read MAC from platform driver or %s"),
+             WLAN_MAC_FILE);
+   }
    /* Set the MAC Address, currently this is used by HAL to add self sta.
     * Remove this once self sta is added as part of session open. */
    halStatus = cfgSetStr(pHddCtx->hHal, WNI_CFG_STA_ID,
@@ -2419,6 +2467,7 @@ VOS_STATUS hdd_wlan_re_init(void *hif_sc)
 
    wlan_hdd_send_svc_nlink_msg(pHddCtx->radio_index,
                                WLAN_SVC_FW_CRASHED_IND, NULL, 0);
+   hdd_reset_sta_mac_addr(pHddCtx);
 
    /* Restart all adapters */
    hdd_start_all_adapters(pHddCtx);

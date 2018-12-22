@@ -2578,6 +2578,7 @@ void hdd_ch_avoid_cb(void *hdd_context, void *indi_param);
 uint8_t hdd_find_prefd_safe_chnl(hdd_context_t *hdd_ctxt,
 		hdd_adapter_t *ap_adapter);
 void hdd_unsafe_channel_restart_sap(hdd_context_t *hdd_ctx);
+int hdd_initialize_mac_address(hdd_context_t *hdd_ctx);
 
 #if defined (FEATURE_WLAN_MCC_TO_SCC_SWITCH) || \
 	defined (FEATURE_WLAN_STA_AP_MODE_DFS_DISABLE)
