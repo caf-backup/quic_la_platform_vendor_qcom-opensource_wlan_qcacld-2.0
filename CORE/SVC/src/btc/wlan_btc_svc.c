@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -59,7 +59,7 @@ void send_btc_nlink_msg (int type, int dest_pid)
    tWlanAssocData *assocData;
    uint32_t skb_size = NLMSG_SPACE(WLAN_NL_MAX_PAYLOAD);
    skb = alloc_skb(skb_size, GFP_KERNEL);
-   If(skb == NULL) {
+   if(skb == NULL) {
       VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
          "BTC: alloc_skb failed\n");
       return;
