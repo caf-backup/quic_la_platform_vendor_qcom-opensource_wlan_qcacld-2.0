@@ -13876,7 +13876,8 @@ static int wlan_hdd_cfg80211_sta_roam_policy(struct wiphy *wiphy,
 static int hdd_validate_avoid_freq_chanlist(hdd_context_t *hdd_ctx,
 					    tHddAvoidFreqList *channel_list)
 {
-	unsigned int range_idx, ch_idx;
+	unsigned int range_idx;
+	uint8_t ch_idx;
 	unsigned int unsafe_channel_index, unsafe_channel_count = 0;
 	bool ch_found = false;
 
@@ -13893,9 +13894,14 @@ static int hdd_validate_avoid_freq_chanlist(hdd_context_t *hdd_ctx,
 		     channel_list->avoidFreqRange[range_idx].endFreq))
 				continue;
 
-		for (ch_idx = channel_list->avoidFreqRange[range_idx].startFreq;
-		     ch_idx <= channel_list->avoidFreqRange[range_idx].endFreq;
+		for (ch_idx =
+		     (uint8_t)channel_list->avoidFreqRange[range_idx].startFreq;
+		     ch_idx <=
+		     (uint8_t)channel_list->avoidFreqRange[range_idx].endFreq;
 		     ch_idx++) {
+			if (INVALID_RF_CHANNEL ==
+						wlan_hdd_get_chan_enum(ch_idx))
+				continue;
 			for (unsafe_channel_index = 0;
 			     unsafe_channel_index < unsafe_channel_count;
 			     unsafe_channel_index++) {
