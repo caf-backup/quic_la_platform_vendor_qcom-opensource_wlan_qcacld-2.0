@@ -16064,6 +16064,9 @@ static int32_t wmi_unified_send_peer_assoc(tp_wma_handle wma,
 	cmd->peer_vht_caps = params->vht_caps;
 #endif
 
+	if (!params->wmmEnabled)
+		cmd->peer_flags &= ~WMI_PEER_QOS;
+
 	if (params->p2pCapableSta)
 		cmd->peer_flags |= WMI_PEER_IS_P2P_CAPABLE;
 

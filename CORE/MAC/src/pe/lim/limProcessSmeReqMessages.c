@@ -2076,6 +2076,9 @@ __limProcessSmeJoinReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
         psessionEntry->limQosEnabled = pSmeJoinReq->isQosEnabled;
         psessionEntry->osen_association = pSmeJoinReq->osen_association;
         psessionEntry->wps_registration = pSmeJoinReq->wps_registration;
+        limLog(pMac,LOG1,FL("wme %d, qos %d"),
+		psessionEntry->limWmeEnabled,
+		psessionEntry->limQosEnabled);
 
 
         /* Store vendor specfic IE for CISCO AP */

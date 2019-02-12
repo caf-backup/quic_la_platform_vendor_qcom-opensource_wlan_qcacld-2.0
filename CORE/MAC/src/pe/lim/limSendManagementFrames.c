@@ -2159,6 +2159,10 @@ limSendAssocReqMgmtFrame(tpAniSirGlobal   pMac,
     fWsmEnabled = ( psessionEntry->limWsmEnabled ) && fWmeEnabled &&
         LIM_BSS_CAPS_GET( WSM, psessionEntry->limCurrentBssQosCaps );
 
+    limLog(pMac, LOG1,
+	    FL("fQosEnabled %d fWmeEnabled %d fWsmEnabled %d psOffloadEnabled %d"),
+	    fQosEnabled, fWmeEnabled, fWsmEnabled, pMac->psOffloadEnabled);
+
     if ( psessionEntry->lim11hEnable  &&
             psessionEntry->pLimJoinReq->spectrumMgtIndicator == eSIR_TRUE )
     {
