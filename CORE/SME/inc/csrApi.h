@@ -541,6 +541,7 @@ typedef enum
 
     eCSR_ROAM_NDP_STATUS_UPDATE,
     eCSR_ROAM_UPDATE_SCAN_RESULT,
+    eCSR_ROAM_SAE_COMPUTE,
 }eRoamCmdStatus;
 
 
@@ -1492,6 +1493,9 @@ typedef struct tagCsrRoamInfo
         struct ndi_create_rsp ndi_create_params;
         struct ndi_delete_rsp ndi_delete_params;
     } ndp;
+#endif
+#ifdef WLAN_FEATURE_SAE
+    struct sir_sae_info *sae_info;
 #endif
 }tCsrRoamInfo;
 
