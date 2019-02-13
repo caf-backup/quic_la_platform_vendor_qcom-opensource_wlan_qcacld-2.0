@@ -522,6 +522,7 @@ typedef enum
 
     // Channel sw update notification
     eCSR_ROAM_DFS_CHAN_SW_NOTIFY,
+    eCSR_ROAM_SAE_COMPUTE,
 }eRoamCmdStatus;
 
 
@@ -1355,6 +1356,9 @@ typedef struct tagCsrRoamInfo
     tANI_U8 replay_ctr[SIR_REPLAY_CTR_LEN];
 #endif
     tSirSmeChanInfo chan_info;
+#ifdef WLAN_FEATURE_SAE
+    struct sir_sae_info *sae_info;
+#endif
 }tCsrRoamInfo;
 
 
