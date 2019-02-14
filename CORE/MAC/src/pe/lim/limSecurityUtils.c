@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -451,9 +451,9 @@ limRestoreFromAuthState(tpAniSirGlobal pMac, tSirResultCodes resultCode, tANI_U1
 
     MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, sessionEntry->peSessionId, sessionEntry->limMlmState));
 
-
-    // 'Change' timer for future activations
-    limDeactivateAndChangeTimer(pMac, eLIM_AUTH_FAIL_TIMER);
+    /* 'Change' timer for future activations */
+    if (tx_timer_running(&pMac->lim.limTimers.gLimAuthFailureTimer))
+        limDeactivateAndChangeTimer(pMac, eLIM_AUTH_FAIL_TIMER);
 
     sirCopyMacAddr(currentBssId,sessionEntry->bssId);
 
