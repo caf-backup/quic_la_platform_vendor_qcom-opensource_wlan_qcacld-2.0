@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2016, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -139,7 +139,7 @@ enum {
     TRACE_CODE_SME_RX_HDD_STORE_JOIN_REQ,
     TRACE_CODE_SME_RX_HDD_CLEAR_JOIN_REQ,
     TRACE_CODE_SME_RX_HDD_ISSUE_JOIN_REQ,
-
+    TRACE_CODE_SME_RX_HDD_SEND_MGMT_TX,
 };
 
 void smeTraceInit(tpAniSirGlobal pMac);

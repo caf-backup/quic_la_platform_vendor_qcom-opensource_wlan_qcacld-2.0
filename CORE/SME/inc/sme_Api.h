@@ -4265,4 +4265,16 @@ VOS_STATUS sme_is_session_valid(tHalHandle hal_handle, uint8_t session_id);
  */
 uint32_t sme_unpack_rsn_ie(tHalHandle hal, uint8_t *buf,
                         uint8_t buf_len, tDot11fIERSN *rsn_ie);
+
+/*
+ * sme_send_mgmt_tx() - Sends mgmt frame from CSR to LIM
+ * @hal: The handle returned by mac_open
+ * @session_id: session id
+ * @buf: pointer to frame
+ * @len: frame length
+ *
+ * Return: eHalStatus
+ */
+eHalStatus sme_send_mgmt_tx(tHalHandle hal, uint8_t session_id,
+				const uint8_t *buf, uint32_t len);
 #endif //#if !defined( __SME_API_H )
