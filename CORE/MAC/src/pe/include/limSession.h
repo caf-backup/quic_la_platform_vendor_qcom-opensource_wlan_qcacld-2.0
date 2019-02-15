@@ -509,6 +509,7 @@ typedef struct sPESession           // Added to Support BT-AMP
     uint8_t *access_policy_vendor_ie;
     uint8_t access_policy;
     uint32_t sta_auth_retries_for_code17;
+    bool sae_pmk_cached;
 } tPESession, *tpPESession;
 
 /*-------------------------------------------------------------------------
