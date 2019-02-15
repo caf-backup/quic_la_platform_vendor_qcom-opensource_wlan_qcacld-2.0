@@ -495,6 +495,7 @@ typedef struct sPESession           // Added to Support BT-AMP
     tANI_U8 countryInfoPresent;
     bool is_ext_caps_present;
     uint32_t sta_auth_retries_for_code17;
+    bool sae_pmk_cached;
 } tPESession, *tpPESession;
 
 /*-------------------------------------------------------------------------
