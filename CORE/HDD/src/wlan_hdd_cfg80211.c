@@ -11978,7 +11978,8 @@ static void hdd_config_sched_scan_plans_to_wiphy(struct wiphy *wiphy,
 }
 #endif
 
-#if defined(WLAN_FEATURE_SAE)
+#if defined(WLAN_FEATURE_SAE) && \
+	defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
 /**
  * wlan_hdd_cfg80211_set_wiphy_sae_feature() - Indicates support of SAE feature
  * @wiphy: Pointer to wiphy
@@ -21788,6 +21789,71 @@ static int wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy,
 }
 #endif
 
+/**
+ * __wlan_hdd_cfg80211_external_auth() - Handle external auth
+ *
+ * @wiphy: Pointer to wireless phy
+ * @dev: net device
+ * @params: Pointer to external auth params
+ *
+ * Return: 0 on success, negative errno on failure
+ *
+ * Userspace sends status of the external authentication(e.g., SAE) with a peer.
+ * The message carries BSSID of the peer and auth status (WLAN_STATUS_SUCCESS/
+ * WLAN_STATUS_UNSPECIFIED_FAILURE) in params.
+ * Userspace may send PMKID in params, which can be used for
+ * further connections.
+ */
+static int
+__wlan_hdd_cfg80211_external_auth(struct wiphy *wiphy,
+				struct net_device *dev,
+				struct cfg80211_external_auth_params *params)
+{
+	hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
+	hdd_adapter_t *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	int ret;
+	tSirMacAddr peer_mac_addr;
+
+	if (hdd_get_conparam() == VOS_FTM_MODE) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+			FL("Command not allowed in FTM mode"));
+		return -EPERM;
+	}
+
+	ret = wlan_hdd_validate_context(hdd_ctx);
+	if (ret)
+		return ret;
+
+	hddLog(VOS_TRACE_LEVEL_DEBUG,
+	       FL("external_auth status: %d"), params->status);
+	sme_handle_sae_msg(hdd_ctx->hHal, adapter->sessionId, params->status);
+
+	return ret;
+}
+
+/**
+ * wlan_hdd_cfg80211_external_auth() - Handle external auth
+ * @wiphy: Pointer to wireless phy
+ * @dev: net device
+ * @params: Pointer to external auth params
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+static int
+wlan_hdd_cfg80211_external_auth(struct wiphy *wiphy,
+				struct net_device *dev,
+				struct cfg80211_external_auth_params *params)
+{
+	int ret;
+
+	vos_ssr_protect(__func__);
+	ret = __wlan_hdd_cfg80211_external_auth(wiphy, dev, params);
+	vos_ssr_unprotect(__func__);
+
+	return ret;
+}
+#endif
+
 #if defined(WLAN_FEATURE_VOWIFI_11R) && defined(KERNEL_SUPPORT_11R_CFG80211)
 static int
 __wlan_hdd_cfg80211_update_ft_ies(struct wiphy *wiphy,
@@ -26106,5 +26172,9 @@ static struct cfg80211_ops wlan_hdd_cfg80211_ops =
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,5,0)) || \
     defined(CFG80211_ABORT_SCAN)
      .abort_scan = wlan_hdd_cfg80211_abort_scan,
+#endif
+#if defined(WLAN_FEATURE_SAE) && \
+    defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
+    .external_auth = wlan_hdd_cfg80211_external_auth,
 #endif
 };
