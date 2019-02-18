@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -389,6 +389,7 @@
 #define SIR_MAC_ANI_WORKAROUND_EID_MIN     0
 #define SIR_MAC_ANI_WORKAROUND_EID_MAX     255
 
+#define SIR_MAC_MAX_ADD_IE_LENGTH       500
 /// Maximum length of each IE
 #define SIR_MAC_MAX_IE_LENGTH       255
 
@@ -410,6 +411,9 @@
 #endif
 
 #define SIR_MAC_OUI_VERSION_1         1
+
+/* OWE DH Parameter element https://tools.ietf.org/html/rfc8110 */
+#define SIR_DH_PARAMETER_ELEMENT_EXT_EID 32
 
 // OUI and type definition for WPA IE in network byte order
 #define SIR_MAC_WPA_OUI             0x01F25000
