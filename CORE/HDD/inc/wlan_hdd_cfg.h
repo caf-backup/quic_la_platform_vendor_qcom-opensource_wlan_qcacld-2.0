@@ -2756,11 +2756,34 @@ enum dot11p_mode {
 #define CFG_ENABLE_NON_DFS_CHAN_ON_RADAR_MAX       (1)
 #define CFG_ENABLE_NON_DFS_CHAN_ON_RADAR_DEFAULT   (0)
 
+/*
+ * <ini>
+ * sae_enabled - Enable/Disable SAE support in driver
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable/disable SAE support in driver
+ * Driver will update config to supplicant based on this config.
+ *
+ * Related: None
+ *
+ * Supported Feature: SAE
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_IS_SAE_ENABLED_NAME    "sae_enabled"
+#define CFG_IS_SAE_ENABLED_DEFAULT (0)
+#define CFG_IS_SAE_ENABLED_MIN     (0)
+#define CFG_IS_SAE_ENABLED_MAX     (1)
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
 
-typedef struct
+typedef struct hdd_config
 {
    //Bitmap to track what is explicitly configured
    DECLARE_BITMAP(bExplicitCfg, MAX_CFG_INI_ITEMS);
@@ -3350,6 +3373,9 @@ typedef struct
    bool                        sap_channel_avoidance;
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
    uint8_t                     prefer_non_dfs_on_radar;
+#ifdef WLAN_FEATURE_SAE
+   bool is_sae_enabled;
+#endif
 } hdd_config_t;
 
 #ifdef WLAN_FEATURE_MBSSID
