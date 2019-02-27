@@ -10376,6 +10376,9 @@ typedef struct {
  */
 #define WMI_PEER_RARAM_XMIT_OMI                         0x1c
 
+/* Per peer MISC stats enable or disable */
+#define  WMI_PEER_PARAM_MISC_STATS_ENABLE               0x22
+
 /** mimo ps values for the parameter WMI_PEER_MIMO_PS_STATE  */
 #define WMI_PEER_MIMO_PS_NONE                          0x0
 #define WMI_PEER_MIMO_PS_STATIC                        0x1
