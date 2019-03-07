@@ -35,6 +35,7 @@
 #include <net/iw_handler.h>
 #include <linux/timer.h>
 #include "vos_event.h"
+#include "csrApi.h"
 
 /*
  * order of parameters in addTs private ioctl
@@ -311,6 +312,10 @@ typedef struct ccp_freq_chan_map_s{
     v_U32_t chan;
 }hdd_freq_chan_map_t;
 
+struct class_a_stats_priv {
+	tCsrGlobalClassAStatsInfo class_a_stats;
+};
+
 #define wlan_hdd_get_wps_ie_ptr(ie, ie_len) \
     wlan_hdd_get_vendor_oui_ie_ptr(WPS_OUI_TYPE, WPS_OUI_TYPE_SIZE, ie, ie_len)
 
@@ -384,7 +389,7 @@ extern int iw_set_three_ints_getnone(struct net_device *dev, struct iw_request_i
                        union iwreq_data *wrqu, char *extra);
 
 void hdd_clearRoamProfileIe( hdd_adapter_t *pAdapter);
-void hdd_GetClassA_statisticsCB(void *pStats, void *pContext);
+void hdd_get_class_a_statistics_cb(void *stats, void *context);
 
 VOS_STATUS wlan_hdd_check_ula_done(hdd_adapter_t *pAdapter);
 
