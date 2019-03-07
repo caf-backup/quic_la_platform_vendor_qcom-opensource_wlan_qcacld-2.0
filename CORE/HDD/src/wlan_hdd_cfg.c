@@ -5372,6 +5372,13 @@ REG_TABLE_ENTRY g_registry_table[] =
 		CFG_SKIP_CRASH_INJECT_MIN,
 		CFG_SKIP_CRASH_INJECT_MAX),
 
+	REG_VARIABLE(CFG_SKIP_WOW_HOSTWAKEUP_NAME, WLAN_PARAM_Integer,
+		hdd_config_t, skip_wow_hostwakeup,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_SKIP_WOW_HOSTWAKEUP_DEFAULT,
+		CFG_SKIP_WOW_HOSTWAKEUP_MIN,
+		CFG_SKIP_WOW_HOSTWAKEUP_MAX),
+
 	REG_VARIABLE(CFG_ENABLE_MONITOR_ON_STA, WLAN_PARAM_Integer,
 		     hdd_config_t, mon_on_sta_enable,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -6081,6 +6088,10 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
           "Name = [gSkipCrashInject] Value = [%u] ",
                    pHddCtx->cfg_ini->skip_crash_inject);
+
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+          "Name = [gSkipWowHostWakeup] Value = [%u] ",
+                   pHddCtx->cfg_ini->skip_wow_hostwakeup);
 
 #ifdef DHCP_SERVER_OFFLOAD
   VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
@@ -8030,6 +8041,13 @@ v_BOOL_t hdd_update_config_dat( hdd_context_t *pHddCtx )
                     eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE) {
        fStatus = FALSE;
        hddLog(LOGE, "Could not pass on WNI_CFG_SKIP_CRASH_INJECT to CCM");
+   }
+
+   if (ccmCfgSetInt(pHddCtx->hHal, WNI_CFG_SKIP_WOW_HOSTWAKEUP,
+                    pConfig->skip_wow_hostwakeup, NULL,
+                    eANI_BOOLEAN_FALSE) == eHAL_STATUS_FAILURE) {
+       fStatus = FALSE;
+       hddLog(LOGE, "Could not pass on WNI_CFG_SKIP_WOW_HOSTWAKEUP to CCM");
    }
 
    return fStatus;

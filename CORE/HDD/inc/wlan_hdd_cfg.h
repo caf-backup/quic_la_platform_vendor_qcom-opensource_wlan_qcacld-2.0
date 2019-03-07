@@ -5340,6 +5340,28 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 
 /*
  * <ini>
+ * gSkipWowHostWakeup - skip wow hostwakeup
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to skip wow hostwakeup or not
+ *
+ * Related: None
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+
+#define CFG_SKIP_WOW_HOSTWAKEUP_NAME      "gSkipWowHostWakeup"
+#define CFG_SKIP_WOW_HOSTWAKEUP_MIN       (0)
+#define CFG_SKIP_WOW_HOSTWAKEUP_MAX       (1)
+#define CFG_SKIP_WOW_HOSTWAKEUP_DEFAULT   (0)
+
+
+/*
+ * <ini>
  * gEnableMonOnSta - extend the monitor capability for STA
  * @Min: 0
  * @Max: 1
@@ -6273,6 +6295,7 @@ struct hdd_config {
    uint32_t  cca_threshold_2g;
    uint32_t  cca_threshold_5g;
    uint8_t                     skip_crash_inject;
+   uint8_t                     skip_wow_hostwakeup;
    uint8_t                     mon_on_sta_enable;
 #ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
    uint32_t                    sap_ch_switch_with_csa;
