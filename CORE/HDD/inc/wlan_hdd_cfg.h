@@ -5409,6 +5409,29 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_ENABLE_BCAST_PROBE_RESP_MAX     (1)
 #define CFG_ENABLE_BCAST_PROBE_RESP_DEFAULT (0)
 
+/*
+ * <ini>
+ * per_chain_stats - Enable/Disable per antenna LL stats
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable/disable per antenna LL stats.
+ * When antenna diversity is enabled this should be set to 1.
+ *
+ * Related: None
+ *
+ * Supported Feature: antenna diversity
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_IS_PER_CHAIN_STATS_ENABLED_NAME    "per_chain_stats"
+#define CFG_IS_PER_CHAIN_STATS_ENABLED_DEFAULT (0)
+#define CFG_IS_PER_CHAIN_STATS_ENABLED_MIN     (0)
+#define CFG_IS_PER_CHAIN_STATS_ENABLED_MAX     (1)
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -6327,6 +6350,8 @@ struct hdd_config {
    uint32_t dpd_recalib_cooling_time;
    uint32_t dpd_recalib_duration_max;
    bool enable_bcast_probe_rsp;
+
+    bool per_chain_stats_enabled;
 };
 
 typedef struct hdd_config hdd_config_t;
