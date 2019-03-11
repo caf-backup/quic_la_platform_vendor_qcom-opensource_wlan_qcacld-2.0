@@ -921,6 +921,7 @@ typedef struct sSirSmeScanReq
     tSirBssType     bssType;
     tANI_U8         dot11mode;
     tSirScanType    scanType;
+    bool            usr_set_dwelltime;
     /**
      * minChannelTime. Not used if scanType is passive.
      * 0x0 - Dont Use min channel timer. Only max channel timeout will used.
@@ -4699,6 +4700,7 @@ typedef struct sSirScanOffloadReq {
     tSirBssType bssType;
     tANI_U8 dot11mode;
     tSirScanType scanType;
+    bool usr_set_dwelltime;
     tANI_U32 minChannelTime;
     tANI_U32 maxChannelTime;
     /*in units of milliseconds, ignored when not connected*/

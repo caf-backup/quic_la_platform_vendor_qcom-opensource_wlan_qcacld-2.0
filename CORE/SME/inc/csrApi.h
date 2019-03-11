@@ -305,6 +305,7 @@ typedef struct tagCsrScanRequest
     eCsrRoamBssType BSSType;
     tCsrSSIDs SSIDs;
     tCsrChannelInfo ChannelInfo;
+    bool     usr_set_dwelltime;
     tANI_U32 minChnTime;    //in units of milliseconds
     tANI_U32 maxChnTime;    //in units of milliseconds
     tANI_U32 minChnTimeBtc;    //in units of milliseconds
@@ -1248,6 +1249,7 @@ typedef struct tagCsrConfigParam
     tANI_U16 vccRssiThreshold;
     tANI_U32 vccUlMacLossThreshold;
 
+    uint32_t  set_scan_dwelltime_dyn;
     tANI_U32  nPassiveMinChnTime;    //in units of milliseconds
     tANI_U32  nPassiveMaxChnTime;    //in units of milliseconds
     tANI_U32  nActiveMinChnTime;     //in units of milliseconds

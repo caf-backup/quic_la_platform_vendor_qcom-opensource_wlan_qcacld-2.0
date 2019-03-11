@@ -11680,9 +11680,17 @@ VOS_STATUS wma_get_buf_start_scan_cmd(tp_wma_handle wma_handle,
 			 * Max duration of CTS2self is 32 ms, which limits
 			 * the dwell time.
 			 */
-		        cmd->dwell_time_active = MIN(scan_req->maxChannelTime,
-				(WMA_CTS_DURATION_MS_MAX - WMA_ROAM_SCAN_CHANNEL_SWITCH_TIME));
-			cmd->dwell_time_passive = cmd->dwell_time_active;
+			uint32_t recommended_sap_dwelltime =
+			    MIN(scan_req->maxChannelTime,
+				(WMA_CTS_DURATION_MS_MAX -
+				 WMA_ROAM_SCAN_CHANNEL_SWITCH_TIME));
+			if (scan_req->usr_set_dwelltime == false) {
+			    cmd->dwell_time_active = recommended_sap_dwelltime;
+			    cmd->dwell_time_passive = cmd->dwell_time_active;
+			} else
+			    WMA_LOGE("usr set dwell time %d instead of %d",
+				     cmd->dwell_time_active,
+				     recommended_sap_dwelltime);
 			cmd->burst_duration = 0;
 			break;
 		    }

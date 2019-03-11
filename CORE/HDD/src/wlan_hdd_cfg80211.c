@@ -16413,6 +16413,8 @@ int wlan_hdd_cfg80211_init(struct device *dev,
     wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_BEACON_RATE_LEGACY);
     wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_BEACON_RATE_HT);
     wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_BEACON_RATE_VHT);
+    if (pCfg->set_scan_dwelltime_dyn)
+        wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_SET_SCAN_DWELL);
 #endif
     wlan_hdd_cfg80211_set_wiphy_fils_feature(wiphy);
     hdd_config_sched_scan_plans_to_wiphy(wiphy, pCfg);
@@ -22701,6 +22703,22 @@ int __wlan_hdd_cfg80211_scan( struct wiphy *wiphy,
     } else {
         scanRequest.minChnTime = cfg_param->nActiveMinChnTime;
         scanRequest.maxChnTime = cfg_param->nActiveMaxChnTime;
+    }
+
+    if (pAdapter->device_mode == WLAN_HDD_SOFTAP &&
+        cfg_param->set_scan_dwelltime_dyn && request->duration != 0) {
+#define MAX_CHANNEL_DWELLTIME (10000)
+        if (request->duration > MAX_CHANNEL_DWELLTIME ||
+            request->duration < scanRequest.minChnTime) {
+            hddLog(VOS_TRACE_LEVEL_ERROR,
+                   "dwell time should between %d and %d",
+                   scanRequest.minChnTime, MAX_CHANNEL_DWELLTIME);
+            scanRequest.usr_set_dwelltime = false;
+            request->duration = 0;
+        } else {
+            scanRequest.usr_set_dwelltime = true;
+            scanRequest.maxChnTime = request->duration;
+        }
     }
 
 #ifdef CFG80211_SCAN_BSSID

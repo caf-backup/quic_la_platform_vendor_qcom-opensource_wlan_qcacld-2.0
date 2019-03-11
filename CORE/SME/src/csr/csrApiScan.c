@@ -564,16 +564,44 @@ eHalStatus csrScanRequest(tpAniSirGlobal pMac, tANI_U16 sessionId,
                         pScanRequest->restTime = pMac->roam.configParam.nRestTimeConc;
                         pScanRequest->min_rest_time = pMac->roam.configParam.min_rest_time_conc;
                         pScanRequest->idle_time = pMac->roam.configParam.idle_time_conc;
-                        if(pScanRequest->scanType == eSIR_ACTIVE_SCAN)
-                        {
-                            pScanRequest->maxChnTime = pMac->roam.configParam.nActiveMaxChnTimeConc;
-                            pScanRequest->minChnTime = pMac->roam.configParam.nActiveMinChnTimeConc;
-                        }
-                        else
-                        {
-                            pScanRequest->maxChnTime = pMac->roam.configParam.nPassiveMaxChnTimeConc;
-                            pScanRequest->minChnTime = pMac->roam.configParam.nPassiveMinChnTimeConc;
-                        }
+
+                        if (!pScanRequest->usr_set_dwelltime) {
+                            if(pScanRequest->scanType == eSIR_ACTIVE_SCAN) {
+                                pScanRequest->maxChnTime =
+                                    pMac->roam.configParam.nActiveMaxChnTimeConc;
+                                pScanRequest->minChnTime =
+                                    pMac->roam.configParam.nActiveMinChnTimeConc;
+                            } else {
+                                pScanRequest->maxChnTime =
+                                    pMac->roam.configParam.nPassiveMaxChnTimeConc;
+                                pScanRequest->minChnTime =
+                                    pMac->roam.configParam.nPassiveMinChnTimeConc;
+                            }
+                        } else {
+                            if(pScanRequest->scanType == eSIR_ACTIVE_SCAN) {
+                                pScanRequest->minChnTime =
+                                    pMac->roam.configParam.nActiveMinChnTimeConc;
+                                if (pScanRequest->maxChnTime < pScanRequest->minChnTime) {
+                                    smsLog(pMac, LOGE,
+                                           FL("usr set dwell time %d less than ActiveMinChnTimeConc %d"),
+                                           pScanRequest->maxChnTime,pScanRequest->minChnTime);
+                                    pScanRequest->maxChnTime =
+                                        pMac->roam.configParam.nActiveMaxChnTimeConc;
+                                    pScanRequest->usr_set_dwelltime = false;
+                                }
+                            } else {
+                                pScanRequest->minChnTime =
+                                    pMac->roam.configParam.nPassiveMinChnTimeConc;
+                                if (pScanRequest->maxChnTime < pScanRequest->minChnTime) {
+                                    smsLog(pMac, LOGE,
+                                           FL("usr set dwell time %d less than PassiveMinChnTimeConc %d"),
+                                           pScanRequest->maxChnTime,pScanRequest->minChnTime);
+                                    pScanRequest->maxChnTime =
+                                        pMac->roam.configParam.nPassiveMaxChnTimeConc;
+                                    pScanRequest->usr_set_dwelltime = false;
+                                }
+                            }
+                        }		
                     }
                 }
 #endif
@@ -5829,6 +5857,7 @@ eHalStatus csrSendMBScanReq( tpAniSirGlobal pMac, tANI_U16 sessionId,
                 }
             }
 
+            pMsg->usr_set_dwelltime = pScanReq->usr_set_dwelltime;
             pMsg->minChannelTime = pal_cpu_to_be32(minChnTime);
             pMsg->maxChannelTime = pal_cpu_to_be32(maxChnTime);
 

@@ -1315,6 +1315,7 @@ static eHalStatus limSendHalStartScanOffloadReq(tpAniSirGlobal pMac,
     pScanOffloadReq->bssType = pScanReq->bssType;
     pScanOffloadReq->dot11mode = pScanReq->dot11mode;
     pScanOffloadReq->scanType = pScanReq->scanType;
+    pScanOffloadReq->usr_set_dwelltime = pScanReq->usr_set_dwelltime;
     pScanOffloadReq->minChannelTime = pScanReq->minChannelTime;
     pScanOffloadReq->maxChannelTime = pScanReq->maxChannelTime;
     pScanOffloadReq->restTime= pScanReq->restTime;
