@@ -26772,6 +26772,17 @@ static VOS_STATUS wma_send_host_wakeup_ind_to_fw(tp_wma_handle wma)
 
 	vos_event_reset(&wma->wma_resume_event);
 
+#ifdef CONFIG_CNSS
+	nSirStatus = wlan_cfgGetInt(pMac, WNI_CFG_SKIP_WOW_HOSTWAKEUP, &cfg_val);
+	if (nSirStatus == eSIR_SUCCESS && cfg_val == 1) {
+		WMA_LOGE("%s: skip to send wow wakeup cmd to fw and do reset",
+			__func__);
+		wmi_tag_crash_inject(wma->wmi_handle, false);
+		vos_trigger_recovery(true);
+		return vos_status;
+	}
+#endif
+
 	ret = wmi_unified_cmd_send(wma->wmi_handle, buf, len,
 				   WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID);
 	if (ret) {
@@ -26783,6 +26794,7 @@ static VOS_STATUS wma_send_host_wakeup_ind_to_fw(tp_wma_handle wma)
 	WMA_LOGD("Host wakeup indication sent to fw");
 	vos_status = vos_wait_single_event(&(wma->wma_resume_event),
 			WMA_RESUME_TIMEOUT);
+
 	if (VOS_STATUS_SUCCESS != vos_status) {
 		WMA_LOGE("%s: Timeout waiting for resume event from FW",
 			__func__);
