@@ -29665,6 +29665,15 @@ void wlan_hdd_cfg80211_ready_to_suspend(void *callbackContext, boolean suspended
 int wlan_hdd_cfg80211_resume_wlan(struct wiphy *wiphy)
 {
     int ret;
+    hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
+
+    if (0 != hdd_ctx->cfg_ini->sleep_power_mode) {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                  "%s: wlan has already been reinited when it is not "
+                  "worked on default sleep power mode, so skip to do "
+                  "wlan cfg80211 resume in this case.", __func__);
+        return 0;
+    }
 
     vos_ssr_protect(__func__);
     ret = __wlan_hdd_cfg80211_resume_wlan(wiphy);
@@ -29885,6 +29894,16 @@ int wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
                                    struct cfg80211_wowlan *wow)
 {
     int ret;
+    hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
+
+    if (0 != hdd_ctx->cfg_ini->sleep_power_mode) {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                  "%s: wlan will do shutdown and reinit when suspend "
+                  "and resume if default sleep power mode changed, so "
+                  "skip to do wlan cfg80211 suspend in this case.",
+                  __func__);
+        return 0;
+    }
 
     vos_ssr_protect(__func__);
     ret = __wlan_hdd_cfg80211_suspend_wlan(wiphy, wow);

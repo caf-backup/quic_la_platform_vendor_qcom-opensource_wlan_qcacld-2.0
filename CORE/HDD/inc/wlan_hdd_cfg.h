@@ -4753,6 +4753,31 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_SKIP_MAC_CONFIG_MAX     (1)
 #define CFG_SKIP_MAC_CONFIG_DEFAULT (0)
 
+/*
+ * <ini>
+ * gChangeSleepPowerMode - Change suspend/resume mode.
+ * @Min: 0
+ * @Max: 2
+ * @Default: 0
+ *
+ * This ini is used to set WLAN chipset suspend/resume mode
+ * 0: do not change sleep power mode
+ * 1: wlan chip reset when do suspend/resume
+ * 2: wlan chip cut power when suspend
+ * others: invalid
+ *
+ * Related: None
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+
+#define CFG_SLEEP_POWER_MODE_NAME    "gChangeSleepPowerMode"
+#define CFG_SLEEP_POWER_MODE_MIN     (0)
+#define CFG_SLEEP_POWER_MODE_MAX     (2)
+#define CFG_SLEEP_POWER_MODE_DEFAULT (0)
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -5624,6 +5649,7 @@ struct hdd_config {
    bool                        sap_probe_resp_offload;
    uint32_t                    sta_auth_retries_for_code17;
    uint8_t                     skip_mac_config;
+   uint32_t                    sleep_power_mode;
 };
 
 typedef struct hdd_config hdd_config_t;
