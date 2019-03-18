@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015, 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1181,11 +1181,19 @@ adf_nbuf_t WLANTL_SendSTA_DataFrame(void *vos_ctx, u_int8_t sta_id,
 							   vos_ctx);
 	void *adf_ctx = vos_get_context(VOS_MODULE_ID_ADF, vos_ctx);
 	adf_nbuf_t ret;
+							vos_ctx);
+	struct ol_txrx_pdev_t *pdev = vos_get_context(VOS_MODULE_ID_TXRX,
+							vos_ctx);
+
 	struct ol_txrx_peer_t *peer;
 
 	if (!tl_shim) {
 		TLSHIM_LOGE("tl_shim is NULL");
 		return skb;
+	}
+	if (!pdev) {
+		TLSHIM_LOGE("pdev is NULL");
+		return NULL;
 	}
 
 	if (!adf_ctx) {
@@ -1210,9 +1218,8 @@ adf_nbuf_t WLANTL_SendSTA_DataFrame(void *vos_ctx, u_int8_t sta_id,
 		return skb;
 	}
 
-	peer = ol_txrx_peer_find_by_local_id(
-			((pVosContextType) vos_ctx)->pdev_txrx_ctx,
-			sta_id);
+
+	peer = ol_txrx_peer_find_by_local_id(pdev, sta_id);
 	if (!peer) {
 		TLSHIM_LOGW("Invalid peer");
 		return skb;
