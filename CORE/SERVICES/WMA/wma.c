@@ -26735,7 +26735,8 @@ send_ready_to_suspend:
  * Sends host wakeup indication to FW. On receiving this indication,
  * FW will come out of WOW.
  */
-static VOS_STATUS wma_send_host_wakeup_ind_to_fw(tp_wma_handle wma)
+static VOS_STATUS wma_send_host_wakeup_ind_to_fw(tp_wma_handle wma,
+					bool skip_wow_hostwakeup)
 {
 	wmi_wow_hostwakeup_from_sleep_cmd_fixed_param *cmd;
 	wmi_buf_t buf;
@@ -26773,13 +26774,21 @@ static VOS_STATUS wma_send_host_wakeup_ind_to_fw(tp_wma_handle wma)
 	vos_event_reset(&wma->wma_resume_event);
 
 #ifdef CONFIG_CNSS
-	nSirStatus = wlan_cfgGetInt(pMac, WNI_CFG_SKIP_WOW_HOSTWAKEUP, &cfg_val);
-	if (nSirStatus == eSIR_SUCCESS && cfg_val == 1) {
-		WMA_LOGE("%s: skip to send wow wakeup cmd to fw and do reset",
-			__func__);
-		wmi_tag_crash_inject(wma->wmi_handle, false);
-		vos_trigger_recovery(true);
-		return vos_status;
+	if (true == skip_wow_hostwakeup) {
+		if (wma_did_ssr_happen(wma)) {
+			WMA_LOGE("%s: SSR happened while waiting for response",
+				__func__);
+			return VOS_STATUS_E_ALREADY;
+		}
+		if (!vos_is_logp_in_progress(VOS_MODULE_ID_WDA, NULL)) {
+			WMA_LOGE("%s: skip to send wow wakeup cmd to fw and do reset",
+				__func__);
+			wmi_tag_crash_inject(wma->wmi_handle, false);
+			vos_trigger_recovery(true);
+			return vos_status;
+		} else {
+			WMA_LOGE("%s: SSR in progress, ignore!", __func__);
+		}
 	}
 #endif
 
@@ -26948,6 +26957,16 @@ int wma_disable_wow_in_fw(WMA_HANDLE handle, int runtime_pm)
 {
 	tp_wma_handle wma = handle;
 	VOS_STATUS ret;
+	bool skip_wow_hostwakeup = false;
+	tSirRetStatus nSirStatus;
+	uint32_t cfg_val = 0;
+	tpAniSirGlobal pMac = (tpAniSirGlobal)vos_get_context(VOS_MODULE_ID_PE,
+				wma->vos_context);
+
+	if (NULL == pMac) {
+		WMA_LOGE("%s: Unable to get PE context", __func__);
+		return VOS_STATUS_E_FAILURE;
+	}
 
 	if (!wma->wow.wow_enable_cmd_sent) {
 		return VOS_STATUS_SUCCESS;
@@ -26963,9 +26982,15 @@ int wma_disable_wow_in_fw(WMA_HANDLE handle, int runtime_pm)
 	}
 #endif
 
-	ret = wma_send_host_wakeup_ind_to_fw(wma);
+	nSirStatus = wlan_cfgGetInt(pMac, WNI_CFG_SKIP_WOW_HOSTWAKEUP, &cfg_val);
+	if (nSirStatus == eSIR_SUCCESS && cfg_val == 1) {
+		WMA_LOGE("%s: skip to send wow wakeup cmd to fw!",
+			__func__);
+		skip_wow_hostwakeup = true;
+	}
+	ret = wma_send_host_wakeup_ind_to_fw(wma, skip_wow_hostwakeup);
 
-	if (ret != VOS_STATUS_SUCCESS)
+	if (ret != VOS_STATUS_SUCCESS || true == skip_wow_hostwakeup)
 		return ret;
 
 	wma->wow.wow_enable_cmd_sent = FALSE;
