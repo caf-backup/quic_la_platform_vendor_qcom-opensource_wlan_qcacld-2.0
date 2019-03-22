@@ -175,6 +175,8 @@ void hif_reset_soc(void *ol_sc);
 void hif_deinit_adf_ctx(void *ol_sc);
 void hif_get_hw_info(void *ol_sc, u32 *version, u32 *revision);
 void hif_set_fw_info(void *ol_sc, u32 target_fw_version);
+bool hif_get_reinit_status(void);
+void hif_set_reinit_status(bool status);
 
 #ifdef IPA_UC_OFFLOAD
 /*

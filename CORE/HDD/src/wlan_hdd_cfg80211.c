@@ -113,6 +113,12 @@
 
 #include "wmi_unified_priv.h"
 
+#if defined(HIF_PCI)
+#include "if_pci.h"
+#elif defined(HIF_SDIO)
+#include "if_ath_sdio.h"
+#endif
+
 #define g_mode_rates_size (12)
 #define a_mode_rates_size (8)
 #define FREQ_BASE_80211G          (2407)
@@ -30894,11 +30900,13 @@ int wlan_hdd_cfg80211_resume_wlan(struct wiphy *wiphy)
     hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
     int ret;
 
-    if (0 != hdd_ctx->cfg_ini->skip_wow_hostwakeup) {
+    if (0 != hdd_ctx->cfg_ini->skip_wow_hostwakeup &&
+        hif_get_reinit_status()) {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                   "%s: wlan has already been reinited when skip the "
                   "wow hostwakeup when do hif resume, so skip to do "
                   "wlan cfg80211 resume in this case.", __func__);
+        hif_set_reinit_status(false);
         return 0;
     }
 

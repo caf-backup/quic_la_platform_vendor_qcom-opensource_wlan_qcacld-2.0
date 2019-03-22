@@ -26785,6 +26785,7 @@ static VOS_STATUS wma_send_host_wakeup_ind_to_fw(tp_wma_handle wma,
 				__func__);
 			wmi_tag_crash_inject(wma->wmi_handle, false);
 			vos_trigger_recovery(true);
+			vos_set_reinit_status(true);
 			return vos_status;
 		} else {
 			WMA_LOGE("%s: SSR in progress, ignore!", __func__);

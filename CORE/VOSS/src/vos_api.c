@@ -2592,6 +2592,11 @@ out:
 	vos_runtime_pm_prevent_suspend_deinit(runtime_context);
 }
 
+void vos_set_reinit_status(bool status)
+{
+	hif_set_reinit_status(status);
+}
+
 /**
  * @brief vos_get_monotonic_boottime()
  * Get kernel boot time.

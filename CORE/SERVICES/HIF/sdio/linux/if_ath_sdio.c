@@ -504,6 +504,16 @@ void hif_set_fw_info(void *ol_sc, u32 target_fw_version)
     ((struct ol_softc *)ol_sc)->target_fw_version = target_fw_version;
 }
 
+bool hif_get_reinit_status(void)
+{
+	return false;
+}
+
+void hif_set_reinit_status(bool status)
+{
+	ENTER("- dummy function!");
+}
+
 /**
  * hif_sdio_check_fw_reg() - Check wether a self recovery is needed
  * @ol_sc: os layser software context

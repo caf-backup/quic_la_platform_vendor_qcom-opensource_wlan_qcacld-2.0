@@ -81,6 +81,8 @@
 #define RAMDUMP_EVENT_TIMEOUT 2500
 #define MAX_REG_READ_RETRIES 10
 
+static bool hif_reinit_flag = false;
+
 unsigned int msienable = 0;
 module_param(msienable, int, S_IRUSR | S_IRGRP | S_IROTH);
 
@@ -1588,6 +1590,16 @@ static inline void hif_pci_release_ramdump_mem(unsigned long *address)
 		kfree(address);
 }
 #endif
+
+bool hif_get_reinit_status(void)
+{
+	return hif_reinit_flag;
+}
+
+void hif_set_reinit_status(bool status)
+{
+	hif_reinit_flag = status;
+}
 
 int
 hif_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)

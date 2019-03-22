@@ -383,6 +383,7 @@ v_U64_t vos_get_monotonic_boottime_ns(void);
 v_U64_t vos_get_bootbased_boottime_ns(void);
 
 void vos_trigger_recovery(bool);
+void vos_set_reinit_status(bool);
 
 #ifdef FEATURE_WLAN_D0WOW
 v_VOID_t vos_pm_control(v_BOOL_t vote);
