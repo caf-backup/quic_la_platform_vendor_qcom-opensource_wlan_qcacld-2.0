@@ -15,6 +15,8 @@ ifndef CONFIG_ROME_IF
 	CONFIG_ROME_IF = pci
 endif
 
+CONFIG_SMART_ANTENNA := y
+
 ifeq ($(KERNEL_BUILD),1)
 	# These are provided in external module based builds
 	# Need to explicitly define for Kernel-based builds
@@ -838,6 +840,13 @@ PKTLOG_OBJS :=	$(PKTLOG_DIR)/pktlog_ac.o \
 		$(PKTLOG_DIR)/pktlog_internal.o \
 		$(PKTLOG_DIR)/linux_ac.o
 
+############ Smart Antenna ############
+SA_DIR := CORE/SERVICES/SA
+SA_INC := -I$(WLAN_ROOT)/$(SA_DIR)
+
+SA_OBJS := $(SA_DIR)/smart_antenna_api.o \
+			$(SA_DIR)/smart_antenna.o
+
 ############ HTT ############
 HTT_DIR :=      CORE/CLD_TXRX/HTT
 HTT_INC :=      -I$(WLAN_ROOT)/$(HTT_DIR)
@@ -969,7 +978,8 @@ INCS +=		$(WMA_INC) \
 		$(PKTLOG_INC) \
 		$(HTT_INC) \
 		$(HTC_INC) \
-		$(DFS_INC)
+		$(DFS_INC) \
+    $(SA_INC)
 
 INCS +=		$(HIF_INC) \
 		$(BMI_INC)
@@ -1001,6 +1011,10 @@ OBJS +=		$(WMA_OBJS) \
 OBJS +=		$(HIF_OBJS) \
 		$(BMI_OBJS) \
 		$(HTT_OBJS)
+
+ifeq ($(CONFIG_SMART_ANTENNA), y)
+OBJS +=  $(SA_OBJS)
+endif
 
 ifeq ($(CONFIG_REMOVE_PKT_LOG), 0)
 OBJS +=		$(PKTLOG_OBJS)
@@ -1755,6 +1769,10 @@ endif
 
 ifeq ($(FAKE_MULTI_IF_NAME), y)
 CDEFINES += -DFAKE_MULTI_IF
+endif
+
+ifeq ($(CONFIG_SMART_ANTENNA), y)
+CDEFINES += -DWLAN_SMART_ANTENNA_FEATURE
 endif
 
 # Module information used by KBuild framework

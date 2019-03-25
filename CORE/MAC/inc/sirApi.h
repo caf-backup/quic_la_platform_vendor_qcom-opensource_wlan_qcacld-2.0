@@ -6754,6 +6754,9 @@ struct sir_wifi_ll_ext_period {
  * @rx_mcs_array_len: length of RX mcs stats buffer
  * @peer_stats: peer stats
  * @cca: physical channel CCA stats
+ * @maxtrix: bitmask for antenna used while receiving this stats
+ * @phyerr_count: phy error times
+ * @timestamp: timestamp on target side for this event
  * @stats: pointer to stats data buffer.
  *
  * Structure of the whole statictics is like this:
@@ -6836,6 +6839,9 @@ struct sir_wifi_ll_ext_stats {
 	uint32_t rx_mcs_array_len;
 	struct sir_wifi_ll_ext_peer_stats *peer_stats;
 	struct sir_wifi_chan_cca_stats *cca;
+	uint32_t maxtrix;
+	uint32_t phyerr_count;
+	uint32_t timestamp;
 	uint8_t stats[];
 };
 

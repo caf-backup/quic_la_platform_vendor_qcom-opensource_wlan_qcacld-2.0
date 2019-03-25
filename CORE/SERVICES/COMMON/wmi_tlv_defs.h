@@ -927,6 +927,45 @@ typedef enum {
     WMITLV_TAG_STRUC_wmi_pdev_he_tb_action_frm_cmd_fixed_param,
     WMITLV_TAG_STRUC_wmi_peer_extd2_stats,
     WMITLV_TAG_STRUC_wmi_hpcs_pulse_start_cmd_fixed_param,
+    _place_holder_tlv_tag_3,
+    _place_holder_tlv_tag_4,
+    _place_holder_tlv_tag_5,
+    _place_holder_tlv_tag_6,
+    _place_holder_tlv_tag_7,
+    _place_holder_tlv_tag_8,
+    _place_holder_tlv_tag_9,
+    _place_holder_tlv_tag_10,
+    _place_holder_tlv_tag_11,
+    _place_holder_tlv_tag_12,
+    _place_holder_tlv_tag_13,
+    _place_holder_tlv_tag_14,
+    _place_holder_tlv_tag_15,
+    _place_holder_tlv_tag_16,
+    _place_holder_tlv_tag_17,
+    _place_holder_tlv_tag_18,
+    _place_holder_tlv_tag_19,
+    _place_holder_tlv_tag_20,
+    _place_holder_tlv_tag_21,
+    _place_holder_tlv_tag_22,
+    _place_holder_tlv_tag_23,
+    _place_holder_tlv_tag_24,
+    _place_holder_tlv_tag_25,
+    _place_holder_tlv_tag_26,
+    _place_holder_tlv_tag_27,
+    _place_holder_tlv_tag_28,
+    _place_holder_tlv_tag_29,
+    _place_holder_tlv_tag_30,
+    _place_holder_tlv_tag_31,
+    _place_holder_tlv_tag_32,
+    _place_holder_tlv_tag_33,
+    _place_holder_tlv_tag_34,
+    _place_holder_tlv_tag_35,
+    _place_holder_tlv_tag_36,
+    _place_holder_tlv_tag_37,
+    _place_holder_tlv_tag_38,
+    _place_holder_tlv_tag_39,
+    _place_holder_tlv_tag_40,
+    WMITLV_TAG_STRUC_wmi_stats_interference,
 } WMITLV_TAG_ID;
 
 /*
@@ -4840,6 +4879,7 @@ WMITLV_CREATE_PARAM_STRUC(WMI_RADIO_TX_POWER_LEVEL_STATS_EVENTID);
  *                                                       array index is (peer_index * WLAN_MAX_AC + ac_index) * rx_mcs_array_len + MCS index
  *                                                       Contains a count of rx PPDUs for each MCS of each AC of each peer.
  *    wmi_stats_period         stats_period[];           Array length is specified by stats_period_array_len
+ *    wmi_stats_interference   stats_interference[];     Array length is determied by dividing array level TLV header's length value by array-element TLV header's length value.
  *
  * For example, if there were 2 peers (X and Y) whose stats were being reported,
  * the message and its TLV arrays would look like this:
@@ -4930,7 +4970,8 @@ WMITLV_CREATE_PARAM_STRUC(WMI_RADIO_TX_POWER_LEVEL_STATS_EVENTID);
     WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_STRUC, wmi_rx_stats, rx_stats, WMITLV_SIZE_VAR) \
     WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_UINT32, A_UINT32, rx_mpdu_aggr, WMITLV_SIZE_VAR) \
     WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_UINT32, A_UINT32, rx_mcs, WMITLV_SIZE_VAR) \
-    WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_STRUC, wmi_stats_period, stats_period, WMITLV_SIZE_VAR)
+    WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_STRUC, wmi_stats_period, stats_period, WMITLV_SIZE_VAR) \
+    WMITLV_ELEM(id,op,buf,len, WMITLV_TAG_ARRAY_STRUC, wmi_stats_interference, stats_interference, WMITLV_SIZE_VAR)
 WMITLV_CREATE_PARAM_STRUC(WMI_REPORT_STATS_EVENTID);
 
 #define WMITLV_TABLE_WMI_VDEV_ENCRYPT_DECRYPT_DATA_RESP_EVENTID(id, op, buf, len) \
