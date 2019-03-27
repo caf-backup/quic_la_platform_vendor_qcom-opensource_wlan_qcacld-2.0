@@ -248,6 +248,7 @@ struct ol_softc {
     bool                    enablefwlog;        /* enable fwlog */
     /* enable FW self-recovery for Rome USB */
     bool                    enableFwSelfRecovery;
+    bool                    shut_up_hi_system_sleep;
 #ifdef HIF_USB
     /* structure to save FW RAM dump (Rome USB) */
     struct fw_ramdump       *ramdump[FW_RAM_SEG_CNT];

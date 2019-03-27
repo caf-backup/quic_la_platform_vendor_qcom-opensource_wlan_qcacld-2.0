@@ -2851,6 +2851,7 @@ ol_sdio_extra_initialization(struct ol_softc *scn)
 
 	A_STATUS status;
 	u_int32_t param;
+	u_int32_t hi_system_param;
 #ifdef CONFIG_DISABLE_SLEEP_BMI_OPTION
 	uint32 value;
 #endif
@@ -2942,6 +2943,26 @@ ol_sdio_extra_initialization(struct ol_softc *scn)
 					hi_acs_flags)),
 				(u_int8_t *)&param, 4, scn);
 
+		if (scn->shut_up_hi_system_sleep) {
+			BMIReadMemory(scn->hif_hdl,
+				      host_interest_item_address(scn->target_type,
+					offsetof(struct host_interest_s,
+						 hi_system_sleep_setting)),
+				      (u_int8_t *)&hi_system_param, 4, scn);
+			pr_err("read hi_system_sleep_setting: 0x%x\n",
+			       hi_system_param);
+
+			hi_system_param |= 0x1;
+
+			BMIWriteMemory(scn->hif_hdl,
+				       host_interest_item_address(scn->target_type,
+					offsetof(struct host_interest_s,
+						 hi_system_sleep_setting)),
+				       (u_int8_t *)&hi_system_param, 4, scn);
+
+			pr_err("write hi_system_sleep_setting 0x%x finished\n",
+			       hi_system_param);
+		}
 	}while(FALSE);
 
 	return status;

@@ -2993,6 +2993,11 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_ENABLE_FW_SELF_RECOVERY_ENABLE       ( 1 )
 #define CFG_ENABLE_FW_SELF_RECOVERY_DEFAULT      ( CFG_ENABLE_FW_SELF_RECOVERY_DISABLE )
 
+#define CFG_SHUTUP_HI_SYSTEM_SLEEP_NAME         "gShutupHiSystemSleep"
+#define CFG_SHUTUP_HI_SYSTEM_SLEEP_DISABLE      ( 0 )
+#define CFG_SHUTUP_HI_SYSTEM_SLEEP_ENABLE       ( 1 )
+#define CFG_SHUTUP_HI_SYSTEM_SLEEP_DEFAULT      ( 1 )
+
 #ifdef WLAN_FEATURE_11AC
 //Macro to handle maximum receive AMPDU size configuration
 #define CFG_VHT_AMPDU_LEN_EXPONENT_NAME                "gVhtAmpduLenExponent"
@@ -5889,6 +5894,7 @@ struct hdd_config {
    v_BOOL_t                    enablefwprint;
    v_BOOL_t                    enablefwlog;
    v_BOOL_t                    enableFwSelfRecovery;
+   bool                        shut_up_hi_system_sleep;
    v_BOOL_t                    fP2pListenOffload;
 #ifdef WLAN_FEATURE_11AC
    v_U8_t                      fVhtAmpduLenExponent;
