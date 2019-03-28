@@ -4831,7 +4831,7 @@ eHalStatus sme_clear_random_mac(tHalHandle hal, uint32_t session_id,
 eHalStatus sme_set_chip_pwr_save_fail_cb(tHalHandle hal, void (*cb)( void *,
 				struct chip_pwr_save_fail_detected_params *));
 
-eHalStatus sme_set_ac_txq_optimize(tHalHandle hal_handle, uint8_t *value);
+eHalStatus sme_set_ac_txq_optimize(tHalHandle hal_handle, uint8_t value);
 
 /**
  * sme_unpack_rsn_ie: wrapper to unpack RSN IE and update def RSN params
