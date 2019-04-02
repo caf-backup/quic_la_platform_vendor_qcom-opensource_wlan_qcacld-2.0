@@ -1987,7 +1987,8 @@ again:
     if (device_id != id->device)  {
         printk(KERN_ERR "%s: PCI link is down!\n", __func__);
         /* PCI link is down, so return with error code. */
-        return -EIO;
+        ret = -EIO;
+        goto err_detect;
     }
 
     /* FIXME: Commenting out assign_resource
@@ -1996,13 +1997,15 @@ again:
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0) && !defined(__LINUX_ARM_ARCH__)
     if (pci_assign_resource(pdev, BAR_NUM)) {
         printk(KERN_ERR "%s: Cannot assign PCI space!\n", __func__);
-        return -EIO;
+        ret = -EIO;
+        goto err_detect;
     }
 #endif
 
     if (pci_enable_device(pdev)) {
         printk(KERN_ERR "%s: Cannot enable PCI device!\n", __func__);
-        return -EIO;
+        ret = -EIO;
+        goto err_detect;
     }
 
     /* Request MMIO resources */
@@ -2293,6 +2296,9 @@ err_region:
         A_MDELAY(delay_time);
         goto again;
     }
+
+err_detect:
+    hdd_wlan_ssr_timer_cleanup();
 
     return ret;
 }

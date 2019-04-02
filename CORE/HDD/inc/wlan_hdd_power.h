@@ -142,5 +142,6 @@ void hdd_wlan_suspend_resume_event(uint8_t state)
 }
 #endif /* FEATURE_WLAN_DIAG_SUPPORT */
 
+void hdd_wlan_ssr_timer_cleanup(void);
 
 #endif // if !defined __WLAN_QCT_DRIVER_H

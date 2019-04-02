@@ -2579,3 +2579,9 @@ success:
    hdd_ssr_timer_del();
    return VOS_STATUS_SUCCESS;
 }
+
+void hdd_wlan_ssr_timer_cleanup(void)
+{
+   pr_err("SSR fails during reinit hence doing ssr timer cleanup");
+   hdd_ssr_timer_del();
+}
