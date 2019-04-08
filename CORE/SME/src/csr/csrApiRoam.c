@@ -3473,6 +3473,7 @@ eHalStatus csrRoamPrepareBssConfig(tpAniSirGlobal pMac, tCsrRoamProfile *pProfil
                      sizeof(tSirMacCapabilityInfo));
         //get qos
         pBssConfig->qosType = csrGetQoSFromBssDesc(pMac, pBssDesc, pIes);
+        smsLog(pMac, LOG1, "QOS TYPE %d", pBssConfig->qosType );
         //get SSID
         if(pIes->SSID.present)
         {
@@ -3527,17 +3528,6 @@ eHalStatus csrRoamPrepareBssConfig(tpAniSirGlobal pMac, tCsrRoamProfile *pProfil
             //Joining BSS is not 11n capable and WMM is disabled on client.
             //Disable QoS and WMM
             pBssConfig->qosType = eCSR_MEDIUM_ACCESS_DCF;
-        }
-
-        if (((pBssConfig->uCfgDot11Mode == eCSR_CFG_DOT11_MODE_11N)  ||
-                         (pBssConfig->uCfgDot11Mode == eCSR_CFG_DOT11_MODE_11AC)) &&
-                         ((pBssConfig->qosType != eCSR_MEDIUM_ACCESS_WMM_eDCF_DSCP) ||
-                          (pBssConfig->qosType != eCSR_MEDIUM_ACCESS_11e_HCF) ||
-                          (pBssConfig->qosType != eCSR_MEDIUM_ACCESS_11e_eDCF) ))
-        {
-            //Joining BSS is 11n capable and WMM is disabled on AP.
-            //Assume all HT AP's are QOS AP's and enable WMM
-            pBssConfig->qosType = eCSR_MEDIUM_ACCESS_WMM_eDCF_DSCP;
         }
 
         //auth type
@@ -15022,6 +15012,10 @@ eHalStatus csrSendJoinReqMsg( tpAniSirGlobal pMac, tANI_U32 sessionId, tSirBssDe
 
         *pBuf = (tANI_U8)pMac->roam.configParam.max_amsdu_num;
         pBuf++;
+
+        smsLog(pMac, LOG1, FL("WMM %d QOC %d"),
+		pMac->roam.roamSession[sessionId].fWMMConnection,
+		pMac->roam.roamSession[sessionId].fQOSConnection);
 
         // WME
         if(pMac->roam.roamSession[sessionId].fWMMConnection)

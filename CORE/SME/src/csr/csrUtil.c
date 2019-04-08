@@ -1640,6 +1640,11 @@ tANI_BOOLEAN csrIsBssDescriptionWme( tHalHandle hHal, tSirBssDescription *pSirBs
             fWme = FALSE;
         }
     }
+    smsLog(pMac, LOG1, FL("beacom parse wmm %d WMMInfoAp %d WMMSupportMode %d HTCAP %d"),
+	pIesTemp->WMMParams.present ,
+	pIesTemp->WMMInfoAp.present,
+	pMac->roam.configParam.WMMSupportMode,
+	pIesTemp->HTCaps.present);
     if( ( pIes == NULL ) && ( NULL != pIesTemp ) )
     {
         //we allocate memory here so free it before returning
