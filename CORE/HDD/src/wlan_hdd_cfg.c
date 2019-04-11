@@ -852,6 +852,13 @@ REG_TABLE_ENTRY g_registry_table[] =
                  CFG_VCC_UL_MAC_LOSS_THRESH_MIN,
                  CFG_VCC_UL_MAC_LOSS_THRESH_MAX ),
 
+   REG_VARIABLE(CFG_SET_SCAN_DWELLTIME_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, set_scan_dwelltime_dyn,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_SET_SCAN_DWELLTIME_DEFAULT,
+                CFG_SET_SCAN_DWELLTIME_DISABLE,
+                CFG_SET_SCAN_DWELLTIME_ENABLE),
+
    REG_VARIABLE( CFG_PASSIVE_MAX_CHANNEL_TIME_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, nPassiveMaxChnTime,
                  VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -8146,6 +8153,8 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    smeConfig->csrConfig.nInitialDwellTime        = pConfig->nInitialDwellTime;
    smeConfig->csrConfig.initial_scan_no_dfs_chnl =
                                             pConfig->initial_scan_no_dfs_chnl;
+   smeConfig->csrConfig.set_scan_dwelltime_dyn   =
+                                            pConfig->set_scan_dwelltime_dyn;
    smeConfig->csrConfig.nActiveMaxChnTime        = pConfig->nActiveMaxChnTime;
    smeConfig->csrConfig.nActiveMinChnTime        = pConfig->nActiveMinChnTime;
    smeConfig->csrConfig.nPassiveMaxChnTime       = pConfig->nPassiveMaxChnTime;

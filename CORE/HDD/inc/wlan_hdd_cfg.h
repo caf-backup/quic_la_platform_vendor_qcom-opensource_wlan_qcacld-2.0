@@ -553,6 +553,24 @@ enum
 #define CFG_VCC_UL_MAC_LOSS_THRESH_MAX        ( 9 )
 #define CFG_VCC_UL_MAC_LOSS_THRESH_DEFAULT    ( 9 )
 
+/*
+ * <ini>
+ * g_set_scan_dwelltime_dyn - support set scan dwell time
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to for enable set scan dwell time dynamically
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SET_SCAN_DWELLTIME_NAME      "g_set_scan_dwelltime_dyn"
+#define CFG_SET_SCAN_DWELLTIME_DISABLE   ( 0 )
+#define CFG_SET_SCAN_DWELLTIME_ENABLE    ( 1 )
+#define CFG_SET_SCAN_DWELLTIME_DEFAULT   ( 0 )
+
 #define CFG_PASSIVE_MAX_CHANNEL_TIME_NAME      "gPassiveMaxChannelTime"
 #define CFG_PASSIVE_MAX_CHANNEL_TIME_MIN       ( 0 )
 #define CFG_PASSIVE_MAX_CHANNEL_TIME_MAX       ( 10000 )
@@ -5556,6 +5574,7 @@ struct hdd_config {
    v_U16_t        nVccRssiTrigger;
    v_U32_t        nVccUlMacLossThreshold;
 
+   uint32_t       set_scan_dwelltime_dyn;
    v_U32_t        nPassiveMinChnTime;    //in units of milliseconds
    v_U32_t        nPassiveMaxChnTime;    //in units of milliseconds
    v_U32_t        nActiveMinChnTime;     //in units of milliseconds
