@@ -30550,6 +30550,7 @@ static void wlan_hdd_chan_info_cb(struct scan_chan_info *info)
 				chan[idx].noise_floor = info->noise_floor;
 				chan[idx].cycle_count = info->cycle_count;
 				chan[idx].rx_clear_count = info->rx_clear_count;
+				chan[idx].rx_frame_count = info->rx_frame_count;
 				chan[idx].tx_frame_count = info->tx_frame_count;
 				chan[idx].clock_freq = info->clock_freq;
 				break;
@@ -30561,6 +30562,10 @@ static void wlan_hdd_chan_info_cb(struct scan_chan_info *info)
 				chan[idx].delta_rx_clear_count =
 						info->rx_clear_count -
 						chan[idx].rx_clear_count;
+
+				chan[idx].delta_rx_frame_count =
+						info->rx_frame_count -
+						chan[idx].rx_frame_count;
 
 				chan[idx].delta_tx_frame_count =
 						info->tx_frame_count -
@@ -30620,8 +30625,7 @@ void wlan_hdd_init_chan_info(hdd_context_t *hdd_ctx)
 		}
 		sme_set_chan_info_callback(
 			hdd_ctx->hHal,
-			&wlan_hdd_chan_info_cb
-			);
+			wlan_hdd_chan_info_cb);
 	}
 }
 
@@ -30663,8 +30667,8 @@ static int __wlan_hdd_cfg80211_dump_survey(struct wiphy *wiphy,
     if (0 != status)
         return status;
 
-    if ((NULL == pHddCtx->chan_info) &&
-        (pHddCtx->cfg_ini->fEnableSNRMonitoring)) {
+    if ((NULL == pHddCtx->chan_info) ||
+        (0 == pHddCtx->cfg_ini->fEnableSNRMonitoring)) {
         hddLog(LOGE, FL("chan_info is NULL"));
         return -EINVAL;
     }
@@ -30674,19 +30678,18 @@ static int __wlan_hdd_cfg80211_dump_survey(struct wiphy *wiphy,
         return -EINVAL;
     }
 
-    pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
+    if (WLAN_HDD_INFRA_STATION == pAdapter->device_mode) {
+        pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
 
-    if (0 == pHddCtx->cfg_ini->fEnableSNRMonitoring ||
-        eConnectionState_Associated != pHddStaCtx->conn_info.connState)
-    {
-        return -ENONET;
-    }
+        if (eConnectionState_Associated != pHddStaCtx->conn_info.connState)
+            return -ENONET;
 
-    if (VOS_TRUE == pHddStaCtx->hdd_ReassocScenario)
-    {
-        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                 "%s: Roaming in progress, hence return ", __func__);
-        return -ENONET;
+        if (VOS_TRUE == pHddStaCtx->hdd_ReassocScenario)
+        {
+            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                     "%s: Roaming in progress, hence return ", __func__);
+            return -ENONET;
+        }
     }
 
     halHandle = WLAN_HDD_GET_HAL_CTX(pAdapter);
@@ -30729,13 +30732,17 @@ static int __wlan_hdd_cfg80211_dump_survey(struct wiphy *wiphy,
                     survey->time_busy =
                               pHddCtx->chan_info[idx].delta_rx_clear_count /
                                   (pHddCtx->chan_info[idx].clock_freq * 1000);
+                    survey->time_rx =
+                              pHddCtx->chan_info[idx].delta_rx_frame_count /
+                                  (pHddCtx->chan_info[idx].clock_freq * 1000);
                     survey->time_tx =
                               pHddCtx->chan_info[idx].delta_tx_frame_count /
                                   (pHddCtx->chan_info[idx].clock_freq * 1000);
 
                     survey->filled |= SURVEY_INFO_TIME |
                                       SURVEY_INFO_TIME_BUSY |
-                                      SURVEY_INFO_TIME_TX;
+                                      SURVEY_INFO_TIME_TX |
+                                      SURVEY_INFO_TIME_RX;
 #else
                     survey->channel_time =
                               pHddCtx->chan_info[idx].delta_cycle_count /
