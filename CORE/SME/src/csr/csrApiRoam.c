@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -96,6 +96,8 @@
 #define CSR_DONT_SEND_DISASSOC_OVER_THE_AIR 1
 #define RSSI_HACK_BMPS (-40)
 #define MAX_CB_VALUE_IN_INI (2)
+
+#define HOST_LOG_MAX_SSID_SIZE 32
 
 #ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
 static tANI_BOOLEAN bRoamScanOffloadStarted = VOS_FALSE;
@@ -9952,11 +9954,10 @@ void csrRoamCheckForLinkStatusChange( tpAniSirGlobal pMac, tSirSmeRsp *pSirMsg )
                                 if(pNewBss)
                                 {
                                     vos_mem_copy(pIbssLog->bssid, pNewBss->bssId, 6);
-                                    if(pNewBss->ssId.length)
-                                    {
-                                        vos_mem_copy(pIbssLog->ssid, pNewBss->ssId.ssId,
-                                                     pNewBss->ssId.length);
-                                    }
+                                    if (pNewBss->ssId.length > HOST_LOG_MAX_SSID_SIZE)
+                                        pNewBss->ssId.length = HOST_LOG_MAX_SSID_SIZE;
+                                    vos_mem_copy(pIbssLog->ssid, pNewBss->ssId.ssId,
+                                                 pNewBss->ssId.length);
                                     pIbssLog->operatingChannel = pNewBss->channelNumber;
                                 }
                                 if(HAL_STATUS_SUCCESS(ccmCfgGetInt(pMac, WNI_CFG_BEACON_INTERVAL, &bi)))
