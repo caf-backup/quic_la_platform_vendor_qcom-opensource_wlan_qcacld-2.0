@@ -1175,6 +1175,10 @@ typedef struct sSirSmeJoinReq
     tSirMacPowerCapInfo powerCap;
     tSirSupChnl         supportedChannels;
     bool sae_pmk_cached;
+
+#ifdef WLAN_FEATURE_FILS_SK
+    struct cds_fils_connection_info fils_con_info;
+#endif
     tSirBssDescription  bssDescription;
 
 } tSirSmeJoinReq, *tpSirSmeJoinReq;
