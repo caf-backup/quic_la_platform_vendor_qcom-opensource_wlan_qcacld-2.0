@@ -1135,6 +1135,7 @@ typedef struct sSirSmeJoinReq
     tANI_U8             cc_switch_mode;
 #endif
     tVOS_CON_MODE       staPersona;             //Persona
+    bool sae_pmk_cached;
     bool                osen_association;
     bool                wps_registration;
     ePhyChanBondState   cbMode;                 // Pass CB mode value in Join.
@@ -1212,7 +1213,6 @@ typedef struct sSirSmeJoinReq
 #ifdef WLAN_FEATURE_FILS_SK
     struct cds_fils_connection_info fils_con_info;
 #endif
-    bool sae_pmk_cached;
     tSirBssDescription  bssDescription;
 } tSirSmeJoinReq, *tpSirSmeJoinReq;
 
