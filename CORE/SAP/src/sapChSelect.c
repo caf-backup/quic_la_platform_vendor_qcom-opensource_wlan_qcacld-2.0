@@ -1660,7 +1660,9 @@ void sapComputeSpectWeight( tSapChSelSpectInfo* pSpectInfoParams,
     v_U32_t ieLen = 0;
     tSirProbeRespBeacon *pBeaconStruct;
     tpAniSirGlobal  pMac = (tpAniSirGlobal) halHandle;
-
+    tSapSpectChInfo *pSpectChStartAddr = pSpectInfoParams->pSpectCh;
+    tSapSpectChInfo *pSpectChEndAddr = pSpectInfoParams->pSpectCh +
+                                      pSpectInfoParams->numSpectChans;
     pBeaconStruct = vos_mem_malloc(sizeof(tSirProbeRespBeacon));
     if ( NULL == pBeaconStruct )
     {
