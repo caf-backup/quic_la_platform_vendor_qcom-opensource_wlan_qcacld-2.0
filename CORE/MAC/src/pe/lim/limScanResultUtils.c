@@ -347,7 +347,7 @@ limCollectBssDescription(tpAniSirGlobal pMac,
     pBssDescr->nReceivedTime = vos_timer_get_system_time();
     pBssDescr->tsf_delta = WDA_GET_RX_TSF_DELTA(pRxPacketInfo);
 
-    limLog(pMac, LOG1,
+    limLog(pMac, LOG4,
         FL("BSSID: "MAC_ADDRESS_STR " rssi: normalized = %d, absolute = %d tsf_delta = %u seq %d"),
         MAC_ADDR_ARRAY(pHdr->bssId), pBssDescr->rssi, pBssDescr->rssi_raw,
         pBssDescr->tsf_delta, ((pHdr->seqControl.seqNumHi << 4) |
