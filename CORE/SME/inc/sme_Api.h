@@ -5002,4 +5002,15 @@ typedef struct {
 
 eHalStatus sme_hpcs_pulse_params_conf_cmd(tHalHandle hHal, tSirHpcsPulseParmasConfig *pHpcsPulseParams);
 
+#ifdef WLAN_SMART_ANTENNA_FEATURE
+eHalStatus sme_set_rx_antenna(tHalHandle hal,
+                              uint32_t matrix);
+#else
+static inline eHalStatus sme_set_rx_antenna(tHalHandle hal,
+					    uint32_t matrix)
+{
+	return eHAL_STATUS_SUCCESS;
+}
+#endif
+
 #endif //#if !defined( __SME_API_H )
