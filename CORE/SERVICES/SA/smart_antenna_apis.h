@@ -324,4 +324,27 @@ extern int deregister_smart_ant_ops(char *interface_name);
  * return: 0 for success.
  */
 extern int set_smart_ant_control(uint32_t magic);
+
+/**
+ * smart_ant_set_gpio_cfg() - Set GPIO config
+ * @gpio_num: GPIO number to be setup
+ * @input: 0 - Output/ 1 - Input
+ * @pull_type: Pull type
+ * @intr_mode: Interrupt mode
+ * @mux_config_val: mux_config_val
+ *
+ * Return: SMART_ANT_STATUS_SUCCESS for success.
+ */
+extern int smart_ant_set_gpio_cfg(uint32_t gpio_num, uint32_t input,
+				  uint32_t pull_type, uint32_t intr_mode,
+				  uint32_t mux_cfg_val);
+
+/**
+ * smart_ant_set_gpio_output() - Set GPIO output
+ * @gpio_num: GPIO number to be setup
+ * @set: Set the GPIO pin
+ *
+ * Return: SMART_ANT_STATUS_SUCCESS for success.
+ */
+extern int smart_ant_set_gpio_output(uint32_t gpio_num, uint32_t set);
 #endif

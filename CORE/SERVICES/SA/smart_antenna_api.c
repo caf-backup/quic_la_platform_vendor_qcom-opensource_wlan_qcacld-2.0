@@ -102,3 +102,73 @@ int set_smart_ant_control(uint32_t magic)
 	return SMART_ANT_STATUS_SUCCESS;
 }
 EXPORT_SYMBOL(set_smart_ant_control);
+
+int smart_ant_set_gpio_cfg(uint32_t gpio_num, uint32_t input,
+			   uint32_t pull_type, uint32_t intr_mode,
+			   uint32_t mux_cfg_val)
+{
+	struct hdd_context_s *hdd_ctx;
+	v_CONTEXT_t vos_ctx;
+	struct smart_ant *sa_handle;
+
+	sa_handle = sa_get_handle();
+	if (!sa_handle) {
+		SA_DPRINTK(sa_handle, SMART_ANTENNA_FATAL,
+			   "%s: Smart antenna module is not attached.",
+			   __func__);
+		return SMART_ANT_STATUS_FAILURE;
+	}
+
+	vos_ctx = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
+	if (!vos_ctx) {
+		SA_DPRINTK(sa_handle, SMART_ANTENNA_FATAL,
+			   "%s:Invalid global VOSS context", __func__);
+		return SMART_ANT_STATUS_FAILURE;
+	}
+
+	hdd_ctx = vos_get_context(VOS_MODULE_ID_HDD, vos_ctx);
+
+	if (!hdd_ctx) {
+		SA_DPRINTK(sa_handle, SMART_ANTENNA_FATAL,
+			   "%s:Invalid HDD Context", __func__);
+		return SMART_ANT_STATUS_FAILURE;
+	}
+	sme_set_gpio_cfg(hdd_ctx->hHal, gpio_num, input, pull_type,
+			 intr_mode, mux_cfg_val);
+	return SMART_ANT_STATUS_SUCCESS;
+}
+EXPORT_SYMBOL(smart_ant_set_gpio_cfg);
+
+int smart_ant_set_gpio_output(uint32_t gpio_num, uint32_t set)
+{
+	struct hdd_context_s *hdd_ctx;
+	v_CONTEXT_t vos_ctx;
+	struct smart_ant *sa_handle;
+
+	sa_handle = sa_get_handle();
+	if (!sa_handle) {
+		SA_DPRINTK(sa_handle, SMART_ANTENNA_FATAL,
+			   "%s: Smart antenna module is not attached.",
+			   __func__);
+		return SMART_ANT_STATUS_FAILURE;
+	}
+
+	vos_ctx = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
+	if (!vos_ctx) {
+		SA_DPRINTK(sa_handle, SMART_ANTENNA_FATAL,
+			   "%s:Invalid global VOSS context", __func__);
+		return SMART_ANT_STATUS_FAILURE;
+	}
+
+	hdd_ctx = vos_get_context(VOS_MODULE_ID_HDD, vos_ctx);
+
+	if (!hdd_ctx) {
+		SA_DPRINTK(sa_handle, SMART_ANTENNA_FATAL,
+			   "%s:Invalid HDD Context", __func__);
+		return SMART_ANT_STATUS_FAILURE;
+	}
+
+	sme_set_gpio_output(hdd_ctx->hHal, gpio_num, set);
+	return SMART_ANT_STATUS_SUCCESS;
+}
+EXPORT_SYMBOL(smart_ant_set_gpio_output);
