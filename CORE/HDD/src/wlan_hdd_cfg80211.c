@@ -22862,6 +22862,7 @@ int __wlan_hdd_cfg80211_scan( struct wiphy *wiphy,
         scanRequest.maxChnTime = cfg_param->nActiveMaxChnTime;
     }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,8,0))
     if (pAdapter->device_mode == WLAN_HDD_SOFTAP &&
         cfg_param->set_scan_dwelltime_dyn && request->duration != 0) {
 #define MAX_CHANNEL_DWELLTIME (10000)
@@ -22877,6 +22878,7 @@ int __wlan_hdd_cfg80211_scan( struct wiphy *wiphy,
             scanRequest.maxChnTime = request->duration;
         }
     }
+#endif
 
 #ifdef CFG80211_SCAN_BSSID
     vos_mem_copy(scanRequest.bssid, request->bssid, VOS_MAC_ADDR_SIZE);
