@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -5413,6 +5413,15 @@ REG_TABLE_ENTRY g_registry_table[] =
 		CFG_IS_PER_CHAIN_STATS_ENABLED_DEFAULT,
 		CFG_IS_PER_CHAIN_STATS_ENABLED_MIN,
 		CFG_IS_PER_CHAIN_STATS_ENABLED_MAX),
+
+#ifdef WLAN_SMART_ANTENNA_FEATURE
+	REG_VARIABLE(CFG_SMART_ANTENNA_PARAM, WLAN_PARAM_Integer,
+		struct hdd_config, smart_antenna_cfg,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_SMART_ANTENNA_PARAM_DEFAULT,
+		CFG_SMART_ANTENNA_PARAM_MIN,
+		CFG_SMART_ANTENNA_PARAM_MAX),
+#endif
 };
 
 

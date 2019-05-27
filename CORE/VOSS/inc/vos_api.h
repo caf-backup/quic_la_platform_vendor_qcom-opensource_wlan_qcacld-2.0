@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -462,5 +462,14 @@ bool vos_is_mon_enable(void);
 v_BOOL_t vos_is_ch_switch_with_csa_enabled(void);
 #ifdef FEATURE_WLAN_DISABLE_CHANNEL_SWITCH
 bool vos_is_chan_ok_for_dnbs(uint8_t channel);
+#endif
+
+#ifdef WLAN_SMART_ANTENNA_FEATURE
+uint32_t vos_get_smart_ant_cfg(void);
+#else
+static inline uint32_t vos_get_smart_ant_cfg(void)
+{
+	return 0;
+}
 #endif
 #endif // if !defined __VOS_API_H

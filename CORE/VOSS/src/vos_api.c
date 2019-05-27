@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -3516,5 +3516,19 @@ bool vos_is_chan_ok_for_dnbs(uint8_t channel)
 				"%s: flag is not set", __func__);
 	spin_unlock_bh(&pHddCtx->restrict_offchan_lock);
 	return true;
+}
+#endif
+
+#ifdef WLAN_SMART_ANTENNA_FEATURE
+uint32_t vos_get_smart_ant_cfg(void)
+{
+	hdd_context_t *hdd_ctx;
+	v_CONTEXT_t vos_context = vos_get_global_context(0, NULL);
+
+	hdd_ctx = vos_get_context(VOS_MODULE_ID_HDD, vos_context);
+	if (!hdd_ctx)
+		return 0;
+	else
+		return hdd_ctx->cfg_ini->smart_antenna_cfg;
 }
 #endif
