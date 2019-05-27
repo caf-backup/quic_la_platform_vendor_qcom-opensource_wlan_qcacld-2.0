@@ -136,7 +136,7 @@ extern int hdd_hostapd_stop (struct net_device *dev);
 #include "tl_shim.h"
 #include "wlan_hdd_oemdata.h"
 #include "sirApi.h"
-
+#include "if_smart_antenna.h"
 #ifdef CNSS_GENL
 #include <net/cnss_nl.h>
 #endif
@@ -8497,22 +8497,28 @@ mem_free:
        } else if (strncmp(command, "STOP", 4) == 0) {
           hddLog(LOG1, FL("STOP command"));
           pHddCtx->driver_being_stopped = true;
-       } else if (strncmp(command, "BTCOEXSCAN", 10) == 0) {
+       } else if ((strncmp(command, "BTCOEXSCAN", 10) == 0) &&
+                  (((tANI_U8 *)strchrnul(command, ' ') - command) == 10)) {
           hddLog(LOG1, FL("ignore BTCOEXSCAN and return -ENOTSUPP"));
           ret = -ENOTSUPP;
-       } else if (strncmp(command, "RXFILTER", 8) == 0) {
+       } else if ((strncmp(command, "RXFILTER", 8) == 0) &&
+                  (((tANI_U8 *)strchrnul(command, ' ') - command) == 8)) {
           hddLog(LOG1, FL("ignore RXFILTER and return -ENOTSUPP"));
           ret = -ENOTSUPP;
-       } else if (strncmp(command, "RXFILTER-START", 14) == 0) {
+       } else if ((strncmp(command, "RXFILTER-START", 14) == 0) &&
+                  (((tANI_U8 *)strchrnul(command, ' ') - command) == 14)) {
           hddLog(LOG1, FL("ignore RXFILTER-START and return 0"));
           ret = 0;
-       } else if (strncmp(command, "RXFILTER-STOP", 13) == 0) {
+       } else if ((strncmp(command, "RXFILTER-STOP", 13) == 0) &&
+                  (((tANI_U8 *)strchrnul(command, ' ') - command) == 13)) {
           hddLog(LOG1, FL("ignore RXFILTER-STOP and return 0"));
           ret = 0;
-       } else if (strncmp(command, "BTCOEXSCAN-START", 16) == 0) {
+       } else if ((strncmp(command, "BTCOEXSCAN-START", 16) == 0) &&
+                  (((tANI_U8 *)strchrnul(command, ' ') - command) == 16)) {
           hddLog(LOG1, FL("ignore BTCOEXSCAN-START and return 0"));
           ret = 0;
-       } else if (strncmp(command, "BTCOEXSCAN-STOP", 15) == 0) {
+       } else if ((strncmp(command, "BTCOEXSCAN-STOP", 15) == 0) &&
+                  (((tANI_U8 *)strchrnul(command, ' ') - command) == 15)) {
           hddLog(LOG1, FL("ignore BTCOEXSCAN-STOP and return 0"));
           ret = 0;
        } else {
@@ -12396,6 +12402,8 @@ hdd_adapter_t *hdd_open_adapter(hdd_context_t *hdd_ctx,
 	if (ret != 0)
 		hddLog(LOGE, "FAILED TO SET RTSCTS Profile ret:%d", ret);
 
+	hdd_create_tsf_file(adapter);
+
 	return adapter;
 
 err_post_add_adapter:
@@ -12462,6 +12470,7 @@ VOS_STATUS hdd_close_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
    pAdapterNode = pCurrent;
    if( VOS_STATUS_SUCCESS == status )
    {
+      hdd_remove_tsf_file(pAdapter);
       wlan_hdd_clear_concurrency_mode(pHddCtx, pAdapter->device_mode);
       hdd_deinit_packet_filtering(pAdapterNode->pAdapter);
       hdd_cleanup_adapter( pHddCtx, pAdapterNode->pAdapter, rtnl_held );
@@ -17162,6 +17171,20 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
          goto err_vosclose;
       }
 
+#ifdef CLD_REGDB
+      if ((wiphy) && country_code) {
+          regulatory_hint(wiphy, country_code);
+      }
+#endif
+
+      if (0 != vos_set_sleep_power_mode(dev,
+          pHddCtx->cfg_ini->sleep_power_mode)) {
+         hddLog(VOS_TRACE_LEVEL_ERROR,
+                "%s: set sleep power mode failed", __func__);
+         pHddCtx->cfg_ini->sleep_power_mode = 0;
+      }
+      ol_set_sleep_power_mode(pHddCtx->cfg_ini->sleep_power_mode);
+
       status = wlan_hdd_reg_init(pHddCtx);
       if (status != VOS_STATUS_SUCCESS) {
          hddLog(VOS_TRACE_LEVEL_FATAL,
@@ -17231,6 +17254,16 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
               "%s: WMI_PDEV_PARAM_ARP_AC_OVERRIDE failed AC: %d ret: %d",
               __func__, pHddCtx->cfg_ini->arp_ac_category, ret);
    }
+
+#ifdef CLD_REGDB
+   if (country_code)
+   {
+       pHddCtx->reg.alpha2[0] = country_code[0];
+       pHddCtx->reg.alpha2[1] = country_code[1];
+       pHddCtx->reg.cc_src = NL80211_REGDOM_SET_BY_DRIVER;
+       pHddCtx->reg.dfs_region = 0;
+   }
+#endif
 
    status = hdd_set_sme_chan_list(pHddCtx);
    if (status != VOS_STATUS_SUCCESS) {
@@ -17308,6 +17341,9 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
       goto err_wiphy_unregister;
 #endif
    }
+
+   /* Register Smart Antenna Module */
+   smart_antenna_attach();
 
 #ifdef FEATURE_WLAN_CH_AVOID
 #ifdef CONFIG_CNSS
@@ -17632,7 +17668,7 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
 
    if ((pHddCtx->cfg_ini->enable_ac_txq_optimize >> 4) & 0x01)
       sme_set_ac_txq_optimize(pHddCtx->hHal,
-                              &pHddCtx->cfg_ini->enable_ac_txq_optimize);
+                              pHddCtx->cfg_ini->enable_ac_txq_optimize);
 
    if (pHddCtx->cfg_ini->enable_go_cts2self_for_sta)
        sme_set_cts2self_for_p2p_go(pHddCtx->hHal);
@@ -18189,6 +18225,10 @@ static int hdd_driver_init( void)
    pr_info("%s: loading driver v%s\n", WLAN_MODULE_NAME,
            QWLAN_VERSIONSTR TIMER_MANAGER_STR MEMORY_DEBUG_STR);
 
+#ifdef CONFIG_VOS_MEM_PRE_ALLOC
+   wcnss_prealloc_reset();
+#endif /* CONFIG_VOS_MEM_PRE_ALLOC */
+
    do {
 
 #ifndef MODULE
@@ -18450,8 +18490,13 @@ static void hdd_driver_exit(void)
 
    vos_preClose( &pVosContext );
 
+   /* deregister Smart Antenna Module */
+   smart_antenna_deattach();
 #ifdef TIMER_MANAGER
    vos_timer_exit();
+#endif
+#ifdef CONFIG_VOS_MEM_PRE_ALLOC
+   wcnss_prealloc_reset();
 #endif
 #ifdef MEMORY_DEBUG
    adf_net_buf_debug_exit();
