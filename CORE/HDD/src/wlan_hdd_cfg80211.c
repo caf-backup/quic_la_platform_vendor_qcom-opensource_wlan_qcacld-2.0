@@ -6437,12 +6437,60 @@ static void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx, int indType,
     return;
 }
 
-static int wlan_hdd_set_primary_peer(hdd_adapter_t *adapter,
-				     v_MACADDR_t *mac_addr)
+static uint32_t wlan_period;
+static v_MACADDR_t primary_mac;
+static struct sir_ll_ext_stats_threshold thresh = {0,};
+/**
+ * wlan_hdd_set_primary_peer() - set primary peer for wlan counter
+ * @adapter: pointer to the adapter
+ * @mac_addr: peer MAC address
+ * @reconnect: true for reassoce, false for assoc
+ *
+ * For SAP mode, once mutiple peers are connected. Only primary peer's counters
+ * will be reported by FW.
+ * For STA mode, primary peer should be the BSS peer.
+ *
+ * Return: 0 for success.
+ */
+int wlan_hdd_set_primary_peer(hdd_adapter_t *adapter,
+			      v_MACADDR_t *mac_addr,
+			      bool reconnect)
 {
 	uint8_t sta_id;
 	hdd_station_ctx_t *hdd_std_ctx;
 	hdd_context_t *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+
+	if (reconnect == false) {
+		hddLog(VOS_TRACE_LEVEL_DEBUG,
+		       "New primary peer setting");
+		vos_mem_copy(primary_mac.bytes,
+			     mac_addr->bytes, VOS_MAC_ADDR_SIZE);
+	} else {
+		/* restore the primary peer setting */
+		hddLog(VOS_TRACE_LEVEL_DEBUG,
+		       "restore WLAN counter's primary peer setting");
+		if (wlan_period == 0) {
+			hddLog(VOS_TRACE_LEVEL_DEBUG,
+			       "WLAN counter is not enabled");
+			return 0;
+		}
+		if (!vos_mem_compare(mac_addr->bytes,
+				     primary_mac.bytes,
+				     VOS_MAC_ADDR_SIZE)) {
+			hddLog(VOS_TRACE_LEVEL_DEBUG,
+			       "Current peer is "MAC_ADDRESS_STR" Primary peer is "MAC_ADDRESS_STR,
+			       MAC_ADDR_ARRAY(mac_addr->bytes),
+			       MAC_ADDR_ARRAY(primary_mac.bytes));
+			return -EINVAL;
+		}
+	}
+
+	/* Stop wlan counter */
+	if (wlan_period) {
+		hddLog(VOS_TRACE_LEVEL_DEBUG, "Stop WLAN counter");
+		thresh.period = 0;
+		sme_ll_stats_set_thresh(hdd_ctx->hHal, &thresh);
+	}
 
 	if (adapter->device_mode == WLAN_HDD_INFRA_STATION) {
 	    hdd_std_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
@@ -6509,6 +6557,13 @@ set_mac:
 		hddLog(VOS_TRACE_LEVEL_ERROR,
 		       FL("sme_ll_stats_set_thresh failed."));
 		return -EINVAL;
+	}
+
+	if (wlan_period) {
+		/* restart wlan counter */
+		hddLog(VOS_TRACE_LEVEL_DEBUG, "Restart WLAN counter");
+		thresh.period = wlan_period;
+		sme_ll_stats_set_thresh(hdd_ctx->hHal, &thresh);
 	}
 	return 0;
 }
@@ -6668,7 +6723,6 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 	int status;
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_LL_STATS_EXT_MAX + 1];
 	hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
-	struct sir_ll_ext_stats_threshold thresh = {0,};
 
 	if (VOS_FTM_MODE == hdd_get_conparam()) {
 		hddLog(LOGE, FL("Command not allowed in FTM mode"));
@@ -6708,7 +6762,7 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 		hddLog(VOS_TRACE_LEVEL_INFO,
 		       FL("Primary MAC from user layer is " MAC_ADDRESS_STR),
 		       MAC_ADDR_ARRAY(mac_addr.bytes));
-		return wlan_hdd_set_primary_peer(adapter, &mac_addr);
+		return wlan_hdd_set_primary_peer(adapter, &mac_addr, false);
 	}
 
 	if (tb[QCA_WLAN_VENDOR_ATTR_LL_STATS_CFG_PERIOD]) {
@@ -6732,6 +6786,7 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 		       FL("Mac counter will be disaabled"));
 		goto set_param;
 	}
+	wlan_period = thresh.period;
 
 	/* global thresh is not enabled */
 	if (!tb[QCA_WLAN_VENDOR_ATTR_LL_STATS_CFG_THRESHOLD]) {

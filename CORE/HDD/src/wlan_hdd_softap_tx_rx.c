@@ -1168,6 +1168,8 @@ VOS_STATUS hdd_softap_RegisterSTA( hdd_adapter_t *pAdapter,
    wlan_hdd_netif_queue_control(pAdapter,
         WLAN_START_ALL_NETIF_QUEUE_N_CARRIER,
         WLAN_CONTROL_PATH);
+
+   wlan_hdd_set_primary_peer(pAdapter, pPeerMacAddress, true);
    return( vosStatus );
 }
 
