@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -3085,4 +3085,7 @@ int wlan_hdd_disconnect(hdd_adapter_t *pAdapter, u16 reason);
 #ifdef FEATURE_WLAN_DISABLE_CHANNEL_SWITCH
 int wlan_hdd_send_avoid_freq_for_dnbs(hdd_context_t *hdd_ctx, uint8_t op_chan);
 #endif
+int wlan_hdd_set_primary_peer(hdd_adapter_t *adapter,
+			      v_MACADDR_t *mac_addr,
+			      bool reconnect);
 #endif
