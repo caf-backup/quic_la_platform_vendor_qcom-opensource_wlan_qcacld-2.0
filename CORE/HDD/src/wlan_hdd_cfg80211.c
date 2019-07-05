@@ -6780,6 +6780,7 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 		       FL("No MAC counter period parameter"));
 	}
 
+	wlan_period = thresh.period;
 	/* period==0. Just disable mac counter */
 	if (thresh.period == 0) {
 		hddLog(VOS_TRACE_LEVEL_INFO,
