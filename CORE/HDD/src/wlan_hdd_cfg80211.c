@@ -17612,6 +17612,11 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
                 pBeacon->head_len, WLAN_EID_SUPP_RATES);
         if (pIe != NULL) {
             pIe++;
+            if (pIe[0] > SIR_MAC_RATESET_EID_MAX) {
+                hddLog(LOGE, FL("Invalid supported rates %d"), pIe[0]);
+                ret = -EINVAL;
+                goto error;
+            }
             pConfig->supported_rates.numRates = pIe[0];
             pIe++;
             for (i = 0; i < pConfig->supported_rates.numRates; i++)
@@ -17625,6 +17630,11 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
                 WLAN_EID_EXT_SUPP_RATES);
         if (pIe != NULL) {
             pIe++;
+            if (pIe[0] > SIR_MAC_RATESET_EID_MAX) {
+                hddLog(LOGE, FL("Invalid supported rates %d"), pIe[0]);
+                ret = -EINVAL;
+                goto error;
+            }
             pConfig->extended_rates.numRates = pIe[0];
             pIe++;
             for (i = 0; i < pConfig->extended_rates.numRates; i++)
@@ -30826,7 +30836,9 @@ wlan_hdd_cfg80211_extscan_signif_wifi_change_results_ind(
         for (j = 0; j < ap_info->numOfRssi; j++)
             hddLog(LOG1, "Rssi %d", *rssi++);
 
-        ap_info += ap_info->numOfRssi * sizeof(*rssi);
+        ap_info = (tSirWifiSignificantChange *)((char *)ap_info +
+                    ap_info->numOfRssi * sizeof(*rssi) +
+                    sizeof(*ap_info));
     }
 
     if (nla_put_u32(skb, QCA_WLAN_VENDOR_ATTR_EXTSCAN_RESULTS_REQUEST_ID,
@@ -30869,7 +30881,9 @@ wlan_hdd_cfg80211_extscan_signif_wifi_change_results_ind(
 
               nla_nest_end(skb, ap);
 
-            ap_info += ap_info->numOfRssi * sizeof(*rssi);
+            ap_info = (tSirWifiSignificantChange *)((char *)ap_info +
+                      ap_info->numOfRssi * sizeof(*rssi) +
+                      sizeof(*ap_info));
         }
         nla_nest_end(skb, aps);
 

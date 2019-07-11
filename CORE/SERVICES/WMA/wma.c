@@ -4847,12 +4847,14 @@ static int wma_extscan_change_results_event_handler(void *handle,
 							src_rssi[count++];
 			}
 		}
-		dest_ap += dest_ap->numOfRssi * sizeof(tANI_S32);
+		dest_ap = (tSirWifiSignificantChange *)((char *)dest_ap +
+				dest_ap->numOfRssi * sizeof(tANI_S32) +
+				sizeof(*dest_ap));
 		src_chglist++;
 	}
 	dest_chglist->requestId = event->request_id;
 	dest_chglist->moreData = moredata;
-	dest_chglist->numResults = event->total_entries;
+	dest_chglist->numResults = numap;
 
 	pMac->sme.pExtScanIndCb(pMac->hHdd,
 				eSIR_EXTSCAN_SIGNIFICANT_WIFI_CHANGE_RESULTS_IND,
@@ -5307,6 +5309,15 @@ static int wma_unified_radio_tx_power_level_stats_event_handler(void *handle,
 	rs_results = (tSirWifiRadioStat *) &link_stats_results->results[0];
 	tx_power_level_values = (uint8 *) param_tlvs->tx_time_per_power_level;
 
+	if (rs_results->total_num_tx_power_levels &&
+	    fixed_param->total_num_tx_power_levels >
+		rs_results->total_num_tx_power_levels) {
+		WMA_LOGE("%s: excess tx_power buffers:%d, total_num_tx_power_levels:%d",
+			 __func__, fixed_param->total_num_tx_power_levels,
+			 rs_results->total_num_tx_power_levels);
+		return -EINVAL;
+	}
+
 	rs_results->total_num_tx_power_levels =
 				fixed_param->total_num_tx_power_levels;
 	if (!rs_results->total_num_tx_power_levels)
@@ -5373,7 +5384,7 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 	tSirLLStatsResults *link_stats_results;
 	tSirWifiRadioStat *rs_results;
 	tSirWifiChannelStats *chn_results;
-	uint8_t *results, *t_radio_stats, *t_channel_stats;
+	uint8_t *t_radio_stats, *t_channel_stats;
 	uint32_t next_chan_offset, count;
 	size_t radio_stats_size, chan_stats_size;
 	size_t link_stats_results_size;
@@ -5430,24 +5441,43 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 		return -EINVAL;
 	}
 
-	link_stats_results_size = sizeof(*link_stats_results) +
+	if (NULL == wma_handle->link_stats_results) {
+		link_stats_results_size = sizeof(*link_stats_results) +
 			radio_stats_size +
 			(radio_stats->num_channels * chan_stats_size);
 
-	wma_handle->link_stats_results = vos_mem_malloc(link_stats_results_size);
-	if (NULL == wma_handle->link_stats_results) {
-		WMA_LOGD("%s: could not allocate mem for stats results-len %zu",
-		__func__, link_stats_results_size);
-		return -ENOMEM;
+		wma_handle->link_stats_results =
+			vos_mem_malloc(link_stats_results_size);
+		if (NULL == wma_handle->link_stats_results) {
+			WMA_LOGD("%s: could not allocate mem for stats results-len %zu",
+			__func__, link_stats_results_size);
+			return -ENOMEM;
+		}
+		vos_mem_zero(wma_handle->link_stats_results,
+				link_stats_results_size);
 	}
 
 	link_stats_results = wma_handle->link_stats_results;
-	vos_mem_zero(link_stats_results, link_stats_results_size);
+	rs_results = (tSirWifiRadioStat *)link_stats_results->results;
+	if (link_stats_results->num_radio == 0) {
+		link_stats_results->num_radio = fixed_param->num_radio;
+	} else if (link_stats_results->num_radio < fixed_param->num_radio) {
+		/*
+		 * The link stats results size allocated based on num_radio of
+		 * first event must be same as following events. Otherwise these
+		 * events may be spoofed. Drop all of them and report error.
+		 */
+		WMA_LOGE("Invalid following WMI_RADIO_LINK_STATS_EVENTID. Discarding this set");
+		vos_mem_free(wma_handle->link_stats_results);
+		wma_handle->link_stats_results = NULL;
+		vos_mem_free(rs_results->tx_time_per_power_level);
+		rs_results->tx_time_per_power_level = NULL;
+		return -EINVAL;
+	}
 
 	link_stats_results->paramId            = WMI_LINK_STATS_RADIO;
 	link_stats_results->rspId              = fixed_param->request_id;
 	link_stats_results->ifaceId            = 0;
-	link_stats_results->num_radio          = fixed_param->num_radio;
 	link_stats_results->peer_event_number  = 0;
 
 	/*
@@ -5460,11 +5490,9 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 	 */
 	link_stats_results->moreResultToFollow = fixed_param->more_radio_events;
 
-	results          = (u_int8_t *)link_stats_results->results;
 	t_radio_stats    = (u_int8_t *)radio_stats;
 	t_channel_stats  = (u_int8_t *)channel_stats;
 
-	rs_results = (tSirWifiRadioStat *) &results[0];
 	rs_results->radio = radio_stats->radio_id;
 	rs_results->onTime = radio_stats->on_time;
 	rs_results->txTime = radio_stats->tx_time;
