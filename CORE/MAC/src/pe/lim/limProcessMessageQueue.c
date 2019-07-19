@@ -729,7 +729,8 @@ limCheckMgmtRegisteredFrames(tpAniSirGlobal pMac, tANI_U8 *pBd,
         limSendSmeMgmtFrameInd( pMac, pHdr->fc.subType, (tANI_U8*)pHdr,
                      WDA_GET_RX_PAYLOAD_LEN(pBd) + sizeof(tSirMacMgmtHdr),
                      pLimMgmtRegistration->sessionId,
-                     WDA_GET_RX_CH(pBd), psessionEntry, 0);
+                     WDA_GET_RX_CH(pBd), psessionEntry,
+                     WDA_GET_RX_RSSI_NORMALIZED(pBd), RXMGMT_FLAG_NONE);
 
         if ( (type == SIR_MAC_MGMT_FRAME) && (fc.type == SIR_MAC_MGMT_FRAME)
               && (subType == SIR_MAC_MGMT_RESERVED15) )
@@ -998,6 +999,16 @@ limHandle80211Frames(tpAniSirGlobal pMac, tpSirMsgQ limMsg, tANI_U8 *pDeferMsg)
                     limProcessDeauthFrame(pMac, pRxPacketInfo,psessionEntry);
                     break;
 
+                case SIR_MAC_MGMT_TIME_ADVERT:
+                {
+                    tANI_U32 frameLen = WDA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
+                    limSendSmeMgmtFrameInd(pMac, SIR_MAC_MGMT_TIME_ADVERT,
+                            (tANI_U8*)pHdr, frameLen + sizeof(tSirMacMgmtHdr),
+                            0, WDA_GET_RX_CH(pRxPacketInfo), NULL,
+                            WDA_GET_RX_RSSI_RAW(pRxPacketInfo),
+                            RXMGMT_FLAG_NONE);
+                }
+                    break;
                 case SIR_MAC_MGMT_ACTION:
                    if(psessionEntry == NULL)
                       limProcessActionFrameNoSession(pMac, pRxPacketInfo);
