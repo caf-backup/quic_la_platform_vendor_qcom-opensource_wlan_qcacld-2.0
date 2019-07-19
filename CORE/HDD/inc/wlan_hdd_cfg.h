@@ -2777,6 +2777,29 @@ enum dot11p_mode {
 
 /*
  * <ini>
+ * enable_sae_for_sap - Enable/Disable SAE support in driver for SAP
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to enable/disable SAE support in driver for SAP mode
+ * Driver will process/drop the SAE authentication frames based on this config.
+ *
+ * Related: None
+ *
+ * Supported Feature: SAE
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_ENABLE_SAE_FOR_SAP_NAME    "enable_sae_for_sap"
+#define CFG_ENABLE_SAE_FOR_SAP_DEFAULT (1)
+#define CFG_ENABLE_SAE_FOR_SAP_MIN     (0)
+#define CFG_ENABLE_SAE_FOR_SAP_MAX     (1)
+
+/*
+ * <ini>
  * sae_enabled - Enable/Disable SAE support in driver
  * @Min: 0
  * @Max: 1
@@ -3394,6 +3417,7 @@ typedef struct hdd_config
    uint8_t                     prefer_non_dfs_on_radar;
 #ifdef WLAN_FEATURE_SAE
    bool is_sae_enabled;
+   bool enable_sae_for_sap;
 #endif
    uint32_t                    sta_auth_retries_for_code17;
 } hdd_config_t;
