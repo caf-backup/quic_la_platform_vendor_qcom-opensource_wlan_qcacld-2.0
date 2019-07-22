@@ -13892,8 +13892,11 @@ __wlan_hdd_cfg80211_external_auth(struct wiphy *wiphy,
 		return ret;
 
 	hddLog(VOS_TRACE_LEVEL_DEBUG,
-	       FL("external_auth status: %d"), params->status);
-	sme_handle_sae_msg(hdd_ctx->hHal, adapter->sessionId, params->status);
+	       FL("external_auth status: %d peer mac: " MAC_ADDRESS_STR),
+	       params->status, MAC_ADDR_ARRAY(params->bssid));
+	vos_mem_copy(peer_mac_addr, params->bssid, VOS_MAC_ADDR_SIZE);
+	sme_handle_sae_msg(hdd_ctx->hHal, adapter->sessionId, params->status,
+			   peer_mac_addr);
 
 	return ret;
 }
