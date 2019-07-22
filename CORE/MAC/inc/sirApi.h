@@ -1230,6 +1230,7 @@ typedef struct sSirSmeAssocInd
     /* Timing and fine Timing measurement capability clubbed together */
     tANI_U8              timingMeasCap;
     tSirSmeChanInfo      chan_info;
+    bool                 is_sae_authenticated;
 } tSirSmeAssocInd, *tpSirSmeAssocInd;
 
 
@@ -1245,6 +1246,7 @@ typedef struct sSirSmeAssocCnf
     tANI_U16             aid;
     tSirMacAddr          alternateBssId;
     tANI_U8              alternateChannelId;
+    tSirMacStatusCodes   mac_status_code;
 } tSirSmeAssocCnf, *tpSirSmeAssocCnf;
 
 /// Definition for Reassociation indication from peer

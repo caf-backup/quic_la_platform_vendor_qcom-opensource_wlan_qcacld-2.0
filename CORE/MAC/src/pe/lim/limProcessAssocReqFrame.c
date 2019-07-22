@@ -879,6 +879,9 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
 
         /// Delete 'pre-auth' context of STA
         authType = pStaPreAuthContext->authType;
+        if (pStaPreAuthContext->authType == eSIR_AUTH_TYPE_SAE)
+            pAssocReq->is_sae_authenticated = true;
+
         limDeletePreAuthNode(pMac, pHdr->sa);
 
         // All is well. Assign AID (after else part)
@@ -1796,6 +1799,8 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
             } else
                 pMlmAssocInd->chan_info.info = MODE_11A;
         }
+
+        pMlmAssocInd->is_sae_authenticated = pAssocReq->is_sae_authenticated;
         limPostSmeMessage(pMac, LIM_MLM_ASSOC_IND, (tANI_U32 *) pMlmAssocInd);
         vos_mem_free(pMlmAssocInd);
     }
