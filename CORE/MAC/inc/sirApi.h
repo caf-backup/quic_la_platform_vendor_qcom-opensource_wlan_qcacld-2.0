@@ -4006,8 +4006,7 @@ typedef struct sSirSetRSSIFilterReq
  * ----------------------------+------+-------+
  */
 #define ALLOWED_ACTION_FRAMES_BITMAP0_STA \
-		((1 << SIR_MAC_ACTION_SPECTRUM_MGMT) | \
-		 (1 << SIR_MAC_ACTION_QOS_MGMT) | \
+		 ((1 << SIR_MAC_ACTION_QOS_MGMT) | \
 		 (1 << SIR_MAC_ACTION_PUBLIC_USAGE) | \
 		 (1 << SIR_MAC_ACTION_SA_QUERY) | \
 		 (1 << SIR_MAC_ACTION_WNM) | \
