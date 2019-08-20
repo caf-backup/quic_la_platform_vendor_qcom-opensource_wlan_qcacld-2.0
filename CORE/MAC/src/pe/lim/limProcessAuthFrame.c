@@ -139,6 +139,7 @@ static void lim_external_auth_add_pre_auth_node(tpAniSirGlobal mac_ctx,
 		     mac_hdr->sa, sizeof(tSirMacAddr));
 	auth_node->mlmState = mlm_state;
 	auth_node->authType = eSIR_AUTH_TYPE_SAE;
+	auth_node->assoc_req.present = false;
 	limAddPreAuthNode(mac_ctx, auth_node);
 }
 
