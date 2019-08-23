@@ -2698,13 +2698,15 @@ eHalStatus csrScanningStateMsgProcessor( tpAniSirGlobal pMac, void *pMsgBuf )
         {
             tCsrRoamSession  *pSession;
             tSirSmeAssocIndToUpperLayerCnf *pUpperLayerAssocCnf;
-            tCsrRoamInfo roamInfo;
-            tCsrRoamInfo *pRoamInfo = NULL;
+            tCsrRoamInfo *roam_info = NULL;
             tANI_U32 sessionId;
             eHalStatus status;
             smsLog( pMac, LOG1, FL("Scanning : ASSOCIATION confirmation can be given to upper layer "));
-            vos_mem_set(&roamInfo, sizeof(tCsrRoamInfo), 0);
-            pRoamInfo = &roamInfo;
+
+	    roam_info = vos_mem_malloc(sizeof(*roam_info));
+	    if (!roam_info)
+		    return eHAL_STATUS_FAILED_ALLOC;
+	    vos_mem_set(roam_info, sizeof(tCsrRoamInfo), 0);
             pUpperLayerAssocCnf = (tSirSmeAssocIndToUpperLayerCnf *)pMsgBuf;
             status = csrRoamGetSessionIdFromBSSID( pMac, (tCsrBssid *)pUpperLayerAssocCnf->bssId, &sessionId );
             pSession = CSR_GET_SESSION(pMac, sessionId);
@@ -2715,27 +2717,27 @@ eHalStatus csrScanningStateMsgProcessor( tpAniSirGlobal pMac, void *pMsgBuf )
                 return eHAL_STATUS_FAILURE;
             }
 
-            pRoamInfo->statusCode = eSIR_SME_SUCCESS; //send the status code as Success
-            pRoamInfo->u.pConnectedProfile = &pSession->connectedProfile;
-            pRoamInfo->staId = (tANI_U8)pUpperLayerAssocCnf->aid;
-            pRoamInfo->rsnIELen = (tANI_U8)pUpperLayerAssocCnf->rsnIE.length;
-            pRoamInfo->prsnIE = pUpperLayerAssocCnf->rsnIE.rsnIEdata;
-            pRoamInfo->addIELen = (tANI_U8)pUpperLayerAssocCnf->addIE.length;
-            pRoamInfo->paddIE = pUpperLayerAssocCnf->addIE.addIEdata;
-            vos_mem_copy(pRoamInfo->peerMac, pUpperLayerAssocCnf->peerMacAddr, sizeof(tSirMacAddr));
-            vos_mem_copy(&pRoamInfo->bssid, pUpperLayerAssocCnf->bssId, sizeof(tCsrBssid));
-            pRoamInfo->wmmEnabledSta = pUpperLayerAssocCnf->wmmEnabledSta;
-            if(CSR_IS_INFRA_AP(pRoamInfo->u.pConnectedProfile) )
+            roam_info->statusCode = eSIR_SME_SUCCESS; //send the status code as Success
+            roam_info->u.pConnectedProfile = &pSession->connectedProfile;
+            roam_info->staId = (tANI_U8)pUpperLayerAssocCnf->aid;
+            roam_info->rsnIELen = (tANI_U8)pUpperLayerAssocCnf->rsnIE.length;
+            roam_info->prsnIE = pUpperLayerAssocCnf->rsnIE.rsnIEdata;
+            roam_info->addIELen = (tANI_U8)pUpperLayerAssocCnf->addIE.length;
+            roam_info->paddIE = pUpperLayerAssocCnf->addIE.addIEdata;
+            vos_mem_copy(roam_info->peerMac, pUpperLayerAssocCnf->peerMacAddr, sizeof(tSirMacAddr));
+            vos_mem_copy(&roam_info->bssid, pUpperLayerAssocCnf->bssId, sizeof(tCsrBssid));
+            roam_info->wmmEnabledSta = pUpperLayerAssocCnf->wmmEnabledSta;
+            if(CSR_IS_INFRA_AP(roam_info->u.pConnectedProfile) )
             {
                 pMac->roam.roamSession[sessionId].connectState = eCSR_ASSOC_STATE_TYPE_INFRA_CONNECTED;
-                pRoamInfo->fReassocReq = pUpperLayerAssocCnf->reassocReq;
-                status = csrRoamCallCallback(pMac, sessionId, pRoamInfo, 0, eCSR_ROAM_INFRA_IND, eCSR_ROAM_RESULT_INFRA_ASSOCIATION_CNF);
+                roam_info->fReassocReq = pUpperLayerAssocCnf->reassocReq;
+                status = csrRoamCallCallback(pMac, sessionId, roam_info, 0, eCSR_ROAM_INFRA_IND, eCSR_ROAM_RESULT_INFRA_ASSOCIATION_CNF);
             }
-            if(CSR_IS_WDS_AP( pRoamInfo->u.pConnectedProfile))
+            if(CSR_IS_WDS_AP( roam_info->u.pConnectedProfile))
             {
                 vos_sleep( 100 );
                 pMac->roam.roamSession[sessionId].connectState = eCSR_ASSOC_STATE_TYPE_WDS_CONNECTED;//Sta
-                status = csrRoamCallCallback(pMac, sessionId, pRoamInfo, 0, eCSR_ROAM_WDS_IND, eCSR_ROAM_RESULT_WDS_ASSOCIATION_IND);//Sta
+                status = csrRoamCallCallback(pMac, sessionId, roam_info, 0, eCSR_ROAM_WDS_IND, eCSR_ROAM_RESULT_WDS_ASSOCIATION_IND);//Sta
             }
 
         }

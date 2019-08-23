@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1414,12 +1414,13 @@ static eHalStatus csrNeighborRoamIssuePreauthReq(tpAniSirGlobal pMac,
         }
         else
         {
+            vos_mem_zero(roamInfo, sizeof(*roamInfo));
             vos_mem_copy((void *)roamInfo->bssid,
                 (void *)pNeighborBssNode->pBssDescription->bssId,
                 sizeof(tCsrBssid));
             csrRoamCallCallback(pMac, sessionId, roamInfo, 0,
                                 eCSR_ROAM_PREAUTH_INIT_NOTIFY, 0);
-            vos_mem_free(pRoamInfo);
+            vos_mem_free(roamInfo);
         }
 #endif
 
@@ -1539,12 +1540,13 @@ eHalStatus csrNeighborRoamPreauthRspHandler(tpAniSirGlobal pMac,
         }
         else
         {
+            vos_mem_zero(roamInfo, sizeof(*roamInfo));
             vos_mem_copy((void *)roamInfo->bssid,
                 (void *)pPreauthRspNode->pBssDescription->bssId,
                 sizeof(tCsrBssid));
             csrRoamCallCallback(pMac, sessionId, roamInfo, 0,
                                 eCSR_ROAM_PREAUTH_STATUS_SUCCESS, 0);
-            vos_mem_free(pRoamInfo);
+            vos_mem_free(roamInfo);
         }
 #endif
 
@@ -1613,12 +1615,13 @@ eHalStatus csrNeighborRoamPreauthRspHandler(tpAniSirGlobal pMac,
                 }
                 else
                 {
+                    vos_mem_zero(roamInfo, sizeof(*roamInfo));
                     vos_mem_copy((void *)roamInfo->bssid,
                         (void *)pNeighborBssNode->pBssDescription->bssId,
                         sizeof(tCsrBssid));
                     csrRoamCallCallback(pMac, sessionId, roamInfo, 0,
                                         eCSR_ROAM_PREAUTH_STATUS_FAILURE, 0);
-                    vos_mem_free(pRoamInfo);
+                    vos_mem_free(roamInfo);
                 }
 #endif
 
@@ -4936,7 +4939,7 @@ eHalStatus csrNeighborRoamIndicateConnect(tpAniSirGlobal pMac,
     eHalStatus  status = eHAL_STATUS_SUCCESS;
     VOS_STATUS  vstatus;
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
-    tCsrRoamInfo roamInfo;
+    tCsrRoamInfo *roam_info;
     tCsrRoamSession *pSession = &pMac->roam.roamSession[sessionId];
 #endif
     tpFTRoamCallbackUsrCtx  pUsrCtx;
@@ -5007,12 +5010,17 @@ eHalStatus csrNeighborRoamIndicateConnect(tpAniSirGlobal pMac,
            status = palSendMBMessage(pMac->hHdd, pMsg );
         }
 #endif
-        vos_mem_copy(&roamInfo.peerMac,
+        roam_info = vos_mem_malloc(sizeof(*roam_info));
+        if (!roam_info)
+            return eHAL_STATUS_FAILED_ALLOC;
+        vos_mem_zero(roam_info, sizeof(*roam_info));
+        vos_mem_copy(&roam_info->peerMac,
                    pMac->roam.roamSession[sessionId].connectedProfile.bssid,6);
-        roamInfo.roamSynchInProgress =
+        roam_info->roamSynchInProgress =
                    pSession->roamOffloadSynchParams.bRoamSynchInProgress;
-        csrRoamCallCallback(pMac, sessionId, &roamInfo, 0,
+        csrRoamCallCallback(pMac, sessionId, roam_info, 0,
                    eCSR_ROAM_SET_KEY_COMPLETE, eCSR_ROAM_RESULT_AUTHENTICATED);
+        vos_mem_free(roam_info);
     }
 #endif
 
@@ -5518,7 +5526,7 @@ void csrNeighborRoamClose(tpAniSirGlobal pMac, tANI_U8 sessionId)
 ---------------------------------------------------------------------------*/
 void csrNeighborRoamRequestHandoff(tpAniSirGlobal pMac, tANI_U8 sessionId)
 {
-    tCsrRoamInfo roamInfo;
+    tCsrRoamInfo *roam_info;
     tpCsrNeighborRoamControlInfo pNeighborRoamInfo =
                                     &pMac->roam.neighborRoamInfo[sessionId];
     tCsrNeighborRoamBSSInfo      handoffNode;
@@ -5541,13 +5549,16 @@ void csrNeighborRoamRequestHandoff(tpAniSirGlobal pMac, tANI_U8 sessionId)
         return;
     }
 
-    vos_mem_zero(&roamInfo, sizeof(tCsrRoamInfo));
-    csrRoamCallCallback(pMac, sessionId, &roamInfo, roamId, eCSR_ROAM_FT_START,
+    roam_info = vos_mem_malloc(sizeof(*roam_info));
+    if (!roam_info)
+        return;
+    vos_mem_zero(roam_info, sizeof(tCsrRoamInfo));
+    csrRoamCallCallback(pMac, sessionId, roam_info, roamId, eCSR_ROAM_FT_START,
                         eSIR_SME_SUCCESS);
 
-    vos_mem_zero(&roamInfo, sizeof(tCsrRoamInfo));
+    vos_mem_zero(roam_info, sizeof(tCsrRoamInfo));
     CSR_NEIGHBOR_ROAM_STATE_TRANSITION(eCSR_NEIGHBOR_ROAM_STATE_REASSOCIATING,
-                                       sessionId)
+                                       sessionId);
 
     csrNeighborRoamGetHandoffAPInfo(pMac, &handoffNode, sessionId);
     VOS_TRACE (VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
@@ -5564,11 +5575,12 @@ void csrNeighborRoamRequestHandoff(tpAniSirGlobal pMac, tANI_U8 sessionId)
     }
     else
     {
+        vos_mem_zero(roamInfoMetrics, sizeof(*roamInfoMetrics));
         vos_mem_copy((void *)roamInfoMetrics->bssid,
             (void *)&handoffNode.pBssDescription->bssId, sizeof(tCsrBssid));
         csrRoamCallCallback(pMac, sessionId, roamInfoMetrics, 0,
                             eCSR_ROAM_HANDOVER_SUCCESS, 0);
-        vos_mem_free(pRoamInfo);
+        vos_mem_free(roamInfoMetrics);
     }
 #endif
 
@@ -5581,6 +5593,7 @@ void csrNeighborRoamRequestHandoff(tpAniSirGlobal pMac, tANI_U8 sessionId)
      */
     csrRoamCopyConnectedProfile(pMac, sessionId,
                                 &pNeighborRoamInfo->csrNeighborRoamProfile);
+
     vos_mem_copy(pNeighborRoamInfo->csrNeighborRoamProfile.BSSIDs.bssid, handoffNode.pBssDescription->bssId, sizeof(tSirMacAddr));
     pNeighborRoamInfo->csrNeighborRoamProfile.ChannelInfo.ChannelList[0] = handoffNode.pBssDescription->channelId;
 
@@ -5589,18 +5602,20 @@ void csrNeighborRoamRequestHandoff(tpAniSirGlobal pMac, tANI_U8 sessionId)
     if(!HAL_STATUS_SUCCESS(csrRoamIssueDisassociateCmd(pMac, sessionId, eCSR_DISCONNECT_REASON_HANDOFF)))
     {
         smsLog(pMac, LOGW, "csrRoamHandoffRequested:  fail to issue disassociate");
+        vos_mem_free(roam_info);
         return;
     }
 
     /* Notify HDD for handoff, providing the BSSID too */
-    roamInfo.reasonCode = eCsrRoamReasonBetterAP;
+    roam_info->reasonCode = eCsrRoamReasonBetterAP;
 
-    vos_mem_copy(roamInfo.bssid,
+    vos_mem_copy(roam_info->bssid,
                  handoffNode.pBssDescription->bssId,
                  sizeof( tCsrBssid ));
 
-    csrRoamCallCallback(pMac, sessionId, &roamInfo, 0,
+    csrRoamCallCallback(pMac, sessionId, roam_info, 0,
                         eCSR_ROAM_ROAMING_START, eCSR_ROAM_RESULT_NONE);
+    vos_mem_free(roam_info);
 
     return;
 }
