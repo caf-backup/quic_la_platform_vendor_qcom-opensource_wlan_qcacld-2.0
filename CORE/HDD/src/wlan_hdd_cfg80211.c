@@ -6267,7 +6267,6 @@ static int wlan_hdd_add_ie(hdd_adapter_t* pHostapdAdapter, v_U8_t *genie,
 
     pIe = wlan_hdd_get_vendor_oui_ie_ptr(oui, oui_size,
                                           pBeacon->tail, pBeacon->tail_len);
-
     if (pIe)
     {
         ielen = pIe[1] + 2;
@@ -7585,10 +7584,12 @@ static int wlan_hdd_cfg80211_stop_ap (struct wiphy *wiphy,
 #endif
 {
     hdd_adapter_t  *pAdapter   = WLAN_HDD_GET_PRIV_PTR(dev);
+    tHalHandle hal_ptr = WLAN_HDD_GET_HAL_CTX(pAdapter);
     hdd_context_t  *pHddCtx    = NULL;
     hdd_scaninfo_t *pScanInfo  = NULL;
     hdd_adapter_t  *staAdapter = NULL;
     VOS_STATUS      status     = VOS_STATUS_E_FAILURE;
+    eHalStatus      halstatus;
     tSirUpdateIE    updateIE;
     beacon_data_t  *old;
     int             ret;
@@ -7612,6 +7613,7 @@ static int wlan_hdd_cfg80211_stop_ap (struct wiphy *wiphy,
            pAdapter->device_mode);
 
     pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
+
     ret = wlan_hdd_validate_context(pHddCtx);
     if (0 != ret) {
         if (pHddCtx->isUnloadInProgress) {
@@ -7623,6 +7625,13 @@ static int wlan_hdd_cfg80211_stop_ap (struct wiphy *wiphy,
                 vos_mem_free(pAdapter->sessionCtx.ap.sapConfig.acs_cfg.ch_list);
         }
         return ret;
+    }
+    if (WLAN_HDD_SOFTAP == pAdapter->device_mode) {
+        halstatus = sme_RoamDelPMKIDfromCache(
+                        hal_ptr, pAdapter->sessionId,
+                        NULL, true);
+        if (!HAL_STATUS_SUCCESS(halstatus))
+            hddLog(LOG1, FL("Cannot flush PMKIDCache"));
     }
 
     status = hdd_get_front_adapter (pHddCtx, &pAdapterNode);
