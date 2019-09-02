@@ -601,7 +601,7 @@ eHalStatus csrScanRequest(tpAniSirGlobal pMac, tANI_U16 sessionId,
                                     pScanRequest->usr_set_dwelltime = false;
                                 }
                             }
-                        }		
+                        }
                     }
                 }
 #endif

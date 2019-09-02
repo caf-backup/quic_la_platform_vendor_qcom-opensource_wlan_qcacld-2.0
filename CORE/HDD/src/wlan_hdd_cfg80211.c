@@ -22919,7 +22919,8 @@ int __wlan_hdd_cfg80211_scan( struct wiphy *wiphy,
     }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,8,0))
-    if (pAdapter->device_mode == WLAN_HDD_SOFTAP &&
+    if ((pAdapter->device_mode == WLAN_HDD_SOFTAP ||
+        pAdapter->device_mode == WLAN_HDD_INFRA_STATION) &&
         cfg_param->set_scan_dwelltime_dyn && request->duration != 0) {
 #define MAX_CHANNEL_DWELLTIME (10000)
         if (request->duration > MAX_CHANNEL_DWELLTIME ||
