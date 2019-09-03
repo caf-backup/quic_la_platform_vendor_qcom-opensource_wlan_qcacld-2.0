@@ -3332,12 +3332,14 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 	uint32_t sectionCount = 0;
 	uint32_t pos = 0;
 	uint32_t readLen = 0;
+#ifdef FW_RAM_DUMP_TO_FILE
 	char fw_dump_filename[40];
 
 #ifdef CONFIG_NON_QC_PLATFORM_PCI
 	char *fw_ram_seg_name[] = {"DRAM ", "AXI ", "REG ", "IRAM1 ", "IRAM2 "};
 #else
 	char *fw_ram_seg_name[] = {"DRAM", "AXI", "REG", "IRAM"};
+#endif
 #endif
 
 	if (scn->fastfwdump_host && scn->fastfwdump_fw) {
@@ -3448,7 +3450,7 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 
 		pr_info("%s: Section:%d Bytes Read:%0x\n", __func__,
 			sectionCount, result[sectionCount]);
-#ifdef CONFIG_NON_QC_PLATFORM_PCI
+#if defined(CONFIG_NON_QC_PLATFORM_PCI) && defined(FW_RAM_DUMP_TO_FILE)
 		printk("\nMemory addr for %s = 0x%p (size: %x)\n",fw_ram_seg_name[sectionCount], bufferLoc, result[sectionCount]);
 #endif
 #ifdef FW_RAM_DUMP_TO_FILE

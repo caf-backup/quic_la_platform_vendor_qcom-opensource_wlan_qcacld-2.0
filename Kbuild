@@ -172,6 +172,11 @@ CONFIG_QCA_WIFI_AUTOMOTIVE_CONC := y
 
 CONFIG_NON_QC_PLATFORM := y
 
+ifeq ($(CONFIG_ARCH_QCS405), y)
+	CONFIG_TXRX_PERF := y
+	CONFIG_NON_QC_PLATFORM := n
+endif
+
 #Enable Power debugfs feature only if debug_fs is enabled
 ifeq ($(CONFIG_DEBUG_FS), y)
 CONFIG_WLAN_POWER_DEBUGFS := y
@@ -1236,6 +1241,7 @@ CDEFINES += -DMDNS_OFFLOAD
 endif
 
 ifeq (y,$(findstring y,$(CONFIG_ARCH_MSM) $(CONFIG_ARCH_QCOM)))
+CDEFINES += -DMSM_PLATFORM
 ifeq ($(CONFIG_CNSS), y)
 ifeq ($(CONFIG_HIF_PCI), 1)
 CDEFINES += -DFEATURE_BUS_BANDWIDTH
@@ -1879,9 +1885,16 @@ endif
 ifneq ($(MODNAME), wlan)
 CHIP_NAME ?= $(MODNAME)
 CDEFINES += -DMULTI_IF_NAME=\"$(CHIP_NAME)\"
+ifeq ($(CONFIG_ARCH_QCS405), y)
+CDEFINES += -DIFNAME_SUFFIX=\"tf\"
+CDEFINES += -DIFNAME_SUFFIX_SIZE=2
+endif
 ifeq ($(CONFIG_MULTI_IF_LOG), y)
 CDEFINES += -DMULTI_IF_LOG
 endif
+else
+CDEFINES += -DIFNAME_SUFFIX=\"\"
+CDEFINES += -DIFNAME_SUFFIX_SIZE=0
 endif
 
 # WLAN_HDD_ADAPTER_MAGIC must be unique for all instances of the driver on the
