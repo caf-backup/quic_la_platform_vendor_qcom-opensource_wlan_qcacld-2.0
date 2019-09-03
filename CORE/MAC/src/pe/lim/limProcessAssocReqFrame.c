@@ -295,6 +295,7 @@ bool lim_send_assoc_ind_to_sme(tpAniSirGlobal pMac,
 				      uint8_t subType,
 				      tpSirMacMgmtHdr pHdr,
 				      tpSirAssocReq pAssocReq,
+				      enum ani_akm_type akm_type,
 				      bool pmfConnection,
 				      bool *assoc_req_copied)
 {
@@ -656,7 +657,11 @@ sendIndToSme:
 
 	pStaDs->valid                  = 0;
 	pStaDs->mlmStaContext.authType = authType;
+	pStaDs->mlmStaContext.akm_type = akm_type;
 	pStaDs->staType = STA_ENTRY_PEER;
+
+	limLog(pMac, LOGE, FL("auth_type = %d, akm_type = %d"),
+	       authType, akm_type);
 
 	//TODO: If listen interval is more than certain limit, reject the association.
 	//Need to check customer requirements and then implement.
@@ -1010,6 +1015,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
     tANI_U16 assocId = 0;
     bool assoc_req_copied = false;
     tDot11fIEVHTCaps *vht_caps;
+    enum ani_akm_type akm_type = ANI_AKM_TYPE_NONE;
 
     limGetPhyMode(pMac, &phyMode, psessionEntry);
 
@@ -1579,6 +1585,8 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
                     goto error;
 
                 }
+                akm_type = lim_translate_rsn_oui_to_akm_type(
+                                   Dot11fIERSN.akm_suite[0]);
             } else if (pAssocReq->wpaPresent) {
                 // Unpack the WPA IE
                 if(pAssocReq->wpa.length)
@@ -1626,6 +1634,8 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
 
                     goto error;
                 }/* end - if(pAssocReq->wpa.length) */
+                akm_type = lim_translate_rsn_oui_to_akm_type(
+                                          Dot11fIEWPA.auth_suites[0]);
             }
         } /* end of if(psessionEntry->pLimStartBssReq->privacy
             && psessionEntry->pLimStartBssReq->rsnIE->length) */
@@ -1659,7 +1669,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
     }
 
     if (!lim_send_assoc_ind_to_sme(pMac, psessionEntry, subType, pHdr,
-                                   pAssocReq, pmfConnection,
+                                   pAssocReq, akm_type, pmfConnection,
                                    &assoc_req_copied))
         goto error;
     return;
@@ -1741,7 +1751,7 @@ void limSendMlmAssocInd(tpAniSirGlobal pMac, tpDphHashNode pStaDs, tpPESession p
                      (tANI_U8 *)&(pAssocReq->ssId), pAssocReq->ssId.length + 1);
         pMlmAssocInd->sessionId = psessionEntry->peSessionId;
         pMlmAssocInd->authType =  pStaDs->mlmStaContext.authType;
-
+        pMlmAssocInd->akm_type =  pStaDs->mlmStaContext.akm_type;
         pMlmAssocInd->capabilityInfo = pAssocReq->capabilityInfo;
 
         // Fill in RSN IE information
