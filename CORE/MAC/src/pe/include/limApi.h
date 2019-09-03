@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2016, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -257,5 +257,12 @@ void limRemainOnChnRsp(tpAniSirGlobal pMac, eHalStatus status, tANI_U32 *data);
   --------------------------------------------------------------------------*/
 void limProcessAbortScanInd(tpAniSirGlobal pMac, tANI_U8 sessionId);
 
+/**
+ * lim_translate_rsn_oui_to_akm_type() - translate RSN OUI to AKM type
+ * @auth_suite: auth suite
+ *
+ * Return: AKM type
+ */
+enum ani_akm_type lim_translate_rsn_oui_to_akm_type(uint8_t auth_suite[4]);
 /************************************************************/
 #endif /* __LIM_API_H */
