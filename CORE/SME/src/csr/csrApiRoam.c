@@ -1841,6 +1841,7 @@ v_U32_t csrConvertPhyCBStateToIniValue(ePhyChanBondState phyCbState)
 eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
 {
     eHalStatus status = eHAL_STATUS_SUCCESS;
+    int i;
 
     if(pParam)
     {
@@ -2200,6 +2201,14 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
             pParam->sta_roam_policy_params.skip_unsafe_channels;
         pMac->roam.configParam.sta_roam_policy.sap_operating_band =
             pParam->sta_roam_policy_params.sap_operating_band;
+	pMac->roam.configParam.wlm_latency_enable =
+		pParam->wlm_latency_enable;
+	pMac->roam.configParam.wlm_latency_level =
+		pParam->wlm_latency_level;
+	for (i = 0; i < CSR_NUM_WLM_LATENCY_LEVEL; i++) {
+		pMac->roam.configParam.wlm_latency_flags[i] =
+			pParam->wlm_latency_flags[i];
+	}
     }
 
     return status;
@@ -2208,6 +2217,8 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
 eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
 {
     eHalStatus status = eHAL_STATUS_INVALID_PARAMETER;
+    int i;
+
     if(pParam)
     {
         pParam->WMMSupportMode = pMac->roam.configParam.WMMSupportMode;
@@ -2422,6 +2433,12 @@ eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
                pMac->roam.configParam.tx_non_aggr_sw_retry_threshhold_vi;
         pParam->tx_non_aggr_sw_retry_threshhold_vo =
                pMac->roam.configParam.tx_non_aggr_sw_retry_threshhold_vo;
+	pParam->wlm_latency_enable = pMac->roam.configParam.wlm_latency_enable;
+	pParam->wlm_latency_level = pMac->roam.configParam.wlm_latency_level;
+	for (i = 0; i < CSR_NUM_WLM_LATENCY_LEVEL; i++) {
+		pParam->wlm_latency_flags[i] =
+			pMac->roam.configParam.wlm_latency_flags[i];
+	}
         status = eHAL_STATUS_SUCCESS;
     }
     return (status);

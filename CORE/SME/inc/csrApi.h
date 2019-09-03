@@ -42,6 +42,8 @@
 #include "sirMacProtDef.h"
 #include "csrLinkList.h"
 
+#define CSR_NUM_WLM_LATENCY_LEVEL   4
+
 typedef enum
 {
     eCSR_AUTH_TYPE_NONE,    //never used
@@ -1422,6 +1424,9 @@ typedef struct tagCsrConfigParam
 #ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
     tANI_U32    sap_ch_switch_with_csa;
 #endif//#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
+    uint16_t wlm_latency_enable;
+    uint16_t wlm_latency_level;
+    uint32_t wlm_latency_flags[CSR_NUM_WLM_LATENCY_LEVEL];
 }tCsrConfigParam;
 
 //Tush
