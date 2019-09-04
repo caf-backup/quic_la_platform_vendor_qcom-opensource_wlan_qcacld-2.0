@@ -96,6 +96,7 @@ when           who                what, where, why
 #define       MAX_ACL_MAC_ADDRESS          32
 #define       AUTO_CHANNEL_SELECT          0
 #define       MAX_ASSOC_IND_IE_LEN         255
+#define       ASSOC_REQ_IE_OFFSET          4
 
 /* defines for WPS config states */
 #define       SAP_WPS_DISABLED             0
@@ -267,6 +268,8 @@ typedef struct sap_StationAssocIndication_s {
     eCsrEncryptionType negotiatedUCEncryptionType;
     eCsrEncryptionType negotiatedMCEncryptionType;
     tANI_BOOLEAN fAuthRequired;
+    uint32_t owe_ie_len;
+    uint8_t *owe_ie;
 } tSap_StationAssocIndication;
 
 typedef struct sap_StationAssocReassocCompleteEvent_s {
@@ -964,7 +967,8 @@ WLANSAP_Open
 VOS_STATUS
 WLANSAP_Start
 (
-    v_PVOID_t  pvosGCtx
+    v_PVOID_t  pvosGCtx,
+    bool reinit
 );
 
 /*==========================================================================

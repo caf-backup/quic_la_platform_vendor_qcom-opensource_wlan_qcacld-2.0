@@ -17244,6 +17244,26 @@ void wlan_hdd_cfg80211_extscan_callback(void *ctx, const tANI_U16 evType,
 
 #endif /* FEATURE_WLAN_EXTSCAN */
 
+void hdd_send_update_owe_info_event(hdd_adapter_t *adapter,
+				    uint8_t sta_addr[],
+				    uint8_t *owe_ie,
+				    uint32_t owe_ie_len)
+{
+	struct cfg80211_update_owe_info owe_info;
+	struct net_device *dev = adapter->dev;
+
+	ENTER();
+
+	vos_mem_copy(owe_info.peer, sta_addr, ETH_ALEN);
+	owe_info.ie = owe_ie;
+	owe_info.ie_len = owe_ie_len;
+
+	cfg80211_update_owe_info_event(dev, &owe_info, GFP_KERNEL);
+
+	EXIT();
+}
+#endif
+
 /* cfg80211_ops */
 static struct cfg80211_ops wlan_hdd_cfg80211_ops =
 {

@@ -300,6 +300,7 @@ typedef struct sSapContext {
      */
     struct sap_avoid_channels_info sap_detected_avoid_ch_ie;
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
+    vos_list_t  owe_pending_assoc_ind_list;
 } *ptSapContext;
 
 
