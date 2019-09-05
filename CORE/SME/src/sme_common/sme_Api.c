@@ -19355,6 +19355,21 @@ void sme_set_chan_info_callback(tHalHandle hal_handle,
 	mac->chan_info_cb = callback;
 }
 
+eHalStatus sme_update_owe_info(tHalHandle hal,
+			       struct sSirSmeAssocInd *assoc_ind)
+{
+	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+	eHalStatus status;
+
+	status = sme_AcquireGlobalLock(&mac->sme);
+	if (HAL_STATUS_SUCCESS(status)) {
+		status = csr_update_owe_info(mac, assoc_ind);
+		sme_ReleaseGlobalLock(&mac->sme);
+	}
+
+	return status;
+}
+
 uint32_t sme_unpack_rsn_ie(tHalHandle hal, uint8_t *buf,
                            uint8_t buf_len,
                            tDot11fIERSN *rsn_ie)

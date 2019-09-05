@@ -1482,6 +1482,9 @@ limSendAssocRspMgmtFrame(tpAniSirGlobal pMac,
 
     nBytes += sizeof(tSirMacMgmtHdr) + nPayload;
 
+    if (pSta)
+        nBytes += pSta->mlmStaContext.owe_ie_len;
+
     halstatus = palPktAlloc( pMac->hHdd, HAL_TXRX_FRM_802_11_MGMT,
                              ( tANI_U16 )nBytes, ( void** ) &pFrame,
                              ( void** ) &pPacket );
@@ -1553,6 +1556,11 @@ limSendAssocRspMgmtFrame(tpAniSirGlobal pMac,
         vos_mem_copy( pFrame+sizeof(tSirMacMgmtHdr)+nPayload,
             &addIE[0], addnIELen ) ;
     }
+
+    if (pSta && pSta->mlmStaContext.owe_ie_len)
+        vos_mem_copy(pFrame + sizeof(tSirMacMgmtHdr) + nPayload + addnIELen,
+                                     pSta->mlmStaContext.owe_ie,
+                                     pSta->mlmStaContext.owe_ie_len);
 
     if( ( SIR_BAND_5_GHZ == limGetRFBand(psessionEntry->currentOperChannel))
        || ( psessionEntry->pePersona == VOS_P2P_CLIENT_MODE ) ||
