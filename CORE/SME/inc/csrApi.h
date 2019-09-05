@@ -1400,6 +1400,9 @@ typedef struct sSirSmeAssocIndToUpperLayerCnf
     /* Timing and fine Timing measurement capability clubbed together */
     tANI_U8              timingMeasCap;
     tSirSmeChanInfo      chan_info;
+    uint8_t              ecsa_capable;
+    uint32_t             ies_len;
+    uint8_t              *ies;
 } tSirSmeAssocIndToUpperLayerCnf, *tpSirSmeAssocIndToUpperLayerCnf;
 
 typedef struct tagCsrSummaryStatsInfo

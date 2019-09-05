@@ -2956,31 +2956,18 @@ sapSignalHDDevent
                          pCsrRoamInfo->peerMac,sizeof(tSirMacAddr));
             sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.staId = pCsrRoamInfo->staId ;
             sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.statusCode = pCsrRoamInfo->statusCode;
-            sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.iesLen = pCsrRoamInfo->rsnIELen;
-            vos_mem_copy(sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.ies, pCsrRoamInfo->prsnIE,
-                        pCsrRoamInfo->rsnIELen);
 
-#ifdef FEATURE_WLAN_WAPI
-            if(pCsrRoamInfo->wapiIELen)
-            {
-                v_U8_t  len = sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.iesLen;
-                sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.iesLen
-                                                        += pCsrRoamInfo->wapiIELen;
-                vos_mem_copy(&sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.ies[len],
-                        pCsrRoamInfo->pwapiIE,
-                            pCsrRoamInfo->wapiIELen);
-            }
-#endif
-
-            if(pCsrRoamInfo->addIELen)
-            {
-                v_U8_t  len = sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.iesLen;
-                sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.iesLen
-                                                        += pCsrRoamInfo->addIELen;
-                vos_mem_copy(&sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.ies[len], pCsrRoamInfo->paddIE,
-                            pCsrRoamInfo->addIELen);
+            if (pCsrRoamInfo->assocReqLength < ASSOC_REQ_IE_OFFSET) {
+                VOS_TRACE(VOS_MODULE_ID_SAP, VOS_TRACE_LEVEL_INFO_HIGH,
+                          FL("Invalid assoc request length:%d"),
+                          pCsrRoamInfo->assocReqLength);
+                return VOS_STATUS_E_FAILURE;
             }
 
+            sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.iesLen =
+		(pCsrRoamInfo->assocReqLength - ASSOC_REQ_IE_OFFSET);
+            sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.ies =
+		(pCsrRoamInfo->assocReqPtr + ASSOC_REQ_IE_OFFSET);
             /* also fill up the channel info from the csrRoamInfo */
             pChanInfo =
             &sapApAppEvent.sapevt.sapStationAssocReassocCompleteEvent.chan_info;
