@@ -1730,31 +1730,37 @@ ol_rx_offload_paddr_deliver_ind_handler(
              &peer_id, &tid, &fw_desc, &head_buf, &tail_buf);
 
         peer = ol_txrx_peer_find_by_id(htt_pdev->txrx_pdev, peer_id);
-        if (peer && peer->vdev) {
-            adf_dp_trace_set_track(head_buf, ADF_RX);
-            NBUF_SET_PACKET_TRACK(head_buf, NBUF_TX_PKT_DATA_TRACK);
-            adf_dp_trace_log_pkt(peer->vdev->vdev_id,
-                                 head_buf, ADF_RX);
-            DPTRACE(adf_dp_trace(head_buf,
-                    ADF_DP_TRACE_RX_OFFLOAD_HTT_PACKET_PTR_RECORD,
-                    adf_nbuf_data_addr(head_buf),
-                    sizeof(adf_nbuf_data(head_buf)), ADF_RX));
-            vdev = peer->vdev;
-            OL_RX_OSIF_DELIVER(vdev, peer, head_buf);
+	    if(!head_buf) {
+		    TXRX_PRINT(TXRX_PRINT_LEVEL_ERR,
+			     "%s: head_buf is NULL", __func__);
+		    return;
         } else {
-            buf = head_buf;
-            while (1) {
-                adf_nbuf_t next;
-                next = adf_nbuf_next(buf);
-                htt_rx_desc_frame_free(htt_pdev, buf);
-                if (buf == tail_buf) {
-                    break;
-                }
-                buf = next;
-            }
+		    if (peer && peer->vdev) {
+		        adf_dp_trace_set_track(head_buf, ADF_RX);
+		        NBUF_SET_PACKET_TRACK(head_buf, NBUF_TX_PKT_DATA_TRACK);
+		        adf_dp_trace_log_pkt(peer->vdev->vdev_id,
+		                             head_buf, ADF_RX);
+		        DPTRACE(adf_dp_trace(head_buf,
+		                ADF_DP_TRACE_RX_OFFLOAD_HTT_PACKET_PTR_RECORD,
+		                adf_nbuf_data_addr(head_buf),
+		                sizeof(adf_nbuf_data(head_buf)), ADF_RX));
+		        vdev = peer->vdev;
+		        OL_RX_OSIF_DELIVER(vdev, peer, head_buf);
+		    } else {
+		        buf = head_buf;
+		        while (1) {
+		            adf_nbuf_t next;
+		            next = adf_nbuf_next(buf);
+		            htt_rx_desc_frame_free(htt_pdev, buf);
+		            if (buf == tail_buf) {
+		                break;
+		            }
+		            buf = next;
+		        }
+		    }
+		    msdu_iter++;
+		    msdu_count--;
         }
-        msdu_iter++;
-        msdu_count--;
     }
     htt_rx_msdu_buff_replenish(htt_pdev);
 }

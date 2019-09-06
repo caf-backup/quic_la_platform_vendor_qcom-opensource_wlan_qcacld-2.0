@@ -260,6 +260,11 @@ limProcessAuthFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo, tpPESession pse
 
     pBody = WDA_GET_RX_MPDU_DATA(pRxPacketInfo);
 
+    if (!pBody) {
+        limLog(pMac, LOGE, FL("pBody is NULL"));
+		return;
+    }
+
     auth_alg = *(uint16_t *)pBody;
     limLog(pMac, LOG1, FL("auth_alg %d "), auth_alg);
     //Restore default failure timeout
