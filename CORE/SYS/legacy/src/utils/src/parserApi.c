@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1289,6 +1289,9 @@ PopulateDot11fExtCap(tpAniSirGlobal   pMac,
     }
 #endif
     p_ext_cap->extChanSwitch = 1;
+
+    if (pMac->roam.configParam.enable_bcast_probe_rsp)
+        p_ext_cap->fils_capability = 1;
 
     if (pDot11f->present)
     {
@@ -4702,7 +4705,7 @@ sirConvertAddtsReq2Struct(tpAniSirGlobal    pMac,
         if ( addts.num_WMMTCLAS )
         {
             j = (tANI_U8)(pAddTs->numTclas + addts.num_WMMTCLAS);
-            if ( SIR_MAC_TCLASIE_MAXNUM > j ) j = SIR_MAC_TCLASIE_MAXNUM;
+            if ( SIR_MAC_TCLASIE_MAXNUM < j ) j = SIR_MAC_TCLASIE_MAXNUM;
 
             for ( i = pAddTs->numTclas; i < j; ++i )
             {
@@ -4884,7 +4887,7 @@ sirConvertAddtsRsp2Struct(tpAniSirGlobal    pMac,
         if ( addts.num_WMMTCLAS )
         {
             j = (tANI_U8)(pAddTs->numTclas + addts.num_WMMTCLAS);
-            if ( SIR_MAC_TCLASIE_MAXNUM > j ) j = SIR_MAC_TCLASIE_MAXNUM;
+            if ( SIR_MAC_TCLASIE_MAXNUM < j ) j = SIR_MAC_TCLASIE_MAXNUM;
 
             for ( i = pAddTs->numTclas; i < j; ++i )
             {
@@ -6107,33 +6110,33 @@ sap_auth_offload_construct_rsn_opaque( tDot11fIERSN *pdot11f_rsn,
         ptr += element_len;
         data_len += element_len;
 
-        if (pdot11f_rsn->pwise_cipher_suite_cnt) {
-            element_len = sizeof(pdot11f_rsn->pwise_cipher_suite_cnt);
+        if (pdot11f_rsn->pwise_cipher_suite_count) {
+            element_len = sizeof(pdot11f_rsn->pwise_cipher_suite_count);
             vos_mem_copy(ptr,
-                         &pdot11f_rsn->pwise_cipher_suite_cnt,
+                         &pdot11f_rsn->pwise_cipher_suite_count,
                          element_len);
             ptr += element_len;
             data_len += element_len;
-            for (count = 0; count < pdot11f_rsn->pwise_cipher_suite_cnt;
+            for (count = 0; count < pdot11f_rsn->pwise_cipher_suite_count;
                  count++) {
                 element_len = DOT11F_RSN_OUI_SIZE;
                 vos_mem_copy(ptr,
-                             &pdot11f_rsn->pwise_cipher_suite[count][0],
+                             &pdot11f_rsn->pwise_cipher_suites[count][0],
                              element_len);
                 ptr += element_len;
                 data_len += element_len;
             }
         }
 
-        if (pdot11f_rsn->akm_suite_count) {
-            element_len = sizeof(pdot11f_rsn->akm_suite_count);
-            vos_mem_copy(ptr, &pdot11f_rsn->akm_suite_count, element_len);
+        if (pdot11f_rsn->akm_suite_cnt) {
+            element_len = sizeof(pdot11f_rsn->akm_suite_cnt);
+            vos_mem_copy(ptr, &pdot11f_rsn->akm_suite_cnt, element_len);
             ptr += element_len;
             data_len += element_len;
-            for (count = 0; count < pdot11f_rsn->akm_suite_count; count++) {
+            for (count = 0; count < pdot11f_rsn->akm_suite_cnt; count++) {
                 element_len = DOT11F_RSN_OUI_SIZE;
                 vos_mem_copy(ptr,
-                             &pdot11f_rsn->akm_suites[count][0],
+                             &pdot11f_rsn->akm_suite[count][0],
                              element_len);
                 ptr += element_len;
                 data_len += element_len;

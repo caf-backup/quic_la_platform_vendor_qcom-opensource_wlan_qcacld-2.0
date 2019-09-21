@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -457,7 +457,7 @@ typedef struct sSirSupportedRates {
     * bits 0-15 and 32 should be set.
     */
     tANI_U8 supportedMCSSet[SIR_MAC_MAX_SUPPORTED_MCS_SET];
-
+    bool mcs_txforce2chain;
     /*
      * RX Highest Supported Data Rate defines the highest data
      * rate that the STA is able to receive, in unites of 1Mbps.
@@ -1133,6 +1133,7 @@ typedef struct sSirSmeJoinReq
     tANI_U8             cc_switch_mode;
 #endif
     tVOS_CON_MODE       staPersona;             //Persona
+    bool sae_pmk_cached;
     bool                osen_association;
     bool                wps_registration;
     ePhyChanBondState   cbMode;                 // Pass CB mode value in Join.
@@ -3674,6 +3675,7 @@ typedef struct sSirSmeAddStaSelfReq
     uint32_t        tx_non_aggr_sw_retry_threshhold_bk;
     uint32_t        tx_non_aggr_sw_retry_threshhold_vi;
     uint32_t        tx_non_aggr_sw_retry_threshhold_vo;
+    bool            enable_bcast_probe_rsp;
 }tSirSmeAddStaSelfReq, *tpSirSmeAddStaSelfReq;
 
 typedef struct sSirSmeDelStaSelfReq
@@ -4742,6 +4744,44 @@ typedef struct sSirScanOffloadReq {
       struct vendor_oui voui;
       ------------------------*/
 } tSirScanOffloadReq, *tpSirScanOffloadReq;
+
+/**
+ * struct wlm_latency_level_param - WLM parameters
+ * @wlm_latency_level: wlm latency level to set
+ *  0 - normal, 1 - moderate, 2 - low, 3 - ultralow
+ * @wlm_latency_flags: wlm latency flags to set
+ *  |31  12|  11  |  10  |9    8|7    6|5    4|3    2|  1  |  0  |
+ *  +------+------+------+------+------+------+------+-----+-----+
+ *  | RSVD | SSLP | CSLP | RSVD | Roam | RSVD | DWLT | DFS | SUP |
+ *  +------+-------------+-------------+-------------------------+
+ *  |  WAL |      PS     |     Roam    |         Scan            |
+ *
+ *  bit 0: Avoid scan request from HLOS if setting
+ *  bit 1: Skip DFS channel SCAN if setting
+ *  bit 2-3: Define policy of dwell time/duration for each foreign channel
+ *     (b2 b3)
+ *     (0  0 ): Default scan dwell time
+ *     (0  1 ): Reserve
+ *     (1  0 ): Shrink off channel dwell time
+ *     (1  1 ): Reserve
+ *  bit 4-5: Reserve for scan
+ *  bit 6-7: Define roaming policy
+ *     (b6 b7)
+ *     (0  0 ): Default roaming behavior, allow roaming in all scenarios
+ *     (0  1 ): Disallow all roaming
+ *     (1  0 ): Allow roaming when final bmissed
+ *     (1  1 ): Reserve
+ *  bit 8-9: Reserve for roaming
+ *  bit 10: Disable css power collapse if setting
+ *  bit 11: Disable sys sleep if setting
+ *  bit 12-31: Reserve for future useage
+ * @vdev_id: vdev id
+ */
+struct wlm_latency_level_param {
+	uint16_t wlm_latency_level;
+	uint32_t wlm_latency_flags;
+	uint16_t vdev_id;
+};
 
 /**
  * sir_scan_event_type - scan event types used in LIM
@@ -6445,6 +6485,16 @@ typedef struct
     tANI_U32 pending_msdu;
 } tSirWifiWmmAcStat, *tpSirWifiWmmAcStat;
 
+struct driver_txq_states {
+	char *cat_name;
+	int wrr_count;
+	int pending_frms;
+	int pending_bytes;
+	bool active;
+	int discard_frms;
+	int dispatched_frms;
+};
+
 /* Interface statistics - corresponding to 2nd most
  * LSB in wifi statistics bitmap  for getting statistics
  */
@@ -6599,9 +6649,9 @@ struct sir_wifi_peer_signal_stats {
 	/* Background noise */
 	int32_t nf[WIFI_MAX_CHAINS];
 
-	int32_t per_ant_rx_mpdus[WIFI_MAX_CHAINS];
-	int32_t per_ant_tx_mpdus[WIFI_MAX_CHAINS];
-	int32_t num_chain;
+	uint32_t per_ant_rx_mpdus[WIFI_MAX_CHAINS];
+	uint32_t per_ant_tx_mpdus[WIFI_MAX_CHAINS];
+	uint32_t num_chain;
 };
 
 #define WIFI_VDEV_NUM		4
@@ -6751,6 +6801,9 @@ struct sir_wifi_ll_ext_period {
  * @rx_mcs_array_len: length of RX mcs stats buffer
  * @peer_stats: peer stats
  * @cca: physical channel CCA stats
+ * @maxtrix: bitmask for antenna used while receiving this stats
+ * @phyerr_count: phy error times
+ * @timestamp: timestamp on target side for this event
  * @stats: pointer to stats data buffer.
  *
  * Structure of the whole statictics is like this:
@@ -6833,6 +6886,9 @@ struct sir_wifi_ll_ext_stats {
 	uint32_t rx_mcs_array_len;
 	struct sir_wifi_ll_ext_peer_stats *peer_stats;
 	struct sir_wifi_chan_cca_stats *cca;
+	uint32_t maxtrix;
+	uint32_t phyerr_count;
+	uint32_t timestamp;
 	uint8_t stats[];
 };
 
@@ -7192,6 +7248,8 @@ struct sblock_info {
  * @vdev_id: vdev id
  * @tsf_low: low 32bits of tsf
  * @tsf_high: high 32bits of tsf
+ * @tsf_id: tsf id
+ * @tsf_id_valid: valid tsf id or not
  *
  * driver use this struct to store the tsf info
  */
@@ -7199,6 +7257,8 @@ struct stsf {
 	uint32_t vdev_id;
 	uint32_t tsf_low;
 	uint32_t tsf_high;
+	uint32_t tsf_id;
+	uint32_t tsf_id_valid;
 };
 
 #ifdef WLAN_FEATURE_MOTION_DETECTION
@@ -7527,7 +7587,7 @@ struct dsrc_radio_chan_stats_ctxt {
 	struct completion completion_evt;
 	uint32_t config_chans_num;
 	uint32_t config_chans_freq[DSRC_MAX_CHAN_STATS_CNT];
-	spinlock_t chan_stats_lock;
+	adf_os_spinlock_t chan_stats_lock;
 	uint32_t chan_stats_num;
 	struct radio_chan_stats_info chan_stats[DSRC_MAX_CHAN_STATS_CNT];
 };
@@ -7698,6 +7758,7 @@ struct udp_resp_offload {
  * @wow_pulse_interval_low: Pulse interval low
  * @wow_pulse_interval_high: Pulse interval high
  * @wow_pulse_repeat_count: Pulse repeat count
+ * @wow_pulse_init_state: Pulse init level
  *
  * SME uses this structure to configure wow pulse info
  * and send it to WMA
@@ -7707,7 +7768,8 @@ struct wow_pulse_mode {
 	uint8_t                    wow_pulse_pin;
 	uint16_t                   wow_pulse_interval_high;
 	uint16_t                   wow_pulse_interval_low;
-	uint16_t                   wow_pulse_repeat_count;
+	uint32_t                   wow_pulse_repeat_count;
+	uint8_t                    wow_pulse_init_state;
 };
 
 /*
@@ -8578,6 +8640,7 @@ struct sme_flush_pending {
  * @cycle_count: cycle count
  * @rx_clear_count: rx clear count
  * @tx_frame_count: TX frame count
+ * @rx_frame_count: RX frame count
  * @clock_freq: clock frequence MHZ
  */
 struct scan_chan_info {
@@ -8587,6 +8650,7 @@ struct scan_chan_info {
 	uint32_t cycle_count;
 	uint32_t rx_clear_count;
 	uint32_t tx_frame_count;
+	uint32_t rx_frame_count;
 	uint32_t clock_freq;
 };
 
@@ -8678,4 +8742,33 @@ struct action_frame_random_filter {
 	uint8_t mac_addr[VOS_MAC_ADDR_SIZE];
 };
 
+/**
+ * struct sae_info - SAE info used for commit/confirm messages
+ * @msg_type: Message type
+ * @msg_len: length of message
+ * @vdev_id: vdev id
+ * @peer_mac_addr: peer MAC address
+ * @ssid: SSID
+ */
+struct sir_sae_info {
+	uint16_t msg_type;
+	uint16_t msg_len;
+	uint32_t vdev_id;
+	v_MACADDR_t peer_mac_addr;
+	tSirMacSSid ssid;
+};
+
+/**
+ * struct sir_sae_msg - SAE msg used for message posting
+ * @message_type: message type
+ * @length: message length
+ * @session_id: SME session id
+ * @sae_status: SAE status, 0: Success, Non-zero: Failure.
+ */
+struct sir_sae_msg {
+	uint16_t message_type;
+	uint16_t length;
+	uint16_t session_id;
+	uint8_t sae_status;
+};
 #endif /* __SIR_API_H */

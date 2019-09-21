@@ -57,6 +57,7 @@ ifeq ($(KERNEL_BUILD), 0)
 	ifeq ($(CONFIG_ARCH_MSM8909), y)
 		ifeq ($(CONFIG_ROME_IF), sdio)
 			CONFIG_WLAN_SYNC_TSF_PLUS := y
+			CONFIG_FEATURE_COEX_PTA_CONFIG_ENABLE := y
 		endif
 	endif
 
@@ -136,6 +137,9 @@ ifeq ($(KERNEL_BUILD), 0)
         ifeq ($(CONFIG_ROME_IF),sdio)
                 CONFIG_WLAN_FEATURE_11W := y
         endif
+        ifeq ($(CONFIG_ROME_IF),pci)
+                CONFIG_WLAN_FEATURE_11W := y
+        endif
 
         ifneq ($(CONFIG_MOBILE_ROUTER), y)
         #Flag to enable NAN
@@ -167,6 +171,12 @@ ifeq ($(KERNEL_BUILD), 0)
 
 endif
 
+ifeq ($(CONFIG_ARCH_QCS405), y)
+	CONFIG_TXRX_PERF := y
+	CONFIG_NON_QC_PLATFORM := n
+	CONFIG_CUSTOMIZE_SDIO_CCCR_VALUE := y
+endif
+
 #Enable Power debugfs feature only if debug_fs is enabled
 ifeq ($(CONFIG_DEBUG_FS), y)
 CONFIG_WLAN_POWER_DEBUGFS := y
@@ -187,6 +197,9 @@ ifneq ($(CONFIG_MOBILE_ROUTER), y)
 CONFIG_QCOM_ESE := y
 CONFIG_QCOM_ESE_UPLOAD := y
 endif
+
+# enable SAE by default
+CONFIG_WLAN_FEATURE_SAE := y
 
 # Feature flags which are not (currently) configurable via Kconfig
 
@@ -395,6 +408,10 @@ HIF_COMMON_DIR := CORE/SERVICES/HIF/common
 HIF_COMMON_OBJS := $(HIF_COMMON_DIR)/hif_bmi_reg_access.o \
                    $(HIF_COMMON_DIR)/hif_diag_reg_access.o
 
+ifeq ($(CONFIG_GPIO_OOB),y)
+HIF_DIR_OBJS += $(HIF_DIR)/hif_oob.o
+endif
+
 HIF_SDIO_DIR := CORE/SERVICES/HIF/sdio
 HIF_SDIO_OBJS := $(HIF_SDIO_DIR)/hif_sdio_send.o \
                  $(HIF_SDIO_DIR)/hif_sdio_dev.o \
@@ -414,6 +431,7 @@ HIF_SDIO_NATIVE_OBJS := $(HIF_SDIO_NATIVE_SRC_DIR)/hif.o \
                         $(HIF_SDIO_NATIVE_SRC_DIR)/hif_scatter.o
 
 HIF_INC := -I$(WLAN_ROOT)/$(HIF_COMMON_DIR) \
+           -I$(WLAN_ROOT)/$(HIF_DIR) \
            -I$(WLAN_ROOT)/$(HIF_SDIO_DIR) \
            -I$(WLAN_ROOT)/$(HIF_SDIO_LINUX_DIR) \
            -I$(WLAN_ROOT)/$(HIF_SDIO_NATIVE_INC_DIR) \
@@ -474,6 +492,11 @@ endif
 
 ifeq ($(CONFIG_QCOM_TDLS),y)
 HDD_OBJS +=	$(HDD_SRC_DIR)/wlan_hdd_tdls.o
+endif
+
+ifeq ($(CONFIG_NETWORK_PHY_TIMESTAMPING), y)
+CONFIG_WLAN_SYNC_TSF_PLUS := y
+CONFIG_WLAN_SYNC_TSF_PTP := y
 endif
 
 ifeq ($(CONFIG_WLAN_SYNC_TSF_PLUS), y)
@@ -773,6 +796,10 @@ VOSS_OBJS :=    $(VOSS_SRC_DIR)/vos_api.o \
 		$(VOSS_SRC_DIR)/vos_types.o \
                 $(VOSS_SRC_DIR)/vos_utils.o
 
+ifeq ($(CONFIG_CLD_REGDB),y)
+VOSS_OBJS += $(VOSS_SRC_DIR)/vos_regdb.o
+endif
+
 ifeq ($(BUILD_DIAG_VERSION),1)
 VOSS_OBJS += $(VOSS_SRC_DIR)/vos_diag.o
 endif
@@ -837,6 +864,13 @@ PKTLOG_OBJS :=	$(PKTLOG_DIR)/pktlog_ac.o \
 		$(PKTLOG_DIR)/pktlog_internal.o \
 		$(PKTLOG_DIR)/linux_ac.o
 
+############ Smart Antenna ############
+SA_DIR := CORE/SERVICES/SA
+SA_INC := -I$(WLAN_ROOT)/$(SA_DIR)
+
+SA_OBJS := $(SA_DIR)/smart_antenna_api.o \
+			$(SA_DIR)/smart_antenna.o
+
 ############ HTT ############
 HTT_DIR :=      CORE/CLD_TXRX/HTT
 HTT_INC :=      -I$(WLAN_ROOT)/$(HTT_DIR)
@@ -863,9 +897,14 @@ HIF_DIR := CORE/SERVICES/HIF
 ifeq ($(CONFIG_HIF_PCI), 1)
 HIF_PCIE_DIR := $(HIF_DIR)/PCIe
 
-HIF_INC := -I$(WLAN_ROOT)/$(HIF_PCIE_DIR)
+HIF_INC := -I$(WLAN_ROOT)/$(HIF_PCIE_DIR) \
+           -I$(WLAN_ROOT)/$(HIF_DIR)
 
 HIF_OBJS := $(HIF_DIR)/ath_procfs.o
+
+ifeq ($(CONFIG_GPIO_OOB),y)
+HIF_OBJS += $(HIF_DIR)/hif_oob.o
+endif
 
 HIF_PCIE_OBJS := $(HIF_PCIE_DIR)/copy_engine.o \
                  $(HIF_PCIE_DIR)/hif_pci.o \
@@ -878,9 +917,14 @@ endif
 ifeq ($(CONFIG_HIF_USB), 1)
 HIF_USB_DIR := $(HIF_DIR)/USB
 
-HIF_INC := -I$(WLAN_ROOT)/$(HIF_USB_DIR)
+HIF_INC := -I$(WLAN_ROOT)/$(HIF_USB_DIR) \
+           -I$(WLAN_ROOT)/$(HIF_DIR)
 
 HIF_OBJS := $(HIF_DIR)/ath_procfs.o
+
+ifeq ($(CONFIG_GPIO_OOB),y)
+HIF_OBJS += $(HIF_DIR)/hif_oob.o
+endif
 
 HIF_USB_OBJS := $(HIF_USB_DIR)/usbdrv.o \
                  $(HIF_USB_DIR)/hif_usb.o \
@@ -968,7 +1012,8 @@ INCS +=		$(WMA_INC) \
 		$(PKTLOG_INC) \
 		$(HTT_INC) \
 		$(HTC_INC) \
-		$(DFS_INC)
+		$(DFS_INC) \
+    $(SA_INC)
 
 INCS +=		$(HIF_INC) \
 		$(BMI_INC)
@@ -1000,6 +1045,10 @@ OBJS +=		$(WMA_OBJS) \
 OBJS +=		$(HIF_OBJS) \
 		$(BMI_OBJS) \
 		$(HTT_OBJS)
+
+ifeq ($(CONFIG_SMART_ANTENNA), y)
+OBJS +=  $(SA_OBJS)
+endif
 
 ifeq ($(CONFIG_REMOVE_PKT_LOG), 0)
 OBJS +=		$(PKTLOG_OBJS)
@@ -1057,10 +1106,31 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DFEATURE_WLAN_CH144 \
 		-DHTC_CRP_DEBUG \
 		-DWLAN_VOWIFI_DEBUG \
-		-DATH_SUPPORT_DFS
+		-DATH_SUPPORT_DFS \
+		-DWMI_COEX_BTC_DUTYCYCLE
 
 ifeq ($(CONFIG_WLAN_POWER_DEBUGFS), y)
 CDEFINES += -DWLAN_POWER_DEBUGFS
+endif
+
+ifeq ($(CONFIG_CUSTOMIZE_SDIO_CCCR_VALUE), y)
+CDEFINES += -DCCCR1=0x15
+CDEFINES += -DCCCR1_VALUE=0x30
+CDEFINES += -DCCCR2=0xf2
+CDEFINES += -DCCCR2_VALUE=0x0f
+CDEFINES += -DCCCR3=0xf1
+CDEFINES += -DCCCR3_VALUE=0xa8
+CDEFINES += -DCCCR4=0xf0
+CDEFINES += -DCCCR4_VALUE=0x81
+else
+CDEFINES += -DCCCR1=0
+CDEFINES += -DCCCR1_VALUE=0
+CDEFINES += -DCCCR2=0
+CDEFINES += -DCCCR2_VALUE=0
+CDEFINES += -DCCCR3=0
+CDEFINES += -DCCCR3_VALUE=0
+CDEFINES += -DCCCR4=0
+CDEFINES += -DCCCR4_VALUE=0
 endif
 
 ifeq ($(CONFIG_FEATURE_COEX_PTA_CONFIG_ENABLE), y)
@@ -1088,6 +1158,10 @@ CDEFINES +=     -DWLAN_FEATURE_MBSSID \
 		-DWLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
 endif
 
+ifeq ($(CONFIG_CLD_REGDB), y)
+CDEFINES +=     -DCLD_REGDB
+endif
+
 ifeq ($(CONFIG_QCA_WIFI_SDIO), 1)
 CDEFINES +=     -DCONFIG_HL_SUPPORT \
                 -DCONFIG_AR6320_SUPPORT \
@@ -1101,10 +1175,30 @@ ifneq ($(TARGET_BUILD_VARIANT),user)
 CDEFINES +=	-DCONFIG_ATH_PROCFS_DIAG_SUPPORT
 endif
 
+ifeq ($(CONFIG_TXRX_PERF), y)
+CDEFINES +=	-DQCA_TXRX_PERF \
+		-DTX_COMPLETION_THREAD \
+		-DMSM8976_TCP_PERF \
+		-DQCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK \
+		-DFEATURE_BUS_BANDWIDTH \
+		-DCONFIG_PERF_NON_QC_PLATFORM \
+		-DHIF_RX_THREAD
+endif
+
 # Enable SDIO HIF Rx Thread
 ifeq ($(CONFIG_HIF_RX_THREAD), y)
 CDEFINES +=	-DHIF_RX_THREAD
 endif
+
+
+ifeq ($(CONFIG_TXRX_PERF_EXT), y)
+CDEFINES += -DCONFIG_IXC_TIMER \
+		-DCONFIG_PERF_MODE
+endif
+endif
+
+ifeq ($(CONFIG_CUSTOMIZED_FIRMWARE_PATH), y)
+CDEFINES += -DCUSTOMIZED_FIRMWARE_PATH
 endif
 
 ifeq ($(CONFIG_WLAN_FEATURE_DSRC), y)
@@ -1204,6 +1298,9 @@ endif
 ifeq ($(CONFIG_SLUB_DEBUG_ON),y)
 CDEFINES += -DTIMER_MANAGER
 CDEFINES += -DMEMORY_DEBUG
+ifneq ($(CONFIG_ROME_IF), sdio)
+CDEFINES += -DNBUF_MAP_UNMAP_DEBUG
+endif
 endif
 
 ifeq ($(HAVE_CFG80211),1)
@@ -1232,6 +1329,10 @@ endif
 
 ifeq ($(CONFIG_QCACLD_WLAN_LFR3),y)
 CDEFINES += -DWLAN_FEATURE_ROAM_OFFLOAD
+endif
+
+ifeq ($(CONFIG_WLAN_FEATURE_SAE),y)
+CDEFINES += -DWLAN_FEATURE_SAE
 endif
 
 ifeq ($(CONFIG_CNSS_GENL), y)
@@ -1272,7 +1373,9 @@ endif
 
 ifneq ($(TARGET_BUILD_VARIANT),user)
 CDEFINES += -DDEBUG_RX_RING_BUFFER
+ifneq ($(CONFIG_TXRX_PERF),y)
 CDEFINES += -DQCA_PKT_PROTO_TRACE
+endif
 endif
 
 # enable the MAC Address auto-generation feature
@@ -1377,6 +1480,9 @@ CDEFINES += -DCONFIG_HL_SUPPORT
 CDEFINES += -DDEBUG_HL_LOGGING
 ifeq ($(CONFIG_QOS_FWD_SUPPORT), y)
 CDEFINES += -DQOS_FWD_SUPPORT
+endif
+ifeq ($(CONFIG_USB_WARM_RESET), y)
+CDEFINES += -DFEATURE_USB_WARM_RESET
 endif
 endif
 
@@ -1613,10 +1719,18 @@ ifeq ($(CONFIG_WLAN_SYNC_TSF_PLUS), y)
 CDEFINES += -DWLAN_FEATURE_TSF_PLUS
 endif
 
+ifeq ($(CONFIG_WLAN_SYNC_TSF_PTP), y)
+CDEFINES += -DWLAN_FEATURE_TSF_PTP
+endif
+
 # Enable target dump for non-qualcomm platform
 ifeq ($(CONFIG_NON_QC_PLATFORM), y)
 CDEFINES += -DCONFIG_NON_QC_PLATFORM
 CDEFINES += -DTARGET_DUMP_FOR_NON_QC_PLATFORM
+endif
+
+ifeq ($(CONFIG_GPIO_OOB),y)
+CDEFINES += -DCONFIG_GPIO_OOB
 endif
 
 ifeq ($(CONFIG_NON_QC_PLATFORM), y)
@@ -1651,6 +1765,7 @@ CDEFINES += -DACS_FW_REPORT_PARAM
 CDEFINES += -DFEATURE_WLAN_SUB_20_MHZ
 CDEFINES += -DMAC_NOTIFICATION_FEATURE
 CDEFINES += -DCHANNEL_HOPPING_ALL_BANDS
+CDEFINES += -DHDD_IPA_RX_SOFTIRQ_THRESH
 endif
 
 ifeq ($(CONFIG_ARCH_MSM8937), y)
@@ -1683,7 +1798,6 @@ ifeq ($(CONFIG_WLAN_OFFLOAD_PACKETS),y)
 CDEFINES += -DWLAN_FEATURE_OFFLOAD_PACKETS
 endif
 
-
 ifeq ($(CONFIG_WLAN_UDP_RESPONSE_OFFLOAD),y)
 CDEFINES += -DWLAN_FEATURE_UDP_RESPONSE_OFFLOAD
 endif
@@ -1693,8 +1807,41 @@ ifeq ($(CONFIG_WLAN_WOW_PULSE), y)
 CDEFINES += -DWLAN_FEATURE_WOW_PULSE
 endif
 
+CDEFINES += -DAUDIO_MULTICAST_AGGR_SUPPORT
+
+#Enable Pattern Bitmap Match & Magic Pattern WOW
+ifeq ($(CONFIG_PBM_MAGIC_WOW), y)
+CDEFINES += -DWLAN_FEATURE_WOW_PULSE
+CDEFINES += -DFEATURE_PBM_MAGIC_WOW
+endif
+
+ifeq ($(CONFIG_USB_RESET_RESUME_PERSISTENCE), y)
+CDEFINES += -DUSB_RESET_RESUME_PERSISTENCE
+endif
+
 ifeq ($(CONFIG_WLAN_FEATURE_NAN_DATAPATH),y)
 CDEFINES += -DWLAN_FEATURE_NAN_DATAPATH
+endif
+
+ifeq ($(CONFIG_USB_RECOVERY),y)
+CDEFINES += -DWLAN_FEATURE_USB_RECOVERY
+endif
+
+ifeq ($(CONFIG_VOS_MEM_PRE_ALLOC),y)
+ifneq ($(CONFIG_WCNSS_MEM_PRE_ALLOC), y)
+CDEFINES += -DCONFIG_VOS_MEM_PRE_ALLOC
+
+ifeq ($(CONFIG_FEATURE_LARGE_PREALLOC),y)
+CDEFINES += -DFEATURE_LARGE_PREALLOC
+obj-m += $(MODNAME).o
+$(MODNAME)-y += $(HDD_SRC_DIR)/wlan_hdd_main_module.o
+OBJS +=$(VOSS_SRC_DIR)/vos_memory_prealloc.o
+else
+obj-m += wlan_prealloc.o
+wlan_prealloc-y += $(VOSS_SRC_DIR)/vos_memory_prealloc.o
+endif
+
+endif
 endif
 
 ifeq ($(CONFIG_DPTRACE_ENABLE), y)
@@ -1703,6 +1850,10 @@ endif
 
 ifeq ($(CONFIG_HIF_PCI), 1)
 CDEFINES += -DFORCE_LEGACY_PCI_INTERRUPTS
+endif
+
+ifeq ($(CONFIG_SUPPORT_P2P_BY_ONE_INTF_WLAN), y)
+CDEFINES += -DSUPPORT_P2P_BY_ONE_INTF_WLAN
 endif
 
 ifeq ($(CONFIG_WLAN_THERMAL_SHUTDOWN), 1)
@@ -1716,6 +1867,10 @@ endif
 
 ifeq ($(CONFIG_WLAN_WAPI_MODE_11AC_DISABLE), y)
 CDEFINES += -DWLAN_WAPI_MODE_11AC_DISABLE
+endif
+
+ifeq ($(CONFIG_WLAN_DYNAMIC_POWER_CONTROL), y)
+CDEFINES += -DFEATURE_DYNAMIC_POWER_CONTROL
 endif
 
 KBUILD_CPPFLAGS += $(CDEFINES)
@@ -1741,6 +1896,19 @@ endif
 ifneq ($(MODNAME), wlan)
 CHIP_NAME ?= $(MODNAME)
 CDEFINES += -DMULTI_IF_NAME=\"$(CHIP_NAME)\"
+ifeq ($(CONFIG_ARCH_QCS405), y)
+CDEFINES += -DIFNAME_SUFFIX=\"tf\"
+CDEFINES += -DIFNAME_SUFFIX_SIZE=2
+else
+CDEFINES += -DIFNAME_SUFFIX=\"\"
+CDEFINES += -DIFNAME_SUFFIX_SIZE=0
+endif
+ifeq ($(CONFIG_MULTI_IF_LOG), y)
+CDEFINES += -DMULTI_IF_LOG
+endif
+else
+CDEFINES += -DIFNAME_SUFFIX=\"\"
+CDEFINES += -DIFNAME_SUFFIX_SIZE=0
 endif
 
 # WLAN_HDD_ADAPTER_MAGIC must be unique for all instances of the driver on the
@@ -1751,6 +1919,15 @@ ifdef WLAN_HDD_ADAPTER_MAGIC
 CDEFINES += -DWLAN_HDD_ADAPTER_MAGIC=$(WLAN_HDD_ADAPTER_MAGIC)
 endif
 
+ifeq ($(CONFIG_SMART_ANTENNA), y)
+CDEFINES += -DWLAN_SMART_ANTENNA_FEATURE
+endif
+
 # Module information used by KBuild framework
+ifeq ($(CONFIG_FEATURE_LARGE_PREALLOC),y)
+obj-$(CONFIG_QCA_CLD_WLAN) += wlan_prealloc.o
+wlan_prealloc-y := $(OBJS)
+else
 obj-$(CONFIG_QCA_CLD_WLAN) += $(MODNAME).o
 $(MODNAME)-y := $(OBJS)
+endif
