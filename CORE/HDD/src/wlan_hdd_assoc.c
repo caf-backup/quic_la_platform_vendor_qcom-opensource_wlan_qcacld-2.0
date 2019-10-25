@@ -2320,7 +2320,7 @@ void hdd_PerformRoamSetKeyComplete(hdd_adapter_t *pAdapter)
 {
     eHalStatus halStatus = eHAL_STATUS_SUCCESS;
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
-    tCsrRoamInfo roamInfo;
+    tCsrRoamInfo roamInfo = {0};
     roamInfo.fAuthRequired = FALSE;
     vos_mem_copy(roamInfo.bssid,
                  pHddStaCtx->roam_info.bssid,
