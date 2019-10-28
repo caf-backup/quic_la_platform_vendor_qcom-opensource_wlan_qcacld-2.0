@@ -172,6 +172,7 @@ int _readwrite_file(const char *filename, char *rbuf,
 {
 	int ret = 0;
 	struct file *filp = (struct file *)-ENOENT;
+	struct inode    *inode;
 	mm_segment_t oldfs;
 	oldfs = get_fs();
 	set_fs(KERNEL_DS);
@@ -184,17 +185,16 @@ int _readwrite_file(const char *filename, char *rbuf,
 			break;
 		}
 
+		inode = GET_INODE_FROM_FILEP(filp);
+		if (!inode) {
+			printk(KERN_ERR
+				"_readwrite_file: Error 2\n");
+			ret = -ENOENT;
+			break;
+		}
+
 		if (length == 0) {
 			/* Read the length of the file only */
-			struct inode    *inode;
-
-			inode = GET_INODE_FROM_FILEP(filp);
-			if (!inode) {
-				printk(KERN_ERR
-					"_readwrite_file: Error 2\n");
-				ret = -ENOENT;
-				break;
-			}
 			ret = i_size_read(inode->i_mapping->host);
 			break;
 		}
@@ -211,6 +211,7 @@ int _readwrite_file(const char *filename, char *rbuf,
 					"_readwrite_file: Error 3\n");
 				break;
 			}
+			write_inode_now(inode, 1);
 		} else {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0))
 			ret = kernel_read(
