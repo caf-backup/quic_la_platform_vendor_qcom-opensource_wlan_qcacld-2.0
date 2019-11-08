@@ -24828,7 +24828,7 @@ static tANI_U32 GetPackedSizeCore(tpAniSirGlobal pCtx,
                             break;
                 case SigIeRICDataDesc:
                             offset = sizeof(tDot11fIERICDataDesc);
-                            pnNeeded -= 2  ; //Subtract the length and Oui as this is our container IE to group Ies and it doesnt have its own length and OUI.
+                            *pnNeeded -= 2  ; //Subtract the length and Oui as this is our container IE to group Ies and it doesnt have its own length and OUI.
                             status |= dot11fGetPackedIERICDataDesc(pCtx, ( tDot11fIERICDataDesc* )(pFrm + pIe->offset + offset * i ), pnNeeded);
                             break;
                 case SigIeRSN:
