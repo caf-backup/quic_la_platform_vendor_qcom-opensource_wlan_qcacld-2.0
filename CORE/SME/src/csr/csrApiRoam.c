@@ -16611,7 +16611,7 @@ eHalStatus csrRoamOpenSession(tpAniSirGlobal pMac,
         }
     }
     if ((pMac->sme.max_intf_count == i) ||
-       (pbSessionId == CSR_SESSION_ID_INVALID))
+        (*pbSessionId == CSR_SESSION_ID_INVALID))
     {
         //No session is available
         smsLog(pMac, LOGE,
