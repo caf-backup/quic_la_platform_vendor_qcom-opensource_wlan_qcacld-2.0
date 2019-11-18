@@ -69,11 +69,11 @@ int logPrintf(tpAniSirGlobal mac, tANI_U32 cmd,
 			   tANI_U32 arg1, tANI_U32 arg2,
 			   tANI_U32 arg3, tANI_U32 arg4);
 #else
-static inline void logPrintf(tpAniSirGlobal mac, tANI_U32 cmd,
+static inline int logPrintf(tpAniSirGlobal mac, tANI_U32 cmd,
 			tANI_U32 arg1, tANI_U32 arg2,
 			tANI_U32 arg3, tANI_U32 arg4)
 {
-    return;
+    return 0;
 }
 #endif
 char *
