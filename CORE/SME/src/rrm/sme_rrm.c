@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -835,7 +835,7 @@ void sme_RrmProcessBeaconReportReqInd(tpAniSirGlobal pMac, void *pMsgBuf)
    if (pBeaconReq->channelList.numChannels > SIR_ESE_MAX_MEAS_IE_REQS) {
          smsLog( pMac, LOGP, "Beacon report request numChannels: %u exceeds "
                 "max num channels", pBeaconReq->channelList.numChannels);
-         return eHAL_STATUS_FAILURE;
+         return;
    }
    //section 11.10.8.1 (IEEE Std 802.11k-2008)
    //channel 0 and 255 has special meaning.
