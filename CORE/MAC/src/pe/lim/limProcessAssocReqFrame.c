@@ -1559,7 +1559,8 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
             psessionEntry->pLimStartBssReq->privacy &&
             psessionEntry->pLimStartBssReq->rsnIE.length) {
             limLog(pMac, LOG1,
-                   FL("RSN enabled auth, Re/Assoc req from STA: "MAC_ADDRESS_STR),
+                   FL("RSN enabled auth, peer(%d, %d) Re/Assoc req from STA: "MAC_ADDRESS_STR),
+                   pAssocReq->rsnPresent,pAssocReq->rsn.length,
                        MAC_ADDR_ARRAY(pHdr->sa));
             if(pAssocReq->rsnPresent)
             {
@@ -1654,9 +1655,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
                         goto error;
                     }
                 }
-            } /* end - if(pAssocReq->rsnPresent) */
-            if((!pAssocReq->rsnPresent) && pAssocReq->wpaPresent)
-            {
+            } else if (pAssocReq->wpaPresent) {
                 // Unpack the WPA IE
                 if(pAssocReq->wpa.length)
                 {
@@ -1705,7 +1704,7 @@ limProcessAssocReqFrame(tpAniSirGlobal pMac, tANI_U8 *pRxPacketInfo,
                 }/* end - if(pAssocReq->wpa.length) */
                 akm_type = lim_translate_rsn_oui_to_akm_type(
                                           Dot11fIEWPA.auth_suites[0]);
-            } /* end - if(pAssocReq->wpaPresent) */
+            }
         } /* end of if(psessionEntry->pLimStartBssReq->privacy
             && psessionEntry->pLimStartBssReq->rsnIE->length) */
 
