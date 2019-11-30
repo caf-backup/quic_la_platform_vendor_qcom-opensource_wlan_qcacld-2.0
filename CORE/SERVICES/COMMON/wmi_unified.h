@@ -20405,6 +20405,13 @@ typedef enum wmi_coex_config_type {
 #endif
     WMI_COEX_CONFIG_SINK_WLAN_TDM       = 21, /* config interval (ms units) (arg1 BT, arg2 WLAN) for A2DP SINK + WLAN */
     WMI_COEX_CONFIG_COEX_ENABLE_MCC_TDM = 22, /* config disable/enable COEX TDM for MCC */
+#ifdef FEATURE_COEX_TPUT_SHAPING_CONFIG
+    /* WMI_COEX_CONFIG_ENABLE_TPUT_SHAPING
+     * config to disable/enable the feature of Shaping traffic
+     * for BT/wifi coex.
+     */
+    WMI_COEX_CONFIG_ENABLE_TPUT_SHAPING = 45,
+#endif
 } WMI_COEX_CONFIG_TYPE;
 
 typedef struct {

@@ -571,14 +571,15 @@ static inline struct htt_tx_compl_ind_append_txtstamp *ol_tx_get_txtstamps(
 	return txtstamp_list;
 }
 
-static inline void ol_tx_timestamp(ol_txrx_pdev_handle pdev,
+static inline void
+ol_tx_timestamp(ol_txrx_pdev_handle pdev, enum htt_tx_status status,
 		adf_nbuf_t netbuf, u_int64_t ts)
 {
 	if (!netbuf)
 		return;
 
 	if (pdev->ol_tx_timestamp_cb)
-		pdev->ol_tx_timestamp_cb(netbuf, ts);
+		pdev->ol_tx_timestamp_cb((int32_t)status, netbuf, ts);
 }
 #else
 static inline struct htt_tx_compl_ind_append_txtstamp *ol_tx_get_txtstamps(
@@ -587,11 +588,12 @@ static inline struct htt_tx_compl_ind_append_txtstamp *ol_tx_get_txtstamps(
 	return NULL;
 }
 
-static inline void ol_tx_timestamp(ol_txrx_pdev_handle pdev,
+static inline void
+ol_tx_timestamp(ol_txrx_pdev_handle pdev, enum htt_tx_status status,
 		adf_nbuf_t netbuf, u_int64_t ts)
 {
 }
-#endif
+#endif /* WLAN_FEATURE_TSF_PLUS */
 
 /* WARNING: ol_tx_inspect_handler()'s bahavior is similar to that of ol_tx_completion_handler().
  * any change in ol_tx_completion_handler() must be mirrored in ol_tx_inspect_handler().
@@ -631,7 +633,10 @@ ol_tx_completion_handler(
     }
 
     OL_TX_DELAY_COMPUTE(pdev, status, desc_ids, num_msdus);
-    if (status == htt_tx_status_ok)
+
+    if (status == htt_tx_status_ok ||
+        status == htt_tx_status_discard ||
+        status == htt_tx_status_no_ack)
         txtstamp_list = ol_tx_get_txtstamps(msg_word, num_msdus);
 
     trace_str = (status) ? "OT:C:F:" : "OT:C:S:";
@@ -648,7 +653,7 @@ ol_tx_completion_handler(
         tx_desc->status = status;
         netbuf = tx_desc->netbuf;
         if (txtstamp_list)
-            ol_tx_timestamp(pdev, netbuf,
+            ol_tx_timestamp(pdev, status, netbuf,
                     (u_int64_t)txtstamp_list->timestamp[i]);
 
         NBUF_UPDATE_TX_PKT_COUNT(netbuf, NBUF_TX_PKT_FREE);

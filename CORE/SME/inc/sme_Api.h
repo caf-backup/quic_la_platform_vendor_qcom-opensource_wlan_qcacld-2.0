@@ -4600,6 +4600,10 @@ VOS_STATUS sme_set_btc_wlan_coex_tx_power(uint32_t coex_tx_power);
 VOS_STATUS sme_configure_pta_coex(uint8_t coex_pta_config_enable, uint32_t coex_pta_config_param);
 #endif
 
+#ifdef FEATURE_COEX_TPUT_SHAPING_CONFIG
+VOS_STATUS sme_configure_tput_shaping_enable(uint32_t coex_tput_shaping_enable);
+#endif
+
 uint8_t    sme_is_any_session_in_connected_state(tHalHandle h_hal);
 
 typedef void ( *tSmeSetThermalLevelCallback)(void *pContext, u_int8_t level);

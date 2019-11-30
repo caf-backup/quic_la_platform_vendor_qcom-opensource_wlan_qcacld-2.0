@@ -159,6 +159,7 @@ ifeq ($(KERNEL_BUILD), 0)
 	CONFIG_WLAN_FEATURE_DSRC := y
 	endif
 
+	CONFIG_FEATURE_COEX_TPUT_SHAPING_CONFIG := y
 endif
 
 #Enable Power debugfs feature only if debug_fs is enabled
@@ -1660,6 +1661,10 @@ endif
 
 ifeq ($(CONFIG_HIF_PCI), 1)
 CDEFINES += -DFORCE_LEGACY_PCI_INTERRUPTS
+endif
+
+ifeq ($(CONFIG_FEATURE_COEX_TPUT_SHAPING_CONFIG), y)
+CDEFINES += -DFEATURE_COEX_TPUT_SHAPING_CONFIG
 endif
 
 KBUILD_CPPFLAGS += $(CDEFINES)
