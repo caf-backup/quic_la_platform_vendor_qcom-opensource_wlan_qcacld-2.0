@@ -1349,6 +1349,10 @@ struct hdd_adapter_s
 #ifdef WLAN_FEATURE_TSF
 #define MAX_INVALD_TIME_NUM 4
    /* tsf value get from firmware */
+#ifndef CONFIG_NON_QC_PLATFORM
+   uint64_t cur_qtime;
+   uint64_t last_qtime;
+#endif
    uint64_t cur_target_time;
    uint64_t cur_host_time;
    uint64_t last_host_time;
@@ -1473,6 +1477,10 @@ struct hdd_adapter_s
      * to cater to multiple application.
      */
     uint8_t restrict_offchannel_cnt;
+
+#ifdef AUDIO_MULTICAST_AGGR_SUPPORT
+    struct audio_multicast_aggr multicast_aggr;
+#endif
 
 };
 
@@ -2716,7 +2724,30 @@ void hdd_set_driver_del_ack_enable(uint16_t session_id, hdd_context_t *hdd_ctx,
 }
 #endif
 
-
+/**
+ * hdd_send_update_owe_info_event - Send update OWE info event
+ * @adapter: Pointer to adapter
+ * @sta_addr: MAC address of peer STA
+ * @owe_ie: OWE IE
+ * @owe_ie_len: Length of OWE IE
+ *
+ * Send update OWE info event to hostapd
+ *
+ * Return: none
+ */
+#ifdef CFG80211_EXTERNAL_DH_UPDATE_SUPPORT
+void hdd_send_update_owe_info_event(hdd_adapter_t *adapter,
+				    uint8_t sta_addr[],
+				    uint8_t *owe_ie,
+				    uint32_t owe_ie_len);
+#else
+static inline void hdd_send_update_owe_info_event(hdd_adapter_t *adapter,
+						  uint8_t sta_addr[],
+						  uint8_t *owe_ie,
+						  uint32_t owe_ie_len)
+{
+}
+#endif
 
 int hdd_reassoc(hdd_adapter_t *pAdapter, const tANI_U8 *bssid,
 		const tANI_U8 channel, const handoff_src src);
@@ -2726,6 +2757,7 @@ void hdd_sap_restart_handle(struct work_struct *work);
 void hdd_set_rps_cpu_mask(hdd_context_t *hdd_ctx);
 void hdd_initialize_adapter_common(hdd_adapter_t *adapter);
 void hdd_svc_fw_shutdown_ind(struct device *dev);
+void hdd_svc_fw_crashed_ind(struct device *dev);
 void wlan_hdd_stop_enter_lowpower(hdd_context_t *hdd_ctx);
 void wlan_hdd_init_chan_info(hdd_context_t *hdd_ctx);
 void wlan_hdd_deinit_chan_info(hdd_context_t *hdd_ctx);
