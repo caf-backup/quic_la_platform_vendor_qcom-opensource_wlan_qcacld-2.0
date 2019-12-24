@@ -56,7 +56,7 @@ typedef ath_dma_addr_t CE_addr_t;
 struct hif_pci_softc {
     void __iomem *mem; /* PCI address. */
                        /* For efficiency, should be first in struct */
-
+    size_t mem_len;
     struct device *dev;
     struct pci_dev *pdev;
     struct _NIC_DEV aps_osdev;
