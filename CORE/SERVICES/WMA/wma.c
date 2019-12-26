@@ -29031,9 +29031,8 @@ static void wma_bin_search_rate(wma_search_rate_t *tbl, int32_t tbl_size,
 			*ret_flag = tbl[mid].flag;
 			return;
 		} else {
-		/* not found. if mid's rate is larger than input move
-		 * upper to mid. If mid's rate is larger than input
-		 * move lower to mid. */
+		/* not found. if mid's rate is less than input move
+		 * lower to mid, otherwise move upper to mid. */
 			if (*mbpsx10_rate > tbl[mid].rate)
 				lower = mid;
 			else
@@ -29050,6 +29049,12 @@ static VOS_STATUS wma_fill_ofdm_cck_mcast_rate(tANI_S32 mbpsx10_rate,
 	tANI_U8 nss, tANI_U8 *rate)
 {
 	tANI_U8 idx = 0;
+
+	if (mbpsx10_rate <= 0) {
+		*rate = 0xFF;
+		return VOS_STATUS_SUCCESS;
+	}
+
 	wma_bin_search_rate(ofdm_cck_rate_tbl, WMA_MAX_OFDM_CCK_RATE_TBL_SIZE,
 		&mbpsx10_rate, &idx);
 
@@ -29247,7 +29252,71 @@ static VOS_STATUS wma_fill_vht_mcast_rate(u_int32_t shortgi,
 	return (*streaming_rate != 0) ? VOS_STATUS_SUCCESS : VOS_STATUS_E_INVAL;
 }
 
+static
+VOS_STATUS wma_ht_vht_rate_auto_chose(u_int32_t shortgi, u_int32_t chwidth,
+				      WLAN_PHY_MODE chanmode, A_UINT32 mhz,
+				      tANI_S32 mbpsx10_rate, tANI_U8 nss,
+				      tANI_U8 *rate)
+{
+	int ret;
+	tANI_U8 rate_ht = *rate;
+	tANI_U8 rate_vht = *rate;
+	tANI_S32 stream_rate_ht = 0;
+	tANI_S32 stream_rate_vht = 0;
+	tANI_S32 stream_rate = 0;
+
+	ret = wma_fill_ht_mcast_rate(shortgi, chwidth, mbpsx10_rate,
+			  nss, chanmode, &rate_ht, &stream_rate_ht);
+	if (ret != VOS_STATUS_SUCCESS) {
+		stream_rate_ht = 0;
+	}
+	if (mhz < WMA_2_4_GHZ_MAX_FREQ) {
+		/* not in 5 GHZ frequency */
+		*rate = rate_ht;
+		stream_rate = stream_rate_ht;
+		goto ht_vht_done;
+	}
+	/* capable doing 11AC mcast so that search vht tables */
+	ret = wma_fill_vht_mcast_rate(shortgi, chwidth, mbpsx10_rate,
+			nss, chanmode, &rate_vht, &stream_rate_vht);
+	if (ret != VOS_STATUS_SUCCESS) {
+		if (stream_rate_ht != 0)
+			ret = VOS_STATUS_SUCCESS;
+		*rate = rate_ht;
+		stream_rate = stream_rate_ht;
+		goto ht_vht_done;
+	}
+	if (stream_rate_ht == 0) {
+		/* only vht rate available */
+		*rate = rate_vht;
+		stream_rate = stream_rate_vht;
+	} else {
+		/* set ht as default first */
+		*rate = rate_ht;
+		stream_rate = stream_rate_ht;
+		if (stream_rate < mbpsx10_rate) {
+			if (mbpsx10_rate <= stream_rate_vht ||
+				stream_rate < stream_rate_vht) {
+				*rate = rate_vht;
+				stream_rate = stream_rate_vht;
+			}
+		} else {
+			if (stream_rate_vht >= mbpsx10_rate &&
+				stream_rate_vht < stream_rate) {
+				*rate = rate_vht;
+				stream_rate = stream_rate_vht;
+			}
+		}
+	}
+ht_vht_done:
+	WMA_LOGE("%s: NSS = %d, ucast_chanmode = %d, freq = %d, input_rate = %d, chwidth = %d rate = 0x%x, streaming_rate = %d",
+		 __func__, nss, chanmode, mhz,
+		 mbpsx10_rate, chwidth, *rate, stream_rate);
+	return VOS_STATUS_SUCCESS;
+}
+
 #define WMA_MCAST_1X1_CUT_OFF_RATE 2000
+#ifndef MCRATE_FORCE_UNRATE
 /*
  * FUNCTION: wma_encode_mc_rate
  *
@@ -29287,73 +29356,84 @@ static VOS_STATUS wma_encode_mc_rate(u_int32_t shortgi, u_int32_t chwidth,
 	 * we try to choose best ht/vht mcs rate */
 	if (540 < mbpsx10_rate) {
 		/* cannot use ofdm/cck, choose closest ht/vht mcs rate */
-		tANI_U8 rate_ht = *rate;
-		tANI_U8 rate_vht = *rate;
-		tANI_S32 stream_rate_ht = 0;
-		tANI_S32 stream_rate_vht = 0;
-		tANI_S32 stream_rate = 0;
-
-		ret = wma_fill_ht_mcast_rate(shortgi, chwidth, mbpsx10_rate,
-				  nss, chanmode, &rate_ht, &stream_rate_ht);
-		if (ret != VOS_STATUS_SUCCESS) {
-			stream_rate_ht = 0;
-		}
-		if (mhz < WMA_2_4_GHZ_MAX_FREQ) {
-			/* not in 5 GHZ frequency */
-			*rate = rate_ht;
-			stream_rate = stream_rate_ht;
-			goto ht_vht_done;
-		}
-		/* capable doing 11AC mcast so that search vht tables */
-		ret = wma_fill_vht_mcast_rate(shortgi, chwidth, mbpsx10_rate,
-				nss, chanmode, &rate_vht, &stream_rate_vht);
-		if (ret != VOS_STATUS_SUCCESS) {
-			if (stream_rate_ht != 0)
-				ret = VOS_STATUS_SUCCESS;
-			*rate = rate_ht;
-			stream_rate = stream_rate_ht;
-			goto ht_vht_done;
-		}
-		if (stream_rate_ht == 0) {
-			/* only vht rate available */
-			*rate = rate_vht;
-			stream_rate = stream_rate_vht;
-		} else {
-			/* set ht as default first */
-			*rate = rate_ht;
-			stream_rate = stream_rate_ht;
-			if (stream_rate < mbpsx10_rate) {
-				if (mbpsx10_rate <= stream_rate_vht ||
-					stream_rate < stream_rate_vht) {
-					*rate = rate_vht;
-					stream_rate = stream_rate_vht;
-				}
-			} else {
-				if (stream_rate_vht >= mbpsx10_rate &&
-					stream_rate_vht < stream_rate) {
-					*rate = rate_vht;
-					stream_rate = stream_rate_vht;
-				}
-			}
-		}
-ht_vht_done:
-		WMA_LOGE("%s: NSS = %d, ucast_chanmode = %d, "
-				"freq = %d, input_rate = %d, chwidth = %d "
-				"rate = 0x%x, streaming_rate = %d",
-				__func__, nss, chanmode, mhz,
-				mbpsx10_rate, chwidth, *rate, stream_rate);
+		ret = wma_ht_vht_rate_auto_chose(shortgi, chwidth, chanmode,
+						 mhz, mbpsx10_rate,
+						 nss, rate);
 	} else {
-		if (mbpsx10_rate > 0)
-			ret = wma_fill_ofdm_cck_mcast_rate(mbpsx10_rate,
-					nss, rate);
-		else
-			*rate = 0xFF;
+		ret = wma_fill_ofdm_cck_mcast_rate(mbpsx10_rate,
+				nss, rate);
 		WMA_LOGE("%s: NSS = %d, ucast_chanmode = %d, "
 				"input_rate = %d, rate = 0x%x",
 				__func__, nss, chanmode, mbpsx10_rate, *rate);
 	}
 	return ret;
 }
+#else
+static VOS_STATUS wma_encode_mc_rate(u_int32_t shortgi, u_int32_t chwidth,
+	WLAN_PHY_MODE chanmode, A_UINT32 mhz, tANI_S32 mbpsx10_rate,
+	tANI_U8 nss, tANI_U8 *rate)
+{
+	int32_t ret = 0;
+
+	/* nss input value: 0 - 1x1; 1 - 2x2; 2 - 3x3 */
+	WMA_LOGE("%s: Input: chanmode = %d, nss = %d, mbpsx10 = 0x%x, chwidth = %d, shortgi = %d",
+		__func__, chanmode, nss, mbpsx10_rate, chwidth, shortgi);
+	if ((mbpsx10_rate & 0x40000000) && nss > 0) {
+		/* bit 30 indicates user inputed nss,
+		 * bit 28 and 29 used to encode nss */
+		tANI_U8 user_nss = (mbpsx10_rate & 0x30000000) >> 28;
+
+		nss = (user_nss < nss) ? user_nss : nss;
+		/* zero out bits 19 - 21 to recover the actual rate */
+		mbpsx10_rate &= ~0x70000000;
+	} else if (mbpsx10_rate <= WMA_MCAST_1X1_CUT_OFF_RATE) {
+		/* if the input rate is less or equal to the
+		 * 1x1 cutoff rate we use 1x1 only */
+		nss = 0;
+	}
+
+	/* encode NSS bits (bit 4, bit 5) */
+	*rate = (nss & 0x3) << 4;
+
+	if (chanmode <= MODE_11GONLY) {
+		if (mbpsx10_rate <= 540) {
+			/* chose legacy rate */
+			ret = wma_fill_ofdm_cck_mcast_rate(mbpsx10_rate,
+							   nss, rate);
+			WMA_LOGE("%s: NSS = %d, ucast_chanmode = %d, input_rate = %d, rate = 0x%x",
+				 __func__, nss, chanmode, mbpsx10_rate, *rate);
+		} else {
+			/* if mcast input rate exceeds the ofdm/cck max rate 54mpbs
+			 * we try to choose best ht/vht mcs rate */
+			wma_ht_vht_rate_auto_chose(shortgi, chwidth, chanmode,
+						   mhz, mbpsx10_rate,
+						   nss, rate);
+		}
+	} else {
+		tANI_S32 stream_rate = 0;
+		/* chose ht/vht rate */
+		if (chanmode == MODE_11NA_HT20 ||
+		    chanmode == MODE_11NG_HT20 ||
+		    chanmode == MODE_11NA_HT40 ||
+		    chanmode == MODE_11NG_HT40) {
+			ret = wma_fill_ht_mcast_rate(shortgi, chwidth,
+						     mbpsx10_rate, nss,
+						     chanmode, rate,
+						     &stream_rate);
+		} else if (chanmode >= MODE_11AC_VHT20 &&
+				chanmode <= MODE_11AC_VHT80_2G) {
+			ret = wma_fill_vht_mcast_rate(shortgi, chwidth,
+						      mbpsx10_rate, nss,
+						      chanmode, rate,
+						      &stream_rate);
+		}
+		WMA_LOGE("%s: ucast_chanmode = %d, NSS = %d, freq = %d, input_rate = %d, chwidth = %d rate = 0x%x, streaming_rate = %d",
+			 __func__, chanmode, nss, mhz,
+			 mbpsx10_rate, chwidth, *rate, stream_rate);
+	}
+	return ret;
+}
+#endif
 /*
  * FUNCTION: wma_process_rate_update_indate
  *

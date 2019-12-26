@@ -1905,6 +1905,10 @@ ifeq ($(CONFIG_SMART_ANTENNA), y)
 CDEFINES += -DWLAN_SMART_ANTENNA_FEATURE
 endif
 
+ifeq ($(CONFIG_FOR_MULTIRATE), y)
+CDEFINES += -DMCRATE_FORCE_UNRATE
+endif
+
 # Module information used by KBuild framework
 ifeq ($(CONFIG_FEATURE_LARGE_PREALLOC),y)
 obj-$(CONFIG_QCA_CLD_WLAN) += wlan_prealloc.o
