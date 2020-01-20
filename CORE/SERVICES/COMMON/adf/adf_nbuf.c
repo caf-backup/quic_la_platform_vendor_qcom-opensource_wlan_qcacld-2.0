@@ -687,6 +687,7 @@ static struct adf_nbuf_map_metadata *adf_nbuf_meta_get(adf_nbuf_t nbuf)
 	return NULL;
 }
 
+#ifdef HIF_PCI
 static a_status_t
 adf_nbuf_track_map(adf_nbuf_t nbuf, const char *file, uint32_t line)
 {
@@ -758,6 +759,17 @@ adf_nbuf_untrack_map(adf_nbuf_t nbuf, const char *file, uint32_t line)
 
 	adf_nbuf_history_add(nbuf, file, line, ADF_NBUF_UNMAP);
 }
+#else
+static inline a_status_t
+adf_nbuf_track_map(adf_nbuf_t nbuf, const char *file, uint32_t line)
+{
+	return A_STATUS_OK;
+}
+
+static inline void
+adf_nbuf_untrack_map(adf_nbuf_t nbuf, const char *file, uint32_t line)
+{}
+#endif
 
 a_status_t adf_nbuf_map_debug(adf_os_device_t osdev,
 			      adf_nbuf_t buf,
@@ -901,6 +913,7 @@ __adf_nbuf_unmap(
     __adf_nbuf_unmap_single(osdev, skb, dir);
 }
 
+#if defined(HIF_PCI)
 a_status_t
 __adf_nbuf_map_single(
     adf_os_device_t osdev, adf_nbuf_t buf, adf_os_dma_dir_t dir)
@@ -930,7 +943,19 @@ __adf_nbuf_unmap_single(
                      skb_end_pointer(buf) - buf->data, dir);
 #endif	/* #if !defined(A_SIMOS_DEVHOST) */
 }
-
+#else
+a_status_t
+__adf_nbuf_map_single(
+    adf_os_device_t osdev, adf_nbuf_t buf, adf_os_dma_dir_t dir)
+{
+	return A_STATUS_OK;
+}
+void
+__adf_nbuf_unmap_single(
+    adf_os_device_t osdev, adf_nbuf_t buf, adf_os_dma_dir_t dir)
+{
+}
+#endif
 /**
  * @brief return the dma map info
  *

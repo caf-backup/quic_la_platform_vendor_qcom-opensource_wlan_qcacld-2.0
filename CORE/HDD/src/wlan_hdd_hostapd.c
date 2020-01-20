@@ -5611,11 +5611,13 @@ static __iw_get_char_setnone(struct net_device *dev,
                                extra, WE_MAX_STR_LEN);
         }
 
+#ifdef AUDIO_MULTICAST_AGGR_SUPPORT
         case QCSAP_GET_ALL_GROUP_INFO:
         {
             return wlan_hdd_get_all_group_info(pAdapter, wrqu,
                                extra);
         }
+#endif
     }
     return 0;
 }
