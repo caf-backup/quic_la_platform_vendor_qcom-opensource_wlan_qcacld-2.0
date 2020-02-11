@@ -412,7 +412,7 @@ static void hdd_SendFTAssocResponse(struct net_device *dev, hdd_adapter_t *pAdap
     if (pCsrRoamInfo->nAssocRspLength < FT_ASSOC_RSP_IES_OFFSET)
     {
         hddLog(LOGE,
-            "%s: pCsrRoamInfo->nAssocRspLength=%d",
+            "%s: Invalid assoc rsp length %d",
             __func__, (int)pCsrRoamInfo->nAssocRspLength);
         return;
     }
@@ -441,6 +441,16 @@ static void hdd_SendFTAssocResponse(struct net_device *dev, hdd_adapter_t *pAdap
     hddLog(LOG1, "%s: AssocRsp is now at %02x%02x", __func__,
         (unsigned int)pFTAssocRsp[0],
         (unsigned int)pFTAssocRsp[1]);
+
+    /* Send the Assoc Resp, the supplicant needs this for initial Auth. */
+    len = pCsrRoamInfo->nAssocRspLength - FT_ASSOC_RSP_IES_OFFSET;
+    if (len > IW_GENERIC_IE_MAX) {
+        hddLog(LOGE,
+             "%s: Invalid assoc rsp length %d",
+             __func__, (int)pCsrRoamInfo->nAssocRspLength);
+        return;
+    }
+    wrqu.data.length = len;
 
     // We need to send the IEs to the supplicant.
     buff = kmalloc(IW_GENERIC_IE_MAX, GFP_ATOMIC);
