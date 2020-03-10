@@ -84,7 +84,7 @@
 #define DHCP_SOURCE_PORT 0x4400
 #define DHCP_DESTINATION_PORT 0x4300
 
-static sme_QosWmmUpType hddWmmDscpToUpMap[WLAN_HDD_MAX_DSCP+1];
+static sme_QosWmmUpType hddWmmDscpToUpMap[WLAN_MAX_DSCP+1];
 #define HDD_WMM_UP_TO_AC_MAP_SIZE 8
 const v_U8_t hddWmmUpToAcMap[] = {
    WLANTL_AC_BE,
