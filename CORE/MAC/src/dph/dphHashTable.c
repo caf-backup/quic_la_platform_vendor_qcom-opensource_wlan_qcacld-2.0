@@ -278,6 +278,7 @@ tpDphHashNode dphInitStaState(tpAniSirGlobal pMac, tSirMacAddr staAddr,
 
     pStaDs->added = 1;
     pStaDs->encPolicy = HAL_ENC_POLICY_NULL;
+    pStaDs->sta_deletion_in_progress = false;
 
 #ifdef WMM_APSD
     pStaDs->stopQueue = 0;
@@ -429,6 +430,7 @@ tSirRetStatus dphDeleteHashEntry(tpAniSirGlobal pMac, tSirMacAddr staAddr, tANI_
       else
          prev->next = ptr->next;
       ptr->added = 0;
+      ptr->sta_deletion_in_progress = false;
       ptr->next = 0;
     }
   else

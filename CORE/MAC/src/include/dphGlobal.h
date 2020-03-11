@@ -635,6 +635,8 @@ typedef struct sDphHashNode
     /* key installed for this STA or not in the firmware */
     tANI_U8 isKeyInstalled;
 
+    bool sta_deletion_in_progress;
+
     /* When a station with already an existing dph entry tries to
 
      * associate again, the old dph entry will be zeroed out except

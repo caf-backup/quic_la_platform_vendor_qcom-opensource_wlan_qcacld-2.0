@@ -190,6 +190,19 @@ void lim_check_sta_in_pe_entries(tpAniSirGlobal pMac, tpSirMacMgmtHdr pHdr)
                 && !pStaDs->rmfEnabled
 #endif
                ) {
+               if (pStaDs->mlmStaContext.mlmState ==
+                    eLIM_MLM_WT_DEL_STA_RSP_STATE ||
+                    pStaDs->mlmStaContext.mlmState ==
+                    eLIM_MLM_WT_DEL_BSS_RSP_STATE ||
+                    pStaDs->sta_deletion_in_progress) {
+                        pe_debug(
+                        "Deletion is in progress (%d) for peer:%pM in mlmState %d",
+                        pStaDs->sta_deletion_in_progress,
+                        pStaDs->staAddr,
+                        pStaDs->mlmStaContext.mlmState);
+                        return;
+                }
+                pStaDs->sta_deletion_in_progress = true;
                 limLog(pMac, LOGE,
                         FL("Sending Deauth and Deleting existing STA entry: "
                         MAC_ADDRESS_STR),
