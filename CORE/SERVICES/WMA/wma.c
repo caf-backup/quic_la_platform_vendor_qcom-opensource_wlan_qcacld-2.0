@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1640,6 +1640,15 @@ static v_VOID_t wma_set_default_tgt_config(tp_wma_handle wma_handle)
 	no_of_peers_supported = ol_get_number_of_peers_supported(scn);
 	tgt_cfg.num_peers = no_of_peers_supported + CFG_TGT_NUM_VDEV + 2;
 #if defined(CONFIG_HL_SUPPORT)
+	/*
+	 *In high latency, Firmware will trigger crash when
+	 *gSoftApMaxPeers is set to 1 in host driver. It will assert
+	 *A_ASSERT(config_param->num_tid_entries > pdev->
+	 *reserved_tids_max);
+	 *So reassign no_of_peers_supported to 2 if it equals 1.
+	 */
+	if (no_of_peers_supported <= 1)
+		no_of_peers_supported = 2;
 	tgt_cfg.num_tids = 4 * no_of_peers_supported;
 #else
 	tgt_cfg.num_tids = (2 * (no_of_peers_supported + CFG_TGT_NUM_VDEV + 2));
