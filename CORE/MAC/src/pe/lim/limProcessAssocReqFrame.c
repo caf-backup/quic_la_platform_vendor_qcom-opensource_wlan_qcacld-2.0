@@ -195,11 +195,10 @@ void lim_check_sta_in_pe_entries(tpAniSirGlobal pMac, tpSirMacMgmtHdr pHdr)
                     pStaDs->mlmStaContext.mlmState ==
                     eLIM_MLM_WT_DEL_BSS_RSP_STATE ||
                     pStaDs->sta_deletion_in_progress) {
-                        pe_debug(
-                        "Deletion is in progress (%d) for peer:%pM in mlmState %d",
+                        PELOGW(limLog(pMac, LOGW, FL("Deletion is in progress (%d) for peer:%pK in mlmState %d"),
                         pStaDs->sta_deletion_in_progress,
                         pStaDs->staAddr,
-                        pStaDs->mlmStaContext.mlmState);
+                        pStaDs->mlmStaContext.mlmState);)
                         return;
                 }
                 pStaDs->sta_deletion_in_progress = true;
