@@ -37656,6 +37656,19 @@ static int wma_sap_ofl_del_sta_handler(void *handle, u_int8_t *data,
 }
 #endif /* SAP_AUTH_OFFLOAD */
 
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
+#include <gpio.h>
+#define TSF_DEBUG_GPIO 79
+
+void wma_tsf_sync_debug_pull_gpio(void)
+{
+	gpio_set_value(TSF_DEBUG_GPIO, 1);
+}
+#else
+void wma_tsf_sync_debug_pull_gpio(void)
+{}
+#endif
+
 /**
  * wma_vdev_tsf_handler() - handle tsf event indicated by FW
  *
@@ -37682,6 +37695,7 @@ static int wma_vdev_tsf_handler(void *handle, uint8_t *data,
 		WMA_LOGE("%s: failed to allocate sSirtsf memory", __func__);
 		return -ENOMEM;
 	}
+	wma_tsf_sync_debug_pull_gpio();
 
 	param_buf = (WMI_VDEV_TSF_REPORT_EVENTID_param_tlvs *)data;
 	tsf_event = param_buf->fixed_param;

@@ -1371,6 +1371,18 @@ struct hdd_adapter_s
    /* to indicate whether tsf_sync has been initialized */
    adf_os_atomic_t tsf_sync_ready_flag;
 #endif /* WLAN_FEATURE_TSF_PLUS */
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND
+   uint64_t first_qtime;
+   uint64_t first_target_time;
+   int64_t offset_min;
+   uint32_t offset_cnt;
+   uint64_t slope;
+   uint32_t slope_cnt;
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
+   uint64_t qtime_next_sec;
+   struct hrtimer tsf_sync_debug_timer;
+#endif
+#endif
 #endif
 
 #ifdef WLAN_FEATURE_MOTION_DETECTION
