@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -118,7 +118,8 @@ void pe_reset_protection_callback(void *ptr)
                   FL("session already deleted. exiting timer callback"));
         return;
     }
-
+    if (pe_session_entry->limSmeState != eLIM_SME_NORMAL_STATE)
+        goto restart_timer;
     current_protection_state |=
                pe_session_entry->gLimOverlap11gParams.protectionEnabled        |
                pe_session_entry->gLimOverlap11aParams.protectionEnabled   << 1 |
@@ -222,6 +223,7 @@ void pe_reset_protection_callback(void *ptr)
     }
 
     pe_session_entry->old_protection_state = current_protection_state;
+restart_timer:
     if (VOS_STATUS_SUCCESS != vos_timer_start(
                              &pe_session_entry->protection_fields_reset_timer,
                              SCH_PROTECTION_RESET_TIME)) {
