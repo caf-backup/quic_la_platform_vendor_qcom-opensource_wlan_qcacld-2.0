@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015,2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015,2018-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -50,6 +50,23 @@
 #define REG_TSF2_L 0x10d4
 #define REG_TSF2_H 0x10d8
 
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND
+
+#define SLOPE_TIMES 1000000000
+#define SLOPE_QTIME_TO_TSF 1000023368
+#define SLOPE_UPDATE_CNT 200
+#define FIND_OFFSET_MIN_CNT 20
+#define FORCE_FIND_OFFSET_MIN_CNT (FIND_OFFSET_MIN_CNT+50)
+#define OFFSET_MIN_MARGIN 40
+
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
+#include <gpio.h>
+#define TSF_DEBUG_GPIO 79
+#define US_PER_SEC 1000000
+#define PRETRIGGER_NS 1000000
+#define HRTIMER_ACCURACY 10
+#endif
+#endif
 /**
  * wlan_hdd_tsf_init() - set gpio and callbacks for
  *     capturing tsf and init tsf_plus
@@ -154,6 +171,12 @@ hdd_capture_tsf(hdd_adapter_t *adapter, uint32_t *buf, int len)
  */
 void hdd_create_tsf_file(hdd_adapter_t *adapter);
 
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
+void hdd_init_tsf_sync_debug_hrtimer(hdd_adapter_t *adapter);
+#else
+static inline void hdd_init_tsf_sync_debug_hrtimer(hdd_adapter_t *adapter)
+{}
+#endif
 /**
  * hdd_remove_tsf_file() - remove tsf file node
  * @adapter: pointer to adapter

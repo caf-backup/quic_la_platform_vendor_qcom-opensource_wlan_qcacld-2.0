@@ -182,6 +182,9 @@ ifeq ($(CONFIG_ARCH_QCS405), y)
 	WLAN_HDD_ADAPTER_MAGIC := 0x5344494F
 	CONFIG_RX_LATENCY_OPTIMIZE := y
 	CONFIG_WLAN_FEATURE_DSRC := n
+	CONFIG_TSF_SHOW_QTIME := y
+	CONFIG_TSF_IRQ_AMEND := y
+	CONFIG_TSF_IRQ_AMEND_DEBUG := n
 endif
 
 #Enable Power debugfs feature only if debug_fs is enabled
