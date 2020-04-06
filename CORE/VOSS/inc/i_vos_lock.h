@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014, 2016, 2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -70,6 +70,7 @@ typedef spinlock_t vos_spin_lock_t;
 
 typedef struct wlan_wake_lock {
 	struct wakeup_source lock;
+	struct wakeup_source *priv;
 	bool is_initialized;
 } vos_wake_lock_t;
 
