@@ -303,6 +303,10 @@ static inline void
 hdd_tsf_record_sk_for_skb(hdd_context_t *hdd_ctx, adf_nbuf_t nbuf)
 {
 }
+
+static inline void hdd_init_tsf_sync_debug_hrtimer(hdd_adapter_t *adapter)
+{
+}
 #endif
 
 #ifdef WLAN_FEATURE_TSF_PTP
