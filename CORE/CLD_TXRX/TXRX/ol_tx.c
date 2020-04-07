@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014, 2016-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014, 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -785,7 +785,7 @@ void ol_tx_vdev_ll_pause_queue_send(void *context)
 {
 #ifdef QCA_SUPPORT_TXRX_VDEV_LL_TXQ
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
-    struct ol_txrx_vdev_t *vdev = from_timer(vdev, t, bundle_queue.timer);
+    struct ol_txrx_vdev_t *vdev = from_timer(vdev, t, ll_pause.timer);
 #else
     struct ol_txrx_vdev_t *vdev = (struct ol_txrx_vdev_t *) context;
 #endif
