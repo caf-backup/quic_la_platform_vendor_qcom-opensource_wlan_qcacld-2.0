@@ -1085,10 +1085,11 @@ typedef __ani_attr_pre_packed struct sSirMacRateSet
 } __ani_attr_packed tSirMacRateSet;
 
 
+/* Reserve 1 byte for NULL character in the SSID name field to print in %s */
 typedef __ani_attr_pre_packed struct sSirMacSSid
 {
     tANI_U8        length;
-    tANI_U8        ssId[32];
+    tANI_U8        ssId[33];
 } __ani_attr_packed tSirMacSSid;
 
 typedef __ani_attr_pre_packed struct sSirMacWpaInfo
