@@ -431,6 +431,11 @@ static struct ieee80211_supported_band wlan_hdd_band_5_GHZ =
                    | IEEE80211_VHT_CAP_RXSTBC_2))
 #endif
                  | IEEE80211_VHT_CAP_RXLDPC
+                 | IEEE80211_VHT_CAP_SU_BEAMFORMEE_CAPABLE
+                 | (0x3 << IEEE80211_VHT_CAP_BEAMFORMEE_STS_SHIFT)
+                 | (0x17 << IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_SHIFT)
+                 | IEEE80211_VHT_CAP_RX_ANTENNA_PATTERN
+                 | IEEE80211_VHT_CAP_TX_ANTENNA_PATTERN
 };
 
 /* This structure contain information what kind of frame are expected in
