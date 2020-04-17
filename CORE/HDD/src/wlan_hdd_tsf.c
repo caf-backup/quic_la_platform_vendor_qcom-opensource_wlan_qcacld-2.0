@@ -451,7 +451,7 @@ static void hdd_reset_host_time_amend(hdd_adapter_t *adapter)
 	adapter->first_target_time = 0;
 	adapter->offset_min = 0;
 	adapter->offset_cnt = 0;
-	adapter->slope = SLOPE_QTIME_TO_TSF;
+	adapter->slope = SLOPE_QTIME_TO_TSF_REF;
 	adapter->slope_cnt = 0;
 #ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
 	adapter->qtime_next_sec = 0;
@@ -586,15 +586,10 @@ void hdd_tsf_amend_host_time(hdd_adapter_t *adapter)
 	bool calc_amend = false;
 
 	/*
-	 * Only amend host time after slope is set for STA.
+	 * Only amend host time after slope is set.
 	 */
-	if ((adapter->device_mode == WLAN_HDD_INFRA_STATION) ||
-	    (adapter->device_mode == WLAN_HDD_P2P_CLIENT)) {
-		if (adapter->slope_cnt == SLOPE_UPDATE_CNT)
-			calc_amend = true;
-	}
-	else if ((adapter->device_mode == WLAN_HDD_SOFTAP) ||
-		 (adapter->device_mode == WLAN_HDD_P2P_GO))
+
+	if (adapter->slope_cnt >= SLOPE_UPDATE_CNT)
 		calc_amend = true;
 
 	if (calc_amend) {
@@ -696,7 +691,8 @@ enum hdd_ts_status hdd_check_timestamp_status(hdd_adapter_t *adapter)
 			     adapter->first_target_time);
 		slope_to_1st = (qtime_delta * SLOPE_TIMES) / tsf_delta;
 		hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
-		       FL("slope_to_1st: %llu"), slope_to_1st);
+		       FL("slope_to_1st: %llu cnt: %u"), slope_to_1st,
+		       adapter->slope_cnt);
 		slope_delta = (slope_to_1st > SLOPE_QTIME_TO_TSF_REF) ?
 			(slope_to_1st - SLOPE_QTIME_TO_TSF_REF) :
 			(SLOPE_QTIME_TO_TSF_REF - slope_to_1st);
@@ -716,23 +712,15 @@ enum hdd_ts_status hdd_check_timestamp_status(hdd_adapter_t *adapter)
 		}
 
 		/*
-		 * For SAP/GO, use macro SLOPE_QTIME_TO_TSF which is
-		 * qtime/qca9377 slope, do not update slope.
-		 * For STA/GC, only update once by collecting SLOPE_UPDATE_CNT
+		 * Update slope once by collecting SLOPE_UPDATE_CNT
 		 * qtime/tsf pairs after new connection established,
 		 * do not update slope periodically.
-		 *
 		 */
-		if (((adapter->device_mode == WLAN_HDD_INFRA_STATION) ||
-			(adapter->device_mode == WLAN_HDD_P2P_CLIENT)) &&
-			(adapter->slope_cnt != SLOPE_UPDATE_CNT)) {
-			adapter->slope_cnt++;
-			if (adapter->slope_cnt == SLOPE_UPDATE_CNT) {
-				adapter->slope = slope_to_1st;
-				hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
-				       FL("update slope: %llu"),
-				       adapter->slope);
-			}
+		if (++adapter->slope_cnt == SLOPE_UPDATE_CNT) {
+			adapter->slope = slope_to_1st;
+			hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+			       FL("update slope: %llu"),
+			       adapter->slope);
 		}
 		hdd_tsf_amend_host_time(adapter);
 	}
