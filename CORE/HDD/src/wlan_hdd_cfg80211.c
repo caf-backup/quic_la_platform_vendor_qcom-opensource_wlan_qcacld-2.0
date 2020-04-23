@@ -17488,25 +17488,6 @@ int wlan_hdd_cfg80211_update_apies(hdd_adapter_t* pHostapdAdapter)
     }
 
 
-    if (test_bit(SOFTAP_BSS_STARTED, &pHostapdAdapter->event_flags)) {
-        updateIE.ieBufferlength = total_ielen;
-        updateIE.pAdditionIEBuffer = genie;
-        updateIE.append = VOS_FALSE;
-        updateIE.notify = VOS_TRUE;
-        if (sme_UpdateAddIE(WLAN_HDD_GET_HAL_CTX(pHostapdAdapter),
-                &updateIE, eUPDATE_IE_PROBE_BCN) == eHAL_STATUS_FAILURE) {
-            hddLog(LOGE, FL("Could not pass on Add Ie probe beacon data"));
-            ret = -EINVAL;
-            goto done;
-        }
-        WLANSAP_ResetSapConfigAddIE(pConfig , eUPDATE_IE_PROBE_BCN);
-    } else {
-        WLANSAP_UpdateSapConfigAddIE(pConfig,
-                                     genie,
-                                     total_ielen,
-                                     eUPDATE_IE_PROBE_BCN);
-    }
-
     /* Added for Probe Response IE */
     proberesp_ies = vos_mem_malloc(pBeacon->proberesp_ies_len +
                                    MAX_GENIE_LEN);
@@ -17559,6 +17540,25 @@ int wlan_hdd_cfg80211_update_apies(hdd_adapter_t* pHostapdAdapter)
                          pBeacon->assocresp_ies,
                          pBeacon->assocresp_ies_len,
                          eUPDATE_IE_ASSOC_RESP);
+    }
+
+    if (test_bit(SOFTAP_BSS_STARTED, &pHostapdAdapter->event_flags)) {
+        updateIE.ieBufferlength = total_ielen;
+        updateIE.pAdditionIEBuffer = genie;
+        updateIE.append = VOS_FALSE;
+        updateIE.notify = VOS_TRUE;
+        if (sme_UpdateAddIE(WLAN_HDD_GET_HAL_CTX(pHostapdAdapter),
+                &updateIE, eUPDATE_IE_PROBE_BCN) == eHAL_STATUS_FAILURE) {
+            hddLog(LOGE, FL("Could not pass on Add Ie probe beacon data"));
+            ret = -EINVAL;
+            goto free_probe_resp_ie;
+        }
+        WLANSAP_ResetSapConfigAddIE(pConfig , eUPDATE_IE_PROBE_BCN);
+    } else {
+        WLANSAP_UpdateSapConfigAddIE(pConfig,
+                                     genie,
+                                     total_ielen,
+                                     eUPDATE_IE_PROBE_BCN);
     }
 
 free_probe_resp_ie:
