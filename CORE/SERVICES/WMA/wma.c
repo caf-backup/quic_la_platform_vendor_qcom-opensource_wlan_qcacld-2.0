@@ -5319,6 +5319,8 @@ static int wma_unified_radio_tx_power_level_stats_event_handler(void *handle,
 	uint8_t *tx_power_level_values;
 	tSirLLStatsResults *link_stats_results;
 	tSirWifiRadioStat *rs_results;
+	uint32_t max_total_num_tx_power_levels = MAX_TPC_LEVELS * NUM_OF_BANDS *
+						MAX_SPATIAL_STREAM_ANY;
 
 	tpAniSirGlobal pMac = (tpAniSirGlobal )vos_get_context(VOS_MODULE_ID_PE,
 				wma_handle->vos_context);
@@ -5358,6 +5360,20 @@ static int wma_unified_radio_tx_power_level_stats_event_handler(void *handle,
 		WMA_LOGE("%s: excess tx_power buffers:%d, num_tx_time_per_power_level:%d",
 			__func__, fixed_param->num_tx_power_levels,
 			param_tlvs->num_tx_time_per_power_level);
+		return -EINVAL;
+	}
+
+	if (fixed_param->radio_id >= link_stats_results->num_radio) {
+		WMA_LOGD("%s: Invalid radio_id %d num_radio %d",
+			__func__, fixed_param->radio_id,
+			link_stats_results->num_radio);
+		return -EINVAL;
+	}
+
+	if (fixed_param->total_num_tx_power_levels >
+	    max_total_num_tx_power_levels) {
+		WMA_LOGD("Invalid total_num_tx_power_levels %d",
+			fixed_param->total_num_tx_power_levels);
 		return -EINVAL;
 	}
 
@@ -25330,6 +25346,11 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 
 	vos_event_set(&wma->wma_resume_event);
 	if (param_buf->wow_packet_buffer) {
+		if (param_buf->num_wow_packet_buffer <= 4) {
+			WMA_LOGE("Invalid wow packet buffer from firmware %u",
+				param_buf->num_wow_packet_buffer);
+			return -EINVAL;
+		}
 		wow_buf_pkt_len = *(uint32_t *)param_buf->wow_packet_buffer;
 		if (wow_buf_pkt_len > (param_buf->num_wow_packet_buffer - 4)) {
 			WMA_LOGE("Invalid wow buf pkt len from firmware, wow_buf_pkt_len: %u, num_wow_packet_buffer: %u",
@@ -37656,6 +37677,19 @@ static int wma_sap_ofl_del_sta_handler(void *handle, u_int8_t *data,
 }
 #endif /* SAP_AUTH_OFFLOAD */
 
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
+#include <gpio.h>
+#define TSF_DEBUG_GPIO 79
+
+void wma_tsf_sync_debug_pull_gpio(void)
+{
+	gpio_set_value(TSF_DEBUG_GPIO, 1);
+}
+#else
+void wma_tsf_sync_debug_pull_gpio(void)
+{}
+#endif
+
 /**
  * wma_vdev_tsf_handler() - handle tsf event indicated by FW
  *
@@ -37682,6 +37716,7 @@ static int wma_vdev_tsf_handler(void *handle, uint8_t *data,
 		WMA_LOGE("%s: failed to allocate sSirtsf memory", __func__);
 		return -ENOMEM;
 	}
+	wma_tsf_sync_debug_pull_gpio();
 
 	param_buf = (WMI_VDEV_TSF_REPORT_EVENTID_param_tlvs *)data;
 	tsf_event = param_buf->fixed_param;

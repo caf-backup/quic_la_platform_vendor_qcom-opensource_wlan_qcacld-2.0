@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -12570,6 +12570,7 @@ hdd_adapter_t *hdd_open_adapter(hdd_context_t *hdd_ctx,
 		hddLog(LOGE, "FAILED TO SET RTSCTS Profile ret:%d", ret);
 
 	hdd_create_tsf_file(adapter);
+	hdd_init_tsf_sync_debug_hrtimer(adapter);
 
 	return adapter;
 

@@ -45,6 +45,7 @@
 #include <linux/gpio.h>
 int irq_tsf = -1;
 #endif
+
 /**
  * enum hdd_tsf_op_result - result of tsf operation
  *
@@ -56,7 +57,7 @@ enum hdd_tsf_op_result {
 	HDD_TSF_OP_FAIL
 };
 
-#ifdef CONFIG_QTIME_TSF_SHOW
+#ifdef WLAN_FEATURE_TSF_SHOW_QTIME
 #define SET_LAST_QTIME \
 	do {adapter->last_qtime = adapter->cur_qtime;} \
 	while (0)
@@ -83,6 +84,11 @@ enum hdd_tsf_op_result {
 #endif
 
 #define WLAN_HDD_CAPTURE_TSF_REQ_TIMEOUT_MS 500
+
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND
+#define HDD_TSF_QTIME_AMEND_DEBUG_LEVEL VOS_TRACE_LEVEL_DEBUG
+#endif
+
 static void hdd_capture_req_timer_expired_handler(void *arg);
 
 #ifdef WLAN_FEATURE_TSF_PLUS
@@ -102,6 +108,51 @@ static inline bool hdd_get_th_sync_status(hdd_adapter_t *adapter)
 static inline bool hdd_get_th_sync_status(hdd_adapter_t *adapter)
 {
 	return true;
+}
+#endif
+
+#ifdef WLAN_FEATURE_TSF_SHOW_QTIME
+
+#define LOG_TIMESTAMP_CYCLES_PER_10_US 192
+
+static inline uint64_t hdd_qtime_to_usecs(uint64_t time)
+{
+	/*
+	 * Try to preserve precision by multiplying by 10 first.
+	 * If that would cause a wrap around, divide first instead.
+	 */
+	if (time * 10 < time) {
+		do_div(time, LOG_TIMESTAMP_CYCLES_PER_10_US);
+		return time * 10;
+	}
+
+	time = time * 10;
+	do_div(time, LOG_TIMESTAMP_CYCLES_PER_10_US);
+
+	return time;
+}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
+static inline uint64_t hdd_get_qtime(void)
+{
+	return arch_counter_get_cntvct();
+}
+#else
+static inline uint64_t hdd_get_qtime(void)
+{
+	return arch_counter_get_cntpct();
+}
+#endif /* LINUX_VERSION_CODE */
+#else
+static inline uint64_t hdd_qtime_to_usecs(uint64_t time)
+{
+	/* timestamps are already in micro seconds */
+	return time;
+}
+
+static inline uint64_t hdd_get_qtime(void)
+{
+	return 0;
 }
 #endif
 
@@ -309,7 +360,6 @@ static enum hdd_tsf_op_result hdd_indicate_tsf_internal(
 #ifdef WLAN_FEATURE_TSF_PLUS
 /* unit for target time: us;  host time: ns */
 #define HOST_TO_TARGET_TIME_RATIO NSEC_PER_USEC
-#define MAX_ALLOWED_DEVIATION_NS (100 * NSEC_PER_USEC)
 #define MAX_CONTINUOUS_ERROR_CNT 3
 
 /**
@@ -318,19 +368,26 @@ static enum hdd_tsf_op_result hdd_indicate_tsf_internal(
  */
 #if defined(CONFIG_NON_QC_PLATFORM)
 #define WLAN_HDD_CAPTURE_TSF_INTERVAL_SEC 2
+#define WLAN_HDD_CAPTURE_TSF_RESYNC_INTERVAL 1
+#define CAP_TSF_TIMER_FIX_SEC 7
+#define MAX_ALLOWED_DEVIATION_NS (100 * NSEC_PER_USEC)
 #else
 #define WLAN_HDD_CAPTURE_TSF_INTERVAL_SEC 10
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND
+#define WLAN_HDD_CAPTURE_TSF_RESYNC_INTERVAL 1
+#define CAP_TSF_TIMER_FIX_SEC 9
+#define MAX_ALLOWED_DEVIATION_NS (200 * NSEC_PER_USEC)
+#else
+#define WLAN_HDD_CAPTURE_TSF_RESYNC_INTERVAL 9
+#define CAP_TSF_TIMER_FIX_SEC 1
+#define MAX_ALLOWED_DEVIATION_NS (100 * NSEC_PER_USEC)
 #endif
+#endif
+
 #define WLAN_HDD_CAPTURE_TSF_INIT_INTERVAL_MS 100
 #define OVERFLOW_INDICATOR32 (((int64_t)0x1) << 32)
 #define MAX_UINT64 ((uint64_t)0xffffffffffffffff)
 #define MASK_UINT32 0xffffffff
-#define CAP_TSF_TIMER_FIX_SEC 7
-#if defined(CONFIG_NON_QC_PLATFORM)
-#define WLAN_HDD_CAPTURE_TSF_RESYNC_INTERVAL 1
-#else
-#define WLAN_HDD_CAPTURE_TSF_RESYNC_INTERVAL 3
-#endif
 
 /**
  * TS_STATUS - timestamp status
@@ -387,6 +444,24 @@ enum hdd_tsf_op_result __hdd_stop_tsf_sync(hdd_adapter_t *adapter)
 	return HDD_TSF_OP_SUCC;
 }
 
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND
+static void hdd_reset_host_time_amend(hdd_adapter_t *adapter)
+{
+	adapter->first_qtime = 0;
+	adapter->first_target_time = 0;
+	adapter->offset_min = 0;
+	adapter->offset_cnt = 0;
+	adapter->slope = SLOPE_QTIME_TO_TSF_REF;
+	adapter->slope_cnt = 0;
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
+	adapter->qtime_next_sec = 0;
+#endif
+}
+#else
+static inline void hdd_reset_host_time_amend(hdd_adapter_t *adapter)
+{}
+#endif
+
 static inline void hdd_reset_timestamps(hdd_adapter_t *adapter)
 {
 	adf_os_spin_lock_bh(&adapter->host_target_sync_lock);
@@ -394,16 +469,14 @@ static inline void hdd_reset_timestamps(hdd_adapter_t *adapter)
 	adapter->cur_target_time = 0;
 	adapter->last_host_time = 0;
 	adapter->last_target_time = 0;
+	hdd_reset_host_time_amend(adapter);
 	adf_os_spin_unlock_bh(&adapter->host_target_sync_lock);
 }
 
 /**
  * hdd_check_timestamp_status() - return the tstamp status
  *
- * @last_target_time: the last saved target time
- * @last_host_time: the last saved host time
- * @cur_target_time : new target time
- * @cur_host_time : new host time
+ * @adapter: pointer to adapter
  *
  * This function check the new timstamp-pair(cur_host_time/cur_target_time)
  *
@@ -414,13 +487,255 @@ static inline void hdd_reset_timestamps(hdd_adapter_t *adapter)
  * HDD_TS_STATUS_INVALID: cur_target_time/cur_host_time is a invalid pair,
  *    should be discard
  */
-static
-enum hdd_ts_status hdd_check_timestamp_status(
-		uint64_t last_target_time,
-		uint64_t last_host_time,
-		uint64_t cur_target_time,
-		uint64_t cur_host_time)
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND
+
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG
+/*
+ * WLAN_FEATURE_TSF_IRQ_AMEND_DEBUG feature is to debug SAP STA tsf sync
+ * accuracy, both SAP and STA pull the gpio 79 (qcs405 platform) when tsf is
+ * rounded to second, for example: tsf vlue 158940329 us round to next second
+ * is 159000000 us
+ */
+void hdd_round_tsf_sec_pull_gpio(hdd_adapter_t *adapter)
 {
+	uint64_t reg_qtime, qtime;
+	uint64_t qtime_delta, tsf_now, tsf_next_sec;
+	uint64_t tsf_left_ns, qtime_left_ns, timer_val;
+
+	GET_CURRENT_QTIME;
+	qtime_delta = qtime - adapter->cur_qtime;
+	/*
+	 * Directly add qtime_delta to tsf, as the qtime_delta
+	 * is within 2000 us, below error is less than 1 us
+	 */
+	tsf_now = qtime_delta + adapter->cur_target_time;
+	tsf_next_sec = (tsf_now / US_PER_SEC) * US_PER_SEC + US_PER_SEC;
+	tsf_left_ns = (tsf_next_sec - tsf_now) * NSEC_PER_USEC;
+	qtime_left_ns = tsf_left_ns * adapter->slope / SLOPE_TIMES;
+	timer_val = qtime_left_ns - PRETRIGGER_NS;
+	hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+	       FL("tsf_next_sec: %llu"), tsf_next_sec);
+	adapter->qtime_next_sec = qtime + (qtime_left_ns / NSEC_PER_USEC);
+	hrtimer_start(&adapter->tsf_sync_debug_timer,
+		      ktime_set(0, timer_val), HRTIMER_MODE_REL);
+}
+
+enum hrtimer_restart hdd_tsf_sync_debug_timer_handler(struct hrtimer *timer)
+{
+	volatile uint64_t qtime, reg_qtime;
+
+	hdd_adapter_t *adapter = container_of(timer,
+			hdd_adapter_t, tsf_sync_debug_timer);
+	int64_t fire_time_error = 0;
+
+	do {
+		GET_CURRENT_QTIME;
+		fire_time_error = (int64_t)(qtime - adapter->qtime_next_sec);
+	} while (fire_time_error < 0);
+
+	if (fire_time_error < HRTIMER_ACCURACY) {
+		gpio_set_value(TSF_DEBUG_GPIO, 0);
+	}
+
+	return HRTIMER_NORESTART;
+}
+
+void hdd_init_tsf_sync_debug_hrtimer(hdd_adapter_t *adapter)
+{
+	hrtimer_init(&adapter->tsf_sync_debug_timer,
+		     CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	adapter->tsf_sync_debug_timer.function =
+		hdd_tsf_sync_debug_timer_handler;
+}
+#else
+void hdd_round_tsf_sec_pull_gpio(hdd_adapter_t *adapter)
+{}
+
+#endif
+/*
+ * WLAN_FEATURE_TSF_IRQ_AMEND feature is to modify cur_qtime recorded
+ * in tsf irq handler, the irq handler has delay in range of [10us, 200us]
+ * reading from osilloscope (qcs405 platform)
+ * before making amendment on cur_qtime, we already tested tsf bias is
+ * within [0, 15us] when connecting to same platform SAP (qcs405 + qca9377 sdio)
+ * It is known that there is slope between tsf_delta and qtime_delta
+ * caused by different clock sources, we record the 1st qtime and tsf pair,
+ * and calculate slope_to_1st for pair n, the slope becomes stable when
+ * there are enough pairs collected.
+ * Use this slope constant to calculate qtime tsf offset:
+ * offset[n] = qtime[n] - slope * tsf[n]
+ * save minimum offset[min] = qtime[min] - slope * tsf[min]
+ * the mininum offset stands for the instant that host response the interrupt
+ * irq the fastest
+ * the amendment[n] = offset[n] - offset[min]
+ * note: qtime[n] = qtime[min] + delta_time + irq_delay[n] (comparing
+ * irq_delay of min)
+ * ideally delta_time - slope * (tsf[n] - tsf[min]) should be 0
+ * but the slope has bias, so with time goes by, the amendment
+ * bias becomes bigger and bigger.
+ * The solution is to update offset[min] in duration, for example: every 30 tsf
+ * pairs collected, find the new offset[min_next] within margin of
+ * old offset[min]
+ * cur_qtime = cur_qtime - amendment
+ */
+
+void hdd_tsf_amend_host_time(hdd_adapter_t *adapter)
+{
+	uint64_t qtime;
+	int64_t offset, amendment;
+	bool calc_amend = false;
+
+	/*
+	 * Only amend host time after slope is set.
+	 */
+
+	if (adapter->slope_cnt >= SLOPE_UPDATE_CNT)
+		calc_amend = true;
+
+	if (calc_amend) {
+		offset = ((int64_t)adapter->cur_qtime -
+			 (int64_t)((adapter->slope
+			 * adapter->cur_target_time) / SLOPE_TIMES));
+		if (adapter->offset_min == 0 || offset < adapter->offset_min) {
+			adapter->offset_min = offset;
+			adapter->offset_cnt = 0;
+			hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+			       FL("set offset_min: %lld"), offset);
+		} else {
+			adapter->offset_cnt++;
+			amendment = offset - adapter->offset_min;
+			hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+			       FL("offset: %lld offset_min %lld \
+				  amendment %lld cnt %u"),
+			       offset, adapter->offset_min, amendment,
+			       adapter->offset_cnt);
+			qtime = adapter->cur_qtime - amendment;
+			SET_CURRENT_QTIME;
+			if (adapter->offset_cnt > FIND_OFFSET_MIN_CNT
+			    && amendment < OFFSET_MIN_MARGIN) {
+				adapter->offset_min = offset;
+				hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+				       FL("reset offset_min: %lld cnt %u"),
+				       offset, adapter->offset_cnt);
+				adapter->offset_cnt = 0;
+			}
+			if (adapter->offset_cnt > FORCE_FIND_OFFSET_MIN_CNT) {
+				hddLog(VOS_TRACE_LEVEL_ERROR,
+				       FL("offset_min not updated! \
+					  force update, cnt %u"),
+				       adapter->offset_cnt);
+				adapter->offset_min = offset;
+				hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+				       FL("reset offset_min: %lld cnt %u"),
+				       offset, adapter->offset_cnt);
+				adapter->offset_cnt = 0;
+			}
+		}
+		hdd_round_tsf_sec_pull_gpio(adapter);
+	}
+}
+
+enum hdd_ts_status hdd_check_timestamp_status(hdd_adapter_t *adapter)
+{
+	/* adapter is validated in hdd_update_timestamp() */
+	uint64_t last_target_time = adapter->last_target_time;
+	uint64_t last_host_time = adapter->last_host_time;
+	uint64_t cur_target_time = adapter->cur_target_time;
+	uint64_t cur_host_time = adapter->cur_host_time;
+	uint64_t qtime_delta, tsf_delta;
+	uint64_t slope_to_1st, slope_delta;
+	uint64_t delta_ns, delta_target_time, delta_host_time;
+
+	/* one or more are not updated, need to wait */
+	if (cur_target_time == 0 || cur_host_time == 0)
+		return HDD_TS_STATUS_WAITING;
+
+	/* init value, it's the first time to update the pair */
+	if (last_target_time == 0 && last_host_time == 0)
+		return HDD_TS_STATUS_READY;
+
+	/* the new values should be greater than the saved values */
+	if ((cur_target_time <= last_target_time) ||
+			(cur_host_time <= last_host_time)) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+			FL("Invalid timestamps!last_target_time: %llu;"
+				"last_host_time: %llu; cur_target_time: %llu;"
+				"cur_host_time: %llu"),
+			last_target_time, last_host_time,
+			cur_target_time, cur_host_time);
+		return HDD_TS_STATUS_INVALID;
+	}
+
+	/*
+	 * The delta between qtime_delta and tsf_delta becomes bigger than
+	 * MAX_ALLOWED_DEVIATION_NS is caused by host irq delay and tsf bias
+	 * caused by firmware (BMPS enabled), drop pairs with big delta_ns
+	 * caused by firmware, amend qtime with WLAN_FEATURE_TSF_IRQ_AMEND
+	 * enabled for the remaining pairs.
+	 */
+	delta_target_time = (cur_target_time - last_target_time) *
+		HOST_TO_TARGET_TIME_RATIO;
+	delta_host_time = cur_host_time - last_host_time;
+
+	/*
+	 * DO NOT use abs64() , a big uint64 value might be turned to
+	 * a small int64 value
+	 */
+	delta_ns = ((delta_target_time > delta_host_time) ?
+			(delta_target_time - delta_host_time) :
+			(delta_host_time - delta_target_time));
+
+	if (adapter->first_qtime != 0 && adapter->first_target_time != 0) {
+		qtime_delta = (adapter->cur_qtime - adapter->first_qtime);
+		tsf_delta = (adapter->cur_target_time -
+			     adapter->first_target_time);
+		slope_to_1st = (qtime_delta * SLOPE_TIMES) / tsf_delta;
+		hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+		       FL("slope_to_1st: %llu cnt: %u"), slope_to_1st,
+		       adapter->slope_cnt);
+		slope_delta = (slope_to_1st > SLOPE_QTIME_TO_TSF_REF) ?
+			(slope_to_1st - SLOPE_QTIME_TO_TSF_REF) :
+			(SLOPE_QTIME_TO_TSF_REF - slope_to_1st);
+		if (slope_delta > SLOPE_RANGE) {
+			hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+			       FL("slope error: %llu"), slope_delta);
+			hdd_reset_host_time_amend(adapter);
+			return HDD_TS_STATUS_INVALID;
+		}
+
+		/* the deviation should be smaller than a threshold */
+		if (delta_ns > MAX_ALLOWED_DEVIATION_NS) {
+			hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+			       FL("Invalid timestamps - delta: %llu ns"),
+			       delta_ns);
+			return HDD_TS_STATUS_INVALID;
+		}
+
+		/*
+		 * Update slope once by collecting SLOPE_UPDATE_CNT
+		 * qtime/tsf pairs after new connection established,
+		 * do not update slope periodically.
+		 */
+		if (++adapter->slope_cnt == SLOPE_UPDATE_CNT) {
+			adapter->slope = slope_to_1st;
+			hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
+			       FL("update slope: %llu"),
+			       adapter->slope);
+		}
+		hdd_tsf_amend_host_time(adapter);
+	}
+
+	return HDD_TS_STATUS_READY;
+}
+#else
+static
+enum hdd_ts_status hdd_check_timestamp_status(hdd_adapter_t *adapter)
+{
+	/* adapter is validated in hdd_update_timestamp() */
+	uint64_t last_target_time = adapter->last_target_time;
+	uint64_t last_host_time = adapter->last_host_time;
+	uint64_t cur_target_time = adapter->cur_target_time;
+	uint64_t cur_host_time = adapter->cur_host_time;
 	uint64_t delta_ns, delta_target_time, delta_host_time;
 
 	/* one or more are not updated, need to wait */
@@ -467,6 +782,7 @@ enum hdd_ts_status hdd_check_timestamp_status(
 
 	return HDD_TS_STATUS_READY;
 }
+#endif
 
 static void hdd_update_timestamp(hdd_adapter_t *adapter,
 		uint64_t target_time, uint64_t host_time)
@@ -493,10 +809,8 @@ static void hdd_update_timestamp(hdd_adapter_t *adapter,
 	if (target_time > 0)
 		adapter->cur_target_time = target_time;
 
-	sync_status = hdd_check_timestamp_status(adapter->last_target_time,
-			adapter->last_host_time,
-			adapter->cur_target_time,
-			adapter->cur_host_time);
+	sync_status = hdd_check_timestamp_status(adapter);
+
 	switch (sync_status) {
 	case HDD_TS_STATUS_INVALID:
 		if (++adapter->continuous_error_count <
@@ -518,6 +832,12 @@ static void hdd_update_timestamp(hdd_adapter_t *adapter,
 		SET_LAST_QTIME;
 		adapter->last_target_time = adapter->cur_target_time;
 		adapter->last_host_time = adapter->cur_host_time;
+#ifdef WLAN_FEATURE_TSF_IRQ_AMEND
+		if (adapter->first_qtime == 0 && adapter->first_target_time == 0) {
+			adapter->first_qtime = adapter->last_qtime;
+			adapter->first_target_time = adapter->last_target_time;
+		}
+#endif
 		adapter->cur_target_time = 0;
 		adapter->cur_host_time = 0;
 		hddLog(VOS_TRACE_LEVEL_INFO,
@@ -682,51 +1002,6 @@ static inline uint64_t hdd_get_monotonic_host_time(hdd_context_t *hdd_ctx)
 	return (HDD_TSF_IS_RAW_SET(hdd_ctx) ?
 		ktime_get_ns() : ktime_get_real_ns());
 }
-
-#ifdef CONFIG_QTIME_TSF_SHOW
-
-#define LOG_TIMESTAMP_CYCLES_PER_10_US 192
-
-static inline uint64_t hdd_qtime_to_usecs(uint64_t time)
-{
-	/*
-	 * Try to preserve precision by multiplying by 10 first.
-	 * If that would cause a wrap around, divide first instead.
-	 */
-	if (time * 10 < time) {
-		do_div(time, LOG_TIMESTAMP_CYCLES_PER_10_US);
-		return time * 10;
-	}
-
-	time = time * 10;
-	do_div(time, LOG_TIMESTAMP_CYCLES_PER_10_US);
-
-	return time;
-}
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
-static inline uint64_t hdd_get_qtime(void)
-{
-	return arch_counter_get_cntvct();
-}
-#else
-static inline uint64_t hdd_get_qtime(void)
-{
-	return arch_counter_get_cntpct();
-}
-#endif /* LINUX_VERSION_CODE */
-#else
-static inline uint64_t hdd_qtime_to_usecs(uint64_t time)
-{
-	/* timestamps are already in micro seconds */
-	return time;
-}
-
-static inline uint64_t hdd_get_qtime(void)
-{
-	return 0;
-}
-#endif
 
 /**
  * is_target_host_valid() - is target tsf valid or not
