@@ -372,10 +372,9 @@ bool hdd_hostapd_sub20_channelwidth_can_switch(
 	hdd_adapter_t *adapter, uint32_t *sub20_channel_width)
 {
 	int i;
-	int sta_count = 0;
 	uint8_t sap_s20_caps;
 	uint8_t sap_s20_config;
-	uint8_t sta_s20_caps = SUB20_MODE_NONE;
+	uint8_t sta_s20_caps = SUB20_MODE_10MHZ|SUB20_MODE_5MHZ;
 	tHalHandle hal_ptr = WLAN_HDD_GET_HAL_CTX(adapter);
 	tSmeConfigParams *sme_config;
 	hdd_station_info_t *sta;
@@ -402,19 +401,14 @@ bool hdd_hostapd_sub20_channelwidth_can_switch(
 	for (i = 0; i < WLAN_MAX_STA_COUNT; i++) {
 		sta = &adapter->aStaInfo[i];
 		if (sta->isUsed && (ap->uBCStaId != i)) {
-			sta_count++;
-			sta_s20_caps |=
+			sta_s20_caps &=
 				sta->sub20_dynamic_channelwidth;
+			hddLog(VOS_TRACE_LEVEL_INFO,
+			       "STA %d sub20 Chwidth info 0x%x",
+			       i, sta->sub20_dynamic_channelwidth);
 		}
 	}
 	adf_os_spin_unlock_bh(&adapter->staInfo_lock);
-
-	if (sta_count != 1) {
-		hddLog(VOS_TRACE_LEVEL_ERROR,
-		       "%d STAs connected with sub20 Channelwidth %d",
-		       sta_count, sta_s20_caps);
-		return false;
-	}
 
 	*sub20_channel_width = sta_s20_caps & sap_s20_caps;
 
@@ -493,7 +487,6 @@ bool hdd_sub20_channelwidth_can_set(
 	hdd_adapter_t *adapter, uint32_t sub20_channel_width)
 {
 	int i;
-	uint32_t sta_count = 0;
 	uint8_t sap_s20_config;
 	uint8_t sta_s20_caps = SUB20_MODE_10MHZ|SUB20_MODE_5MHZ;
 	tHalHandle hal_ptr;
@@ -571,16 +564,19 @@ bool hdd_sub20_channelwidth_can_set(
 	for (i = 0; i < WLAN_MAX_STA_COUNT; i++) {
 		sta = &adapter->aStaInfo[i];
 		if (sta->isUsed && (ap->uBCStaId != i)) {
-			sta_count++;
 			sta_s20_caps &=
 				sta->sub20_dynamic_channelwidth;
+			hddLog(VOS_TRACE_LEVEL_INFO,
+			       "STA %d sub20 Channelwidth info 0x%x",
+			       i, sta->sub20_dynamic_channelwidth);
 		}
 	}
 	adf_os_spin_unlock_bh(&adapter->staInfo_lock);
-	if (sta_count >= 1 && !(sta_s20_caps & sub20_channel_width)) {
+	if (WLAN_HDD_SOFTAP == adapter->device_mode &&
+	    !(sta_s20_caps & sub20_channel_width)) {
 		hddLog(VOS_TRACE_LEVEL_ERROR,
-		       "%d STAs connected with sub20 Channelwidth %d",
-		       sta_count, sta_s20_caps);
+		       "STAs %d mismatch with setting %d in sub20 Chwidth",
+		       sta_s20_caps, sub20_channel_width);
 		return false;
 	}
 
