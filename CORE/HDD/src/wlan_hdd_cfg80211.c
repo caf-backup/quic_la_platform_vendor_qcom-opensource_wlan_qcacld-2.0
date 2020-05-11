@@ -114,6 +114,7 @@
 #include "wmi_unified_priv.h"
 #include "limSessionUtils.h"
 #include "if_smart_antenna.h"
+#include <linux/pm_qos.h>
 
 #define g_mode_rates_size (12)
 #define a_mode_rates_size (8)
@@ -10731,6 +10732,33 @@ static int wlan_hdd_handle_restrict_offchan_config(hdd_adapter_t *adapter,
 }
 #endif
 
+#ifdef LATENCY_OPTIMIZE
+static void wlan_hdd_vendor_cmd_set_wlm_mode(hdd_context_t* hdd_ctx,
+					     uint16_t latency_level)
+{
+	if (latency_level ==
+	    QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_ULTRALOW) {
+		hdd_ctx->llm_enabled = true;
+		if (!hdd_ctx->hbw_requested) {
+			vos_request_pm_qos_type(PM_QOS_CPU_DMA_LATENCY,
+						DISABLE_KRAIT_IDLE_PS_VAL);
+			hdd_ctx->hbw_requested = true;
+		}
+	}
+	else {
+		if (hdd_ctx->hbw_requested) {
+			vos_remove_pm_qos();
+			hdd_ctx->hbw_requested = false;
+		}
+		hdd_ctx->llm_enabled = false;
+	}
+}
+#else
+static void wlan_hdd_vendor_cmd_set_wlm_mode(hdd_context_t* hdd_ctx,
+					     uint16_t latency_level)
+{}
+#endif
+
 /**
  * __wlan_hdd_cfg80211_wifi_configuration_set() - Wifi configuration
  * vendor command
@@ -11135,6 +11163,7 @@ static int __wlan_hdd_cfg80211_wifi_configuration_set(struct wiphy *wiphy,
 			return -EINVAL;
 		}
 
+		wlan_hdd_vendor_cmd_set_wlm_mode(pHddCtx, latency_level);
 		/* Mapping the latency value to the level which fw expected
 		 * 0 - normal, 1 - moderate, 2 - low, 3 - ultralow
 		 */

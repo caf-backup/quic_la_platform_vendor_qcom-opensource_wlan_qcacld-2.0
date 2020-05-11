@@ -2214,6 +2214,9 @@ struct hdd_context_s
     adf_os_spinlock_t restrict_offchan_lock;
     bool  restrict_offchan_flag;
     hdd_spectral_t *hdd_spec;
+
+    /* ultra low latency mode enabled */
+    bool llm_enabled;
 };
 
 /*---------------------------------------------------------------------------

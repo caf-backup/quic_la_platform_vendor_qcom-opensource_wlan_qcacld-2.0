@@ -949,7 +949,7 @@ VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
        * Just put packet into backlog queue, not scheduling RX sirq
        */
       if (skb_next) {
-#ifdef RX_LATENCY_OPTIMIZE
+#ifdef LATENCY_OPTIMIZE
 	local_bh_disable();
 	rxstat = netif_receive_skb(skb);
 	local_bh_enable();
@@ -967,7 +967,7 @@ VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
           * This is the last packet on the chain
           * Scheduling rx sirq
           */
-#ifdef RX_LATENCY_OPTIMIZE
+#ifdef LATENCY_OPTIMIZE
 	local_bh_disable();
 	rxstat = netif_receive_skb(skb);
 	local_bh_enable();
