@@ -2210,7 +2210,8 @@ struct hdd_context_s
 #endif
     adf_os_spinlock_t restrict_offchan_lock;
     bool  restrict_offchan_flag;
-
+    /* ultra low latency mode enabled */
+    bool llm_enabled;
 };
 
 /*---------------------------------------------------------------------------

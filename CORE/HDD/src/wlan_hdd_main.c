@@ -14937,6 +14937,13 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    pHddCtx->num_of_channels = 0;
    adf_os_spin_unlock(&pHddCtx->acs_skip_lock);
 #endif
+#ifdef LATENCY_OPTIMIZE
+   pHddCtx->llm_enabled = false;
+#endif
+	if (pHddCtx->hbw_requested) {
+		vos_remove_pm_qos();
+		pHddCtx->hbw_requested = false;
+	}
 
 
    if (pConfig && !pConfig->enablePowersaveOffload)
@@ -15863,7 +15870,7 @@ void hdd_cnss_request_bus_bandwidth(hdd_context_t *pHddCtx,
         vos_request_bus_bandwidth(dev, next_vote_level);
 
         if (next_vote_level <= CNSS_BUS_WIDTH_LOW) {
-            if (pHddCtx->hbw_requested) {
+            if (pHddCtx->hbw_requested && !pHddCtx->llm_enabled) {
                 vos_remove_pm_qos();
                 pHddCtx->hbw_requested = false;
             }
@@ -16894,6 +16901,23 @@ VOS_STATUS hdd_mt_host_ev_cb(void *pcb_cxt, tSirMtEvent *pevent)
 	return VOS_STATUS_SUCCESS;
 }
 #endif
+
+#ifdef LATENCY_OPTIMIZE
+bool hdd_is_llm_enabled(void)
+{
+	hdd_context_t* hdd_ctx = NULL;
+	void *vos = vos_get_global_context(VOS_MODULE_ID_HDD, NULL);
+	hdd_ctx = vos_get_context(VOS_MODULE_ID_HDD, vos);
+
+	return (hdd_ctx->llm_enabled);
+}
+#else
+bool hdd_is_llm_enabled(void)
+{
+	return false;
+}
+#endif
+
 /**---------------------------------------------------------------------------
 
   \brief hdd_wlan_startup() - HDD init function
@@ -17167,6 +17191,9 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    for (i = 0; i < MAX_MOD_LOGLEVEL; i++) {
        pHddCtx->fw_log_settings.dl_mod_loglevel[i] = 0;
    }
+#ifdef LATENCY_OPTIMIZE
+   pHddCtx->llm_enabled = false;
+#endif
 
    if (VOS_FTM_MODE != hdd_get_conparam()) {
        vos_set_multicast_logging(pHddCtx->cfg_ini->multicast_host_fw_msgs);

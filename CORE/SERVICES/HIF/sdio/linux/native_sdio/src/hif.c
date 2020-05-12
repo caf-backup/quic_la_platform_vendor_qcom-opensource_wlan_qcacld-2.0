@@ -1480,6 +1480,30 @@ static void hif_oob_irq_handler(void *dev_para)
 }
 
 #ifdef HIF_MBOX_SLEEP_WAR
+
+#ifdef LATENCY_OPTIMIZE
+extern bool hdd_is_llm_enabled(void);
+
+void hif_mbox_request_to_sleep(HIF_DEVICE* device)
+{
+	if (hdd_is_llm_enabled()) {
+		adf_os_timer_cancel(&device->sleep_timer);
+		adf_os_timer_start(&device->sleep_timer,
+				   HIF_MIN_SLEEP_INACTIVITY_TIME_MS);
+	} else {
+		adf_os_atomic_set(&device->mbox_state,
+				  HIF_MBOX_REQUEST_TO_SLEEP_STATE);
+		up(&device->sem_async);
+	}
+}
+#else
+void hif_mbox_request_to_sleep(HIF_DEVICE* device)
+{
+	adf_os_atomic_set(&device->mbox_state, HIF_MBOX_REQUEST_TO_SLEEP_STATE);
+	up(&device->sem_async);
+}
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
 static void
 HIF_sleep_entry(struct timer_list *t)
@@ -1493,12 +1517,10 @@ HIF_sleep_entry(void *arg)
 #endif
 
     A_UINT32 idle_ms;
-
     idle_ms = adf_os_ticks_to_msecs(adf_os_ticks()
                                     - device->sleep_ticks);
     if (idle_ms >= HIF_MIN_SLEEP_INACTIVITY_TIME_MS) {
-       adf_os_atomic_set(&device->mbox_state, HIF_MBOX_REQUEST_TO_SLEEP_STATE);
-       up(&device->sem_async);
+	hif_mbox_request_to_sleep(device);
     } else {
        adf_os_timer_cancel(&device->sleep_timer);
        adf_os_timer_start(&device->sleep_timer,
