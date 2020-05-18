@@ -14971,9 +14971,8 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    TRACK_UNLOAD_STATUS(unload_ipa_cleanup);
    hdd_ipa_cleanup(pHddCtx);
 #endif
-#ifdef LATENCY_OPTIMIZE
-   pHddCtx->llm_enabled = false;
-#endif
+
+	pHddCtx->llm_enabled = false;
 	if (pHddCtx->hbw_requested) {
 		vos_remove_pm_qos();
 		pHddCtx->hbw_requested = false;
@@ -17067,9 +17066,8 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    for (i = 0; i < MAX_MOD_LOGLEVEL; i++) {
        pHddCtx->fw_log_settings.dl_mod_loglevel[i] = 0;
    }
-#ifdef LATENCY_OPTIMIZE
-   pHddCtx->llm_enabled = false;
-#endif
+
+	pHddCtx->llm_enabled = false;
 
    if (VOS_FTM_MODE != hdd_get_conparam()) {
        vos_set_multicast_logging(pHddCtx->cfg_ini->multicast_host_fw_msgs);
@@ -20161,7 +20159,7 @@ void hdd_stop_bus_bw_compute_timer(hdd_adapter_t *pAdapter)
 
     if (can_stop == VOS_TRUE) {
         vos_timer_stop(&pHddCtx->bus_bw_timer);
-        if (pHddCtx->hbw_requested) {
+        if (pHddCtx->hbw_requested && !pHddCtx->llm_enabled) {
             vos_remove_pm_qos();
             pHddCtx->hbw_requested = false;
         }
