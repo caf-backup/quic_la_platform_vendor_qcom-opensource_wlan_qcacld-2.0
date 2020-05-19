@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2996,6 +2996,7 @@ void limHandleCSAoffloadMsg(tpAniSirGlobal pMac,tpSirMsgQ MsgQ)
    tANI_U8 sessionId;
    tANI_U16 aid = 0 ;
    int chan_space;
+   uint8_t current_chan_width = 0;
 
    if (!csa_params) {
       limLog(pMac, LOGE, FL("limMsgQ body ptr is NULL"));
@@ -3036,6 +3037,8 @@ void limHandleCSAoffloadMsg(tpAniSirGlobal pMac,tpSirMsgQ MsgQ)
 #ifdef WLAN_FEATURE_11AC
       if(psessionEntry->vhtCapability)
       {
+          current_chan_width =
+             psessionEntry->gLimWiderBWChannelSwitch.newChanWidth;
           if ( csa_params->ies_present_flag & lim_wbw_ie_present )
           {
               psessionEntry->gLimWiderBWChannelSwitch.newChanWidth =
@@ -3099,6 +3102,20 @@ void limHandleCSAoffloadMsg(tpAniSirGlobal pMac,tpSirMsgQ MsgQ)
       }
       limLog(pMac, LOG1, FL("secondarySubBand = %d"),
              psessionEntry->gLimChannelSwitch.secondarySubBand);
+
+      if ((psessionEntry->currentOperChannel == csa_params->channel) &&
+          (psessionEntry->sub20_channelwidth ==
+           csa_params->new_sub20_channelwidth) &&
+          (current_chan_width ==
+           psessionEntry->gLimWiderBWChannelSwitch.newChanWidth))
+      {
+          psessionEntry->gLimChannelSwitch.state = eLIM_CHANNEL_SWITCH_IDLE;
+          limLog(pMac, LOGE, FL("Ignore CSA, ch %d bw %d sub20 %d"),
+                 psessionEntry->currentOperChannel,
+                 psessionEntry->gLimWiderBWChannelSwitch.newChanWidth,
+                 psessionEntry->sub20_channelwidth);
+          goto err;
+      }
 
       psessionEntry->lim_sub20_channel_switch_bandwidth =
                          csa_params->new_sub20_channelwidth;
