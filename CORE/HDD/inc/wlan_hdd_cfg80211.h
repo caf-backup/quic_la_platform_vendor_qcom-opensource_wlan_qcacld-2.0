@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -114,6 +114,10 @@ typedef struct {
    u32 type;
    u32 age;
 }__attribute__((packed)) qcom_ie_age ;
+#endif
+
+#ifndef WLAN_AKM_SUITE_SAE
+#define WLAN_AKM_SUITE_SAE 0x000FAC08
 #endif
 
 /* Vendor id to be used in vendor specific command and events
