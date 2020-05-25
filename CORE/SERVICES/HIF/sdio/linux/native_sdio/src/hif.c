@@ -985,7 +985,11 @@ static int async_task(void *param)
     BUS_REQUEST *request;
     A_STATUS status;
 
+#ifdef LATENCY_OPTIMIZE
+    set_user_nice(current, MIN_NICE);
+#else
     set_user_nice(current, -3);
+#endif
     device = (HIF_DEVICE *)param;
     AR_DEBUG_PRINTF(ATH_DEBUG_TRACE, ("AR6000: async task\n"));
     set_current_state(TASK_INTERRUPTIBLE);
