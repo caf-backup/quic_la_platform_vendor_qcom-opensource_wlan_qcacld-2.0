@@ -356,8 +356,8 @@ populate_dot11f_avoid_channel_ie(tpAniSirGlobal mac_ctx,
 		return;
 
 	dot11f->present = true;
-	dot11f->type = QCOM_VENDOR_IE_MCC_AVOID_CH;
-	dot11f->channel = pe_session->currentOperChannel;
+	dot11f->MccChanInfo.present = true;
+	dot11f->MccChanInfo.channel = pe_session->currentOperChannel;
 }
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
 
@@ -4277,11 +4277,11 @@ sirConvertBeaconFrame2Struct(tpAniSirGlobal       pMac,
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
     if(pBeacon->QComVendorIE.present) {
         pBeaconStruct->AvoidChannelIE.present =
-            pBeacon->QComVendorIE.present;
-        pBeaconStruct->AvoidChannelIE.type =
-            pBeacon->QComVendorIE.type;
-        pBeaconStruct->AvoidChannelIE.channel =
-            pBeacon->QComVendorIE.channel;
+		pBeacon->QComVendorIE.present;
+	pBeaconStruct->AvoidChannelIE.MccChanInfo.present =
+		pBeacon->QComVendorIE.MccChanInfo.present;
+	pBeaconStruct->AvoidChannelIE.MccChanInfo.channel =
+		pBeacon->QComVendorIE.MccChanInfo.channel;
     }
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
 
