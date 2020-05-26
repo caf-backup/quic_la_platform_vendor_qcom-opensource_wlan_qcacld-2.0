@@ -313,8 +313,8 @@ populate_dot11f_avoid_channel_ie(tpAniSirGlobal mac_ctx,
 		return;
 
 	dot11f->present = true;
-	dot11f->type = QCOM_VENDOR_IE_MCC_AVOID_CH;
-	dot11f->channel = pe_session->currentOperChannel;
+	dot11f->MccChanInfo.present = true;
+	dot11f->MccChanInfo.channel = pe_session->currentOperChannel;
 }
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
 
@@ -2329,7 +2329,7 @@ tSirRetStatus sirConvertProbeFrame2Struct(tpAniSirGlobal       pMac,
     }
 #endif
     pProbeResp->Vendor1IEPresent = pr->Vendor1IE.present;
-    pProbeResp->Vendor2IEPresent = pr->Vendor2IE.present;
+    pProbeResp->Vendor2IEPresent = pr->vendor2_ie.present;
     pProbeResp->Vendor3IEPresent = pr->Vendor3IE.present;
 
     vos_mem_free(pr);
@@ -3500,7 +3500,7 @@ sirParseBeaconIE(tpAniSirGlobal        pMac,
     }
 
     pBeaconStruct->Vendor1IEPresent = pBies->Vendor1IE.present;
-    pBeaconStruct->Vendor2IEPresent = pBies->Vendor2IE.present;
+    pBeaconStruct->Vendor2IEPresent = pBies->vendor2_ie.present;
     pBeaconStruct->Vendor3IEPresent = pBies->Vendor3IE.present;
     if (pBies->ExtCap.present) {
         pBeaconStruct->ExtCap.present = 1;
@@ -3834,17 +3834,17 @@ sirConvertBeaconFrame2Struct(tpAniSirGlobal       pMac,
     }
 
     pBeaconStruct->Vendor1IEPresent = pBeacon->Vendor1IE.present;
-    pBeaconStruct->Vendor2IEPresent = pBeacon->Vendor2IE.present;
+    pBeaconStruct->Vendor2IEPresent = pBeacon->vendor2_ie.present;
     pBeaconStruct->Vendor3IEPresent = pBeacon->Vendor3IE.present;
 
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
     if(pBeacon->QComVendorIE.present) {
         pBeaconStruct->AvoidChannelIE.present =
-            pBeacon->QComVendorIE.present;
-        pBeaconStruct->AvoidChannelIE.type =
-            pBeacon->QComVendorIE.type;
-        pBeaconStruct->AvoidChannelIE.channel =
-            pBeacon->QComVendorIE.channel;
+		pBeacon->QComVendorIE.present;
+	pBeaconStruct->AvoidChannelIE.MccChanInfo.present =
+		pBeacon->QComVendorIE.MccChanInfo.present;
+	pBeaconStruct->AvoidChannelIE.MccChanInfo.channel =
+		pBeacon->QComVendorIE.MccChanInfo.channel;
     }
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
 
