@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -5091,6 +5091,16 @@ REG_TABLE_ENTRY g_registry_table[] =
                 VAR_FLAGS_OPTIONAL,
                 (void *) CFG_ENABLE_TX_SCHED_WRR_BK_DEFAULT),
 
+   REG_VARIABLE_STRING(CFG_ENABLE_TX_SCHED_WRR_MCAST_DATA, WLAN_PARAM_String,
+                hdd_config_t, tx_sched_wrr_mcast_data,
+                VAR_FLAGS_OPTIONAL,
+                (void *) CFG_ENABLE_TX_SCHED_WRR_MCAST_DATA_DEFAULT),
+
+   REG_VARIABLE_STRING(CFG_ENABLE_TX_SCHED_WRR_NON_QOS_DATA, WLAN_PARAM_String,
+                hdd_config_t, tx_sched_wrr_non_qos_data,
+                VAR_FLAGS_OPTIONAL,
+                (void *) CFG_ENABLE_TX_SCHED_WRR_NON_QOS_DATA_DEFAULT),
+
    REG_VARIABLE(CFG_TGT_GTX_USR_CFG_NAME, WLAN_PARAM_Integer,
                 hdd_config_t, tgt_gtx_usr_cfg,
                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -6374,6 +6384,12 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
   hddLog(LOG2, "Name = [%s] Value = [%s]",
           CFG_ENABLE_TX_SCHED_WRR_BE,
           pHddCtx->cfg_ini->tx_sched_wrr_be);
+  hddLog(LOG2, "Name = [%s] Value = [%s]",
+          CFG_ENABLE_TX_SCHED_WRR_MCAST_DATA,
+          pHddCtx->cfg_ini->tx_sched_wrr_mcast_data);
+  hddLog(LOG2, "Name = [%s] Value = [%s]",
+          CFG_ENABLE_TX_SCHED_WRR_NON_QOS_DATA,
+          pHddCtx->cfg_ini->tx_sched_wrr_non_qos_data);
 
   hddLog(LOG2, "Name = [%s] Value = [%u]",
                  CFG_TGT_GTX_USR_CFG_NAME,

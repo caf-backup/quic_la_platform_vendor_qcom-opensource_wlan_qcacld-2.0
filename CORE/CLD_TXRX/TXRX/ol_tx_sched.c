@@ -1044,12 +1044,18 @@ void ol_tx_sched_wrr_param_update(struct ol_txrx_pdev_t *pdev,
 				struct ol_tx_sched_wrr_adv_t *scheduler)
 {
 	int i;
-	char *tx_sched_wrr_name[4] = {
+#ifdef WLAN_DEBUG
+	char *tx_sched_wrr_name[OL_TX_SCHED_WRR_ADV_NUM_CATEGORIES] = {
 		"BE",
 		"BK",
 		"VI",
-		"VO"
+		"VO",
+		"NON_QOS",
+		"UCAST_MGMT",
+		"MCAST_DATA",
+		"MCAST_MGMT"
 	};
+#endif
 
 	if (NULL == scheduler)
 		return;
@@ -1061,7 +1067,7 @@ void ol_tx_sched_wrr_param_update(struct ol_txrx_pdev_t *pdev,
 		"         skip credit limit credit disc");
 
 	for (i = OL_TX_SCHED_WRR_ADV_CAT_BE;
-		i <= OL_TX_SCHED_WRR_ADV_CAT_VO; i++) {
+		i < OL_TX_SCHED_WRR_ADV_NUM_CATEGORIES; i++) {
 		if (ol_cfg_get_wrr_skip_weight(pdev->ctrl_pdev, i)) {
 			scheduler->categories[i].specs.wrr_skip_weight =
 				ol_cfg_get_wrr_skip_weight(pdev->ctrl_pdev, i);

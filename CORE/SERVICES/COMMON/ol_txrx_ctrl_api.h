@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -252,6 +252,12 @@ enum {
 	OL_TX_WMM_AC_BK,
 	OL_TX_WMM_AC_VI,
 	OL_TX_WMM_AC_VO,
+
+	/* Must following sequence in scheduler */
+	OL_TX_NON_QOS_DATA,
+	OL_TX_UCAST_MGMT,
+	OL_TX_MCAST_DATA,
+	OL_TX_MCAST_MGMT,
 
 	OL_TX_NUM_WMM_AC
 };

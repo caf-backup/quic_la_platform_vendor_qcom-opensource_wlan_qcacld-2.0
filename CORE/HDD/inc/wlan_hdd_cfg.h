@@ -4979,6 +4979,24 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_ENABLE_TX_SCHED_WRR_BK          "gEnableTxSchedWrrBK"
 #define CFG_ENABLE_TX_SCHED_WRR_BK_DEFAULT  ""
 
+/*
+ * This key is mapping to MCAST_DATA defined in data path module through
+ * OL_TX_SCHED_WRR_ADV_CAT_CFG_SPEC. The user can tune the
+ * WRR TX sched parameters such as skip, credit, limit, credit, disc for BE.
+ * e.g., gEnableTxSchedWrrMCASTDATA = 10, 9, 8, 1, 8
+ */
+#define CFG_ENABLE_TX_SCHED_WRR_MCAST_DATA        "gEnableTxSchedWrrMCASTDATA"
+#define CFG_ENABLE_TX_SCHED_WRR_MCAST_DATA_DEFAULT  ""
+
+/*
+ * This key is mapping to NON_QOS_DATA defined in data path module through
+ * OL_TX_SCHED_WRR_ADV_CAT_CFG_SPEC. The user can tune the
+ * WRR TX sched parameters such as skip, credit, limit, credit, disc for BE.
+ * e.g., gEnableTxSchedWrrNonQosDATA = 10, 9, 8, 1, 8
+ */
+#define CFG_ENABLE_TX_SCHED_WRR_NON_QOS_DATA     "gEnableTxSchedWrrNonQosDATA"
+#define CFG_ENABLE_TX_SCHED_WRR_NON_QOS_DATA_DEFAULT  ""
+
 #define CFG_TGT_GTX_USR_CFG_NAME      "tgt_gtx_usr_cfg"
 #define CFG_TGT_GTX_USR_CFG_MIN       (0)
 #define CFG_TGT_GTX_USR_CFG_MAX       (32)
@@ -6573,6 +6591,10 @@ struct hdd_config {
    uint8_t  tx_sched_wrr_be[TX_SCHED_WRR_PARAM_STRING_LENGTH];
    /* Tuning TX sched parameters for BK (skip credit limit credit disc) */
    uint8_t  tx_sched_wrr_bk[TX_SCHED_WRR_PARAM_STRING_LENGTH];
+   /* Tuning TX sched parameters for MDATA (skip credit limit credit disc) */
+   uint8_t  tx_sched_wrr_mcast_data[TX_SCHED_WRR_PARAM_STRING_LENGTH];
+   /* Tuning TX sched parameters for NON_QOS_DATA */
+   uint8_t  tx_sched_wrr_non_qos_data[TX_SCHED_WRR_PARAM_STRING_LENGTH];
 
    /* parameter to control GTX */
    uint32_t                    tgt_gtx_usr_cfg;

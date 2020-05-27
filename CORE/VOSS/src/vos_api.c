@@ -388,6 +388,14 @@ static void vos_set_ac_specs_params(tMacOpenParameters *param,
 		case OL_TX_WMM_AC_VO:
 			tx_sched_wrr_ac = hdd_ctx->cfg_ini->tx_sched_wrr_vo;
 			break;
+		case OL_TX_MCAST_DATA:
+			tx_sched_wrr_ac =
+				hdd_ctx->cfg_ini->tx_sched_wrr_mcast_data;
+			break;
+		case OL_TX_NON_QOS_DATA:
+			tx_sched_wrr_ac =
+				hdd_ctx->cfg_ini->tx_sched_wrr_non_qos_data;
+			break;
 		default:
 			tx_sched_wrr_ac = NULL;
 		}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014,2016-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014,2016-2017,2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -454,7 +454,9 @@ int ol_cfg_get_wrr_skip_weight(ol_pdev_handle pdev, int ac)
 {
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 
-	if (ac >= OL_TX_WMM_AC_BE && ac <= OL_TX_WMM_AC_VO)
+	if (ac < OL_TX_NUM_WMM_AC &&
+	    ac != OL_TX_UCAST_MGMT &&
+	    ac != OL_TX_MCAST_MGMT)
 		return cfg->ac_specs[ac].wrr_skip_weight;
 	else
 		return 0;
@@ -471,7 +473,7 @@ uint32_t ol_cfg_get_credit_threshold(ol_pdev_handle pdev, int ac)
 {
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 
-	if (ac >= OL_TX_WMM_AC_BE && ac <= OL_TX_WMM_AC_VO)
+	if (ac >= OL_TX_WMM_AC_BE && ac < OL_TX_NUM_WMM_AC)
 		return cfg->ac_specs[ac].credit_threshold;
 	else
 		return 0;
@@ -489,7 +491,7 @@ uint16_t ol_cfg_get_send_limit(ol_pdev_handle pdev, int ac)
 {
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 
-	if (ac >= OL_TX_WMM_AC_BE && ac <= OL_TX_WMM_AC_VO)
+	if (ac >= OL_TX_WMM_AC_BE && ac < OL_TX_NUM_WMM_AC)
 		return cfg->ac_specs[ac].send_limit;
 	else
 		return 0;
@@ -507,7 +509,7 @@ int ol_cfg_get_credit_reserve(ol_pdev_handle pdev, int ac)
 {
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 
-	if (ac >= OL_TX_WMM_AC_BE && ac <= OL_TX_WMM_AC_VO)
+	if (ac >= OL_TX_WMM_AC_BE && ac < OL_TX_NUM_WMM_AC)
 		return cfg->ac_specs[ac].credit_reserve;
 	else
 		return 0;
@@ -524,7 +526,7 @@ int ol_cfg_get_discard_weight(ol_pdev_handle pdev, int ac)
 {
 	struct txrx_pdev_cfg_t *cfg = (struct txrx_pdev_cfg_t *)pdev;
 
-	if (ac >= OL_TX_WMM_AC_BE && ac <= OL_TX_WMM_AC_VO)
+	if (ac >= OL_TX_WMM_AC_BE && ac < OL_TX_NUM_WMM_AC)
 		return cfg->ac_specs[ac].discard_weight;
 	else
 		return 0;
