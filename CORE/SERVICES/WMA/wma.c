@@ -44259,7 +44259,11 @@ VOS_STATUS wma_set_wlm_latency_level(uint8_t vdev_id, uint16_t latency_level)
 	ret = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
 					WMI_WLM_CONFIG_CMDID);
 	if (ret != VOS_STATUS_SUCCESS)
-		WMA_LOGE("Decrease tx power value failed");
+		WMA_LOGE("Set WLM config failed");
+	else {
+		WMA_LOGE("WLM config: set latency level %d flags 0x%x",
+			 cmd->latency_level, cmd->flags);
+	}
 
 	return ret;
 }
