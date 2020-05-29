@@ -18843,6 +18843,7 @@ static void wma_add_bss_ap_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 #ifdef WLAN_FEATURE_11W
 	int ret = 0;
 #endif /* WLAN_FEATURE_11W */
+	uint32_t dot11mode;
 
 	pdev = vos_get_context(VOS_MODULE_ID_TXRX, wma->vos_context);
 
@@ -18931,6 +18932,8 @@ static void wma_add_bss_ap_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 	if (req.ssid.length > 0)
 		vos_mem_copy(req.ssid.ssId, add_bss->ssId.ssId,
 			     add_bss->ssId.length);
+	wlan_cfgGetInt(wma->mac_context, WNI_CFG_DOT11_MODE, &dot11mode);
+	req.dot11_mode = dot11mode;
 
 	status = wma_vdev_start(wma, &req, VOS_FALSE);
 	if (status != VOS_STATUS_SUCCESS) {
@@ -19223,6 +19226,7 @@ static void wma_add_bss_sta_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 	int ret = 0;
 	int pps_val = 0;
 	v_BOOL_t roam_synch_in_progress = VOS_FALSE;
+	u_int32_t dot11mode;
 	tpAniSirGlobal pMac = (tpAniSirGlobal)vos_get_context(VOS_MODULE_ID_PE,
 				wma->vos_context);
 
@@ -19339,6 +19343,9 @@ static void wma_add_bss_sta_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 				vos_mem_copy(req.ssid.ssId, add_bss->ssId.ssId,
 						 add_bss->ssId.length);
 
+			wlan_cfgGetInt(wma->mac_context, WNI_CFG_DOT11_MODE,
+				       &dot11mode);
+			req.dot11_mode = dot11mode;
 			status = wma_vdev_start(wma, &req, VOS_FALSE);
 			if (status != VOS_STATUS_SUCCESS) {
 				wma_remove_vdev_req(wma, vdev_id,
