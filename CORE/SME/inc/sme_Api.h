@@ -5095,5 +5095,10 @@ eHalStatus sme_au_get_txrx_stat(tHalHandle hal,
 			void *context,
 			void (*callbackfn)(struct sir_au_get_txrx_stat_resp *param,
 						void *pcontext));
+eHalStatus sme_au_get_tx_sched(tHalHandle hal,
+			uint8_t sessionid,
+			void *context,
+			void (*callbackfn)(struct sir_au_get_tx_sched_resp *param,
+						void *pcontext));
 #endif
 #endif //#if !defined( __SME_API_H )

@@ -300,6 +300,8 @@ enum {
     QCSAP_SET_CANDIDATE_CH,
     QCSAP_MULTICAST_DEL_GROUP,
     QCSAP_SET_TXRX_PRINT_LEVEL,
+    QCSAP_AUDIO_AGGR_SET_TX_SCHED,
+    QCSAP_AUDIO_AGGR_GET_TX_SCHED,
 };
 
 int iw_get_channel_list(struct net_device *dev,
