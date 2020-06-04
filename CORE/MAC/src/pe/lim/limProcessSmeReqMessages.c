@@ -867,7 +867,8 @@ __limHandleSmeStartBssRequest(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
                 tANI_U32 centerChan;
                 tANI_U32 chanWidth;
 
-                chanWidth = pSmeStartBssReq->vht_channel_width;
+                psessionEntry->vht_channel_width = chanWidth =
+                     pSmeStartBssReq->vht_channel_width;
 
                 VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,
                                 FL("vht_channel_width %u"),

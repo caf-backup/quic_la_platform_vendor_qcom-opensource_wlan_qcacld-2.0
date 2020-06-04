@@ -29488,7 +29488,7 @@ VOS_STATUS wma_process_rate_update_indicate(tp_wma_handle wma,
 		__func__, vdev_id, intr[vdev_id].type,
 		pRateUpdateParams->dev_mode, pRateUpdateParams->bssid,
 		intr[vdev_id].config.shortgi, intr[vdev_id].rate_flags);
-	ret = wma_encode_mc_rate(short_gi, intr[vdev_id].config.chwidth,
+	ret = wma_encode_mc_rate(short_gi, intr[vdev_id].channelwidth,
 			intr[vdev_id].chanmode, intr[vdev_id].mhz,
 			mbpsx10_rate, pRateUpdateParams->nss, &rate);
 	if (ret != VOS_STATUS_SUCCESS) {
