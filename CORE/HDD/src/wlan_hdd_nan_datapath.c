@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1112,7 +1112,7 @@ static void hdd_ndp_new_peer_ind_handler(hdd_adapter_t *adapter,
 	struct sme_ndp_peer_ind *new_peer_ind = ind_params;
 	hdd_context_t *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	tSirBssDescription tmp_bss_descp = {0};
-	tCsrRoamInfo roam_info = {0};
+	tCsrRoamInfo *roam_info;
 	struct nan_datapath_ctx *ndp_ctx = WLAN_HDD_GET_NDP_CTX_PTR(adapter);
 	hdd_station_ctx_t *sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	v_MACADDR_t bc_mac_addr = VOS_MAC_ADDR_BROADCAST_INITIALIZER;
@@ -1134,12 +1134,15 @@ static void hdd_ndp_new_peer_ind_handler(hdd_adapter_t *adapter,
 		return;
 	}
 
+	roam_info = vos_mem_malloc(sizeof(*roam_info));
+	if (!roam_info)
+		return;
 	/* this function is called for each new peer */
 	ndp_ctx->active_ndp_peers++;
 	hddLog(LOG1, FL("vdev_id: %d, num_peers: %d"),
 		adapter->sessionId,  ndp_ctx->active_ndp_peers);
 
-	hdd_roamRegisterSTA(adapter, &roam_info, new_peer_ind->sta_id,
+	hdd_roamRegisterSTA(adapter, roam_info, new_peer_ind->sta_id,
 			    &new_peer_ind->peer_mac_addr, &tmp_bss_descp);
 	hdd_ctx->sta_to_adapter[new_peer_ind->sta_id] = adapter;
 	/* perform following steps for first new peer ind */
@@ -1150,11 +1153,13 @@ static void hdd_ndp_new_peer_ind_handler(hdd_adapter_t *adapter,
 				    &bc_mac_addr, &tmp_bss_descp);
 		hddLog(LOG1, FL("Set ctx connection state to connected"));
 		sta_ctx->conn_info.connState = eConnectionState_NdiConnected;
-		hdd_wmm_connect(adapter, &roam_info, eCSR_BSS_TYPE_NDI);
+		hdd_wmm_connect(adapter, roam_info, eCSR_BSS_TYPE_NDI);
 		wlan_hdd_netif_queue_control(adapter,
 			WLAN_WAKE_ALL_NETIF_QUEUE,
 			WLAN_CONTROL_PATH);
 	}
+
+	vos_mem_free(roam_info);
 	EXIT();
 }
 /**

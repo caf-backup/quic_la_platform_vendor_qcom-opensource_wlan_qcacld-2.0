@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2016, 2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -292,6 +292,14 @@ typedef void (*tp_pe_packetdump_cb)(adf_nbuf_t netbuf,
 
 void pe_register_packetdump_callback(tp_pe_packetdump_cb pe_packetdump_cb);
 void pe_deregister_packetdump_callback(void);
+
+/**
+ * lim_translate_rsn_oui_to_akm_type() - translate RSN OUI to AKM type
+ * @auth_suite: auth suite
+ *
+ * Return: AKM type
+ */
+enum ani_akm_type lim_translate_rsn_oui_to_akm_type(uint8_t auth_suite[4]);
 
 /************************************************************/
 #endif /* __LIM_API_H */

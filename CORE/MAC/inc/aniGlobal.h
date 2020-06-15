@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -401,6 +401,9 @@ typedef struct sLimTimers
      * for a period of time on a particular DFS channel
      */
     TX_TIMER           gLimActiveToPassiveChannelTimer;
+
+    /* SAE authentication related timer */
+    TX_TIMER           sae_auth_timer;
 
 //********************TIMER SECTION ENDS**************************************************
 // ALL THE FIELDS BELOW THIS CAN BE ZEROED OUT in limInitialize
@@ -1273,6 +1276,7 @@ typedef struct sAniSirGlobal
     bool snr_monitor_enabled;
     /* channel information callback */
     void (*chan_info_cb)(struct scan_chan_info *chan_info);
+    uint32_t sta_auth_retries_for_code17;
 } tAniSirGlobal;
 
 typedef enum

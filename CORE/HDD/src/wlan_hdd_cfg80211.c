@@ -419,6 +419,7 @@ wlan_hdd_txrx_stypes[NUM_NL80211_IFTYPES] = {
     [NL80211_IFTYPE_STATION] = {
         .tx = 0xffff,
         .rx = BIT(SIR_MAC_MGMT_ACTION) |
+            BIT(SIR_MAC_MGMT_AUTH) |
             BIT(SIR_MAC_MGMT_PROBE_REQ),
     },
     [NL80211_IFTYPE_AP] = {
@@ -11933,6 +11934,7 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
 struct wiphy *wlan_hdd_cfg80211_wiphy_alloc(int priv_size)
 {
     struct wiphy *wiphy;
+
     ENTER();
 
     /*
@@ -11973,6 +11975,30 @@ static void hdd_config_sched_scan_plans_to_wiphy(struct wiphy *wiphy,
 #else
 static void hdd_config_sched_scan_plans_to_wiphy(struct wiphy *wiphy,
 						 hdd_config_t *config)
+{
+}
+#endif
+
+#if defined(WLAN_FEATURE_SAE) && \
+	defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
+/**
+ * wlan_hdd_cfg80211_set_wiphy_sae_feature() - Indicates support of SAE feature
+ * @wiphy: Pointer to wiphy
+ * @config: pointer to config
+ *
+ * This function is used to indicate the support of SAE
+ *
+ * Return: None
+ */
+static void wlan_hdd_cfg80211_set_wiphy_sae_feature(struct wiphy *wiphy,
+						    struct hdd_config *config)
+{
+	if (config->is_sae_enabled)
+		wiphy->features |= NL80211_FEATURE_SAE;
+}
+#else
+static void wlan_hdd_cfg80211_set_wiphy_sae_feature(struct wiphy *wiphy,
+						    struct hdd_config *config)
 {
 }
 #endif
@@ -12051,6 +12077,7 @@ int wlan_hdd_cfg80211_init(struct device *dev,
 #endif
 
     wiphy->features |= NL80211_FEATURE_HT_IBSS;
+    wlan_hdd_cfg80211_set_wiphy_sae_feature(wiphy, pCfg);
 
 #ifdef FEATURE_WLAN_SCAN_PNO
     if (pCfg->configPNOScanSupport)
@@ -12763,7 +12790,6 @@ static int wlan_hdd_add_ie(hdd_adapter_t* pHostapdAdapter, v_U8_t *genie,
 
     pIe = wlan_hdd_get_vendor_oui_ie_ptr(oui, oui_size,
                                           pBeacon->tail, pBeacon->tail_len);
-
     if (pIe)
     {
         ielen = pIe[1] + 2;
@@ -13652,7 +13678,6 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
     struct ieee80211_mgmt *pMgmt_frame;
     v_U8_t *pIe=NULL;
     v_U16_t capab_info;
-    eCsrAuthType RSNAuthType;
     eCsrEncryptionType RSNEncryptType;
     eCsrEncryptionType mcRSNEncryptType;
     int status = VOS_STATUS_SUCCESS;
@@ -13662,6 +13687,7 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
     tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(pHostapdAdapter);
     struct qc_mac_acl_entry *acl_entry = NULL;
     v_SINT_t i;
+    uint32_t ii;
     hdd_config_t *iniConfig;
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pHostapdAdapter);
     tSmeConfigParams sme_config;
@@ -13907,7 +13933,7 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
                         vos_get_context( VOS_MODULE_ID_SME, pVosContext),
                         &RSNEncryptType,
                         &mcRSNEncryptType,
-                        &RSNAuthType,
+                        &pConfig->akm_list,
                         &MFPCapable,
                         &MFPRequired,
                         pConfig->RSNWPAReqIE[1]+2,
@@ -13922,9 +13948,11 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
             pConfig->mcRSNEncryptType = mcRSNEncryptType;
             (WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter))->ucEncryptType
                                                               = RSNEncryptType;
-            hddLog( LOG1, FL("CSR AuthType = %d, "
-                        "EncryptionType = %d mcEncryptionType = %d"),
-                        RSNAuthType, RSNEncryptType, mcRSNEncryptType);
+            hddLog( LOG1, FL("CSR EncryptionType = %d mcEncryptionType = %d"),
+                        RSNEncryptType, mcRSNEncryptType);
+            for (ii = 0; ii < pConfig->akm_list.numEntries; ii++)
+                hddLog(LOG1, FL("CSR AKM Suite [%d] = %d"), ii,
+                       pConfig->akm_list.authType[ii]);
         }
     }
 
@@ -13958,7 +13986,7 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
                           vos_get_context( VOS_MODULE_ID_SME, pVosContext),
                           &RSNEncryptType,
                           &mcRSNEncryptType,
-                          &RSNAuthType,
+                          &pConfig->akm_list,
                           &MFPCapable,
                           &MFPRequired,
                           pConfig->RSNWPAReqIE[1]+2,
@@ -13973,9 +14001,11 @@ static int wlan_hdd_cfg80211_start_bss(hdd_adapter_t *pHostapdAdapter,
                 pConfig->mcRSNEncryptType = mcRSNEncryptType;
                 (WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter))->ucEncryptType
                                                               = RSNEncryptType;
-                hddLog( LOG1, FL("CSR AuthType = %d, "
-                                "EncryptionType = %d mcEncryptionType = %d"),
-                                RSNAuthType, RSNEncryptType, mcRSNEncryptType);
+                hddLog(LOG1, FL("CSR EncryptionType= %d mcEncryptionType= %d"),
+                       RSNEncryptType, mcRSNEncryptType);
+                for (ii = 0; ii < pConfig->akm_list.numEntries; ii++)
+                    hddLog(LOG1, FL("CSR AKM Suite [%d] = %d"), ii,
+                           pConfig->akm_list.authType[ii]);
             }
         }
     }
@@ -14556,10 +14586,12 @@ static int __wlan_hdd_cfg80211_stop_ap (struct wiphy *wiphy,
 #endif
 {
     hdd_adapter_t  *pAdapter   = WLAN_HDD_GET_PRIV_PTR(dev);
+    tHalHandle hal_ptr = WLAN_HDD_GET_HAL_CTX(pAdapter);
     hdd_context_t  *pHddCtx    = NULL;
     hdd_scaninfo_t *pScanInfo  = NULL;
     hdd_adapter_t  *staAdapter = NULL;
     VOS_STATUS      status     = VOS_STATUS_E_FAILURE;
+    eHalStatus      halstatus;
     tSirUpdateIE    updateIE;
     beacon_data_t  *old;
     int             ret = 0;
@@ -14589,8 +14621,14 @@ static int __wlan_hdd_cfg80211_stop_ap (struct wiphy *wiphy,
            pAdapter->device_mode);
 
     pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
-    if (WLAN_HDD_SOFTAP == pAdapter->device_mode)
+    if (WLAN_HDD_SOFTAP == pAdapter->device_mode) {
         hdd_wlan_green_ap_stop_bss(pHddCtx);
+        halstatus = sme_RoamDelPMKIDfromCache(
+                        hal_ptr, pAdapter->sessionId,
+                        NULL, true);
+        if (!HAL_STATUS_SUCCESS(halstatus))
+            hddLog(LOG1, FL("Cannot flush PMKIDCache"));
+    }
 
     status = hdd_get_front_adapter (pHddCtx, &pAdapterNode);
     while (NULL != pAdapterNode && VOS_STATUS_SUCCESS == status) {
@@ -18659,7 +18697,10 @@ static int wlan_hdd_cfg80211_set_auth_type(hdd_adapter_t *pAdapter,
             pHddStaCtx->conn_info.authType = eCSR_AUTH_TYPE_CCKM_WPA;//eCSR_AUTH_TYPE_CCKM_RSN needs to be handled as well if required.
             break;
 #endif
-
+        case NL80211_AUTHTYPE_SAE:
+            hddLog(LOG1, "set authentication type to SAE");
+            pHddStaCtx->conn_info.authType = eCSR_AUTH_TYPE_SAE;
+            break;
 
         default:
             hddLog(VOS_TRACE_LEVEL_ERROR,
@@ -18727,7 +18768,14 @@ static int wlan_hdd_set_akm_suite( hdd_adapter_t *pAdapter,
                             __func__);
             pWextState->authKeyMgmt |= IW_AUTH_KEY_MGMT_802_1X;
             break;
-
+	case WLAN_AKM_SUITE_SAE:
+	    hddLog(LOG1, "setting key mgmt type to SAE");
+            pWextState->authKeyMgmt |= IW_AUTH_KEY_MGMT_802_1X;
+	    break;
+	case WLAN_AKM_SUITE_OWE:
+		hddLog(LOG1, "setting key mgmt type to OWE");
+		pWextState->authKeyMgmt |= IW_AUTH_KEY_MGMT_802_1X;
+		break;
         default:
             hddLog(VOS_TRACE_LEVEL_ERROR, "%s: Unsupported key mgmt type %d",
                     __func__, key_mgmt);
@@ -19105,6 +19153,29 @@ int wlan_hdd_cfg80211_set_ie(hdd_adapter_t *pAdapter,
                 }
                 break;
 #endif
+	    case SIR_MAC_REQUEST_EID_MAX:
+		    if (genie[0] ==
+			SIR_DH_PARAMETER_ELEMENT_EXT_EID) {
+			v_U16_t curAddIELen = pWextState->assocAddIE.length;
+			if (SIR_MAC_MAX_ADD_IE_LENGTH <
+			    (pWextState->assocAddIE.length + eLen))
+			{
+			   hddLog(VOS_TRACE_LEVEL_FATAL, "Cannot accommodate assocAddIE "
+							  "Need bigger buffer space");
+			   VOS_ASSERT(0);
+			   return -ENOMEM;
+			}
+			hddLog(VOS_TRACE_LEVEL_INFO, "Set DH EXT IE(len %d)",
+				   eLen + 2);
+			memcpy( pWextState->assocAddIE.addIEdata + curAddIELen, genie - 2, eLen + 2);
+			pWextState->assocAddIE.length += eLen + 2;
+
+			pWextState->roamProfile.pAddIEAssoc = pWextState->assocAddIE.addIEdata;
+			pWextState->roamProfile.nAddIEAssocLength = pWextState->assocAddIE.length;
+		    } else {
+			hddLog(VOS_TRACE_LEVEL_FATAL, "UNKNOWN EID: %X", genie[0]);
+		    }
+		    break;
             default:
                 hddLog (VOS_TRACE_LEVEL_ERROR,
                         "%s Set UNKNOWN IE %X", __func__, elementId);
@@ -20518,7 +20589,6 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 {
     hdd_adapter_t *pAdapter = WLAN_HDD_GET_PRIV_PTR( dev );
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
-    int ssidlen = pHddStaCtx->conn_info.SSID.SSID.length;
     tANI_U8 rate_flags;
 
     hdd_context_t *pHddCtx = (hdd_context_t*) wiphy_priv(wiphy);
@@ -20557,11 +20627,9 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
         return -EINVAL;
     }
 
-    if ((eConnectionState_Associated != pHddStaCtx->conn_info.connState) ||
-            (0 == ssidlen))
+    if (eConnectionState_Associated != pHddStaCtx->conn_info.connState)
     {
-        hddLog(VOS_TRACE_LEVEL_INFO, "%s: Not associated or"
-                    " Invalid ssidlen, %d", __func__, ssidlen);
+        hddLog(VOS_TRACE_LEVEL_INFO, "%s: Not associated", __func__);
         /*To keep GUI happy*/
         return 0;
     }
@@ -21583,6 +21651,99 @@ static int wlan_hdd_cfg80211_add_station(struct wiphy *wiphy,
     return ret;
 }
 
+#ifdef CFG80211_FILS_SK_OFFLOAD_SUPPORT
+/*
+ * wlan_hdd_is_pmksa_valid: API to validate pmksa
+ * @pmksa: pointer to cfg80211_pmksa structure
+ *
+ * Return: True if valid else false
+ */
+static inline bool wlan_hdd_is_pmksa_valid(struct cfg80211_pmksa *pmksa)
+{
+    if (pmksa->bssid || (pmksa->ssid && pmksa->cache_id) ){
+        return true;
+    }
+    else
+    {
+        hddLog(LOGE, FL(" Either of  bssid (%p) ssid (%p) or cache_id (%p) are NULL"),
+                pmksa->bssid, pmksa->ssid, pmksa->cache_id);
+        return false;
+    }
+}
+
+/*
+ * hdd_update_pmksa_info: API to update tPmkidCacheInfo from cfg80211_pmksa
+ * @pmk_cache: pmksa from supplicant
+ * @pmk_cache: pmk needs to be updated
+ *
+ * Return: None
+ */
+static void hdd_update_pmksa_info(tPmkidCacheInfo *pmk_cache,
+        struct cfg80211_pmksa *pmksa, bool is_delete)
+{
+    if (pmksa->bssid) {
+        hddLog(VOS_TRACE_LEVEL_DEBUG,"set PMKSA for " MAC_ADDRESS_STR,
+                MAC_ADDR_ARRAY(pmksa->bssid));
+        vos_mem_copy(pmk_cache->BSSID,
+                pmksa->bssid, VOS_MAC_ADDR_SIZE);
+    } else {
+        vos_mem_copy(pmk_cache->ssid, pmksa->ssid,
+                SIR_MAC_MAX_SSID_LENGTH);
+        vos_mem_copy(pmk_cache->cache_id, pmksa->cache_id, CACHE_ID_LEN);
+        pmk_cache->ssid_len = pmksa->ssid_len;
+        hddLog(VOS_TRACE_LEVEL_INFO, "set PMKSA for ssid %*.*s cache_id %x %x",
+                pmk_cache->ssid_len, pmk_cache->ssid_len,
+                pmksa->ssid, pmksa->cache_id[0], pmksa->cache_id[1]);
+   }
+
+    if (is_delete)
+        return;
+
+    vos_mem_copy(pmk_cache->PMKID, pmksa->pmkid, CSR_RSN_PMKID_SIZE);
+    if (pmksa->pmk_len && (pmksa->pmk_len <= CSR_RSN_MAX_PMK_LEN)) {
+        vos_mem_copy(pmk_cache->pmk, pmksa->pmk, pmksa->pmk_len);
+        pmk_cache->pmk_len = pmksa->pmk_len;
+    } else
+        hddLog(VOS_TRACE_LEVEL_INFO, "pmk len is %zu", pmksa->pmk_len);
+}
+#else
+/*
+ * wlan_hdd_is_pmksa_valid: API to validate pmksa
+ * @pmksa: pointer to cfg80211_pmksa structure
+ *
+ * Return: True if valid else false
+ */
+static inline bool wlan_hdd_is_pmksa_valid(struct cfg80211_pmksa *pmksa)
+{
+    if (!pmksa->bssid) {
+        hddLog(LOGE,FL("both bssid is NULL %p"), pmksa->bssid);
+        return false;
+    }
+    return true;
+}
+
+/*
+ * hdd_update_pmksa_info: API to update tPmkidCacheInfo from cfg80211_pmksa
+ * @pmk_cache: pmksa from supplicant
+ * @pmk_cache: pmk needs to be updated
+ *
+ * Return: None
+ */
+static void hdd_update_pmksa_info(tPmkidCacheInfo *pmk_cache,
+        struct cfg80211_pmksa *pmksa, bool is_delete)
+{
+    hddLog(VOS_TRACE_LEVEL_INFO,"set PMKSA for " MAC_ADDRESS_STR,
+            MAC_ADDR_ARRAY(pmksa->bssid));
+    vos_mem_copy(pmk_cache->BSSID,
+            pmksa->bssid, VOS_MAC_ADDR_SIZE);
+
+    if (is_delete)
+        return;
+
+    vos_mem_copy(pmk_cache->PMKID, pmksa->pmkid, CSR_RSN_PMKID_SIZE);
+}
+#endif
+
 #ifdef FEATURE_WLAN_LFR
 static int __wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *dev,
             struct cfg80211_pmksa *pmksa)
@@ -21592,7 +21753,7 @@ static int __wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device 
     tHalHandle halHandle;
     eHalStatus result = eHAL_STATUS_SUCCESS;
     int status;
-    tPmkidCacheInfo pmk_id;
+    tPmkidCacheInfo pmk_cache;
 
     ENTER();
 
@@ -21606,14 +21767,14 @@ static int __wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device 
         return -EINVAL;
     }
 
-    if (!pmksa->bssid || !pmksa->pmkid) {
-        hddLog(LOGE, FL("pmksa->bssid(%pK) or pmksa->pmkid(%pK) is NULL"),
-               pmksa->bssid, pmksa->pmkid);
+    if (!pmksa->pmkid) {
+        hddLog(LOGE, FL("pmksa->pmkid(%p) is NULL"),
+               pmksa->pmkid);
         return -EINVAL;
     }
 
-    hddLog(VOS_TRACE_LEVEL_DEBUG, FL("set PMKSA for "MAC_ADDRESS_STR),
-           MAC_ADDR_ARRAY(pmksa->bssid));
+    if (!wlan_hdd_is_pmksa_valid(pmksa))
+        return -EINVAL;
 
     status = wlan_hdd_validate_context(pHddCtx);
     if (0 != status)
@@ -21621,12 +21782,18 @@ static int __wlan_hdd_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device 
 
     halHandle = WLAN_HDD_GET_HAL_CTX(pAdapter);
 
-    vos_mem_copy(pmk_id.BSSID, pmksa->bssid, ETHER_ADDR_LEN);
-    vos_mem_copy(pmk_id.PMKID, pmksa->pmkid, CSR_RSN_PMKID_SIZE);
+    vos_mem_zero(&pmk_cache, sizeof(pmk_cache));
 
-    /* Add to the PMKSA ID Cache in CSR */
-    result = sme_RoamSetPMKIDCache(halHandle,pAdapter->sessionId,
-                                   &pmk_id, 1, FALSE);
+    hdd_update_pmksa_info(&pmk_cache, pmksa, false);
+
+    /* Add to the PMKSA ID Cache in CSR
+     * PMKSA cache will be having following
+     * 1. pmkid id
+     * 2. pmk 15733
+     * 3. bssid or cache identifier
+    */
+   result = sme_RoamSetPMKIDCache(halHandle,pAdapter->sessionId,
+                                   &pmk_cache, 1, FALSE);
 
     MTRACE(vos_trace(VOS_MODULE_ID_HDD,
                      TRACE_CODE_HDD_CFG80211_SET_PMKSA,
@@ -21655,6 +21822,7 @@ static int __wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device 
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
     tHalHandle halHandle;
     int status = 0;
+    tPmkidCacheInfo pmk_cache;
 
     ENTER();
 
@@ -21668,13 +21836,8 @@ static int __wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device 
         return -EINVAL;
     }
 
-    if (!pmksa->bssid) {
-        hddLog(LOGE, FL("pmksa->bssid is NULL"));
+    if (!wlan_hdd_is_pmksa_valid(pmksa))
         return -EINVAL;
-    }
-
-    hddLog(VOS_TRACE_LEVEL_DEBUG, FL("Deleting PMKSA for "MAC_ADDRESS_STR),
-           MAC_ADDR_ARRAY(pmksa->bssid));
 
     status = wlan_hdd_validate_context(pHddCtx);
     if (0 != status)
@@ -21685,10 +21848,14 @@ static int __wlan_hdd_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device 
     MTRACE(vos_trace(VOS_MODULE_ID_HDD, TRACE_CODE_HDD_CFG80211_DEL_PMKSA,
                                       pAdapter->sessionId, 0));
 
+    vos_mem_zero(&pmk_cache, sizeof(pmk_cache));
+
+    hdd_update_pmksa_info(&pmk_cache, pmksa, true);
+
     /* Delete the PMKID CSR cache */
     if (eHAL_STATUS_SUCCESS !=
         sme_RoamDelPMKIDfromCache(halHandle,
-                                  pAdapter->sessionId, pmksa->bssid, FALSE)) {
+                                  pAdapter->sessionId, &pmk_cache, FALSE)) {
        hddLog(LOGE, FL("Failed to delete PMKSA for "MAC_ADDRESS_STR),
                       MAC_ADDR_ARRAY(pmksa->bssid));
        status = -EINVAL;
@@ -21753,6 +21920,118 @@ static int wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy,
     vos_ssr_unprotect(__func__);
 
     return ret;
+}
+#endif
+
+#if defined(WLAN_FEATURE_SAE) && \
+	defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
+#if defined(CFG80211_EXTERNAL_AUTH_AP_SUPPORT)
+/**
+ * wlan_hdd_extauth_cache_pmkid() - Extract and cache pmkid
+ * @adapter: hdd vdev/net_device context
+ * @hHal: Handle to the hal
+ * @params: Pointer to external auth params.
+ *
+ * Extract the PMKID and BSS from external auth params and add to the
+ * PMKSA Cache in CSR.
+ */
+static void
+wlan_hdd_extauth_cache_pmkid(hdd_adapter_t *adapter,
+			     tHalHandle hHal,
+			     struct cfg80211_external_auth_params *params)
+{
+	tPmkidCacheInfo pmk_cache;
+	VOS_STATUS result;
+
+	if (params->pmkid) {
+		vos_mem_zero(&pmk_cache, sizeof(pmk_cache));
+		vos_mem_copy(pmk_cache.BSSID, params->bssid,
+			     VOS_MAC_ADDR_SIZE);
+		vos_mem_copy(pmk_cache.PMKID, params->pmkid,
+			     CSR_RSN_PMKID_SIZE);
+		result = sme_RoamSetPMKIDCache(hHal, adapter->sessionId,
+					       &pmk_cache, 1, false);
+		if (!VOS_IS_STATUS_SUCCESS(result))
+			hddLog(VOS_TRACE_LEVEL_ERROR,
+			       FL("external_auth: Failed to cache PMKID"));
+	}
+}
+#else
+static void
+wlan_hdd_extauth_cache_pmkid(hdd_adapter_t *adapter,
+			     tHalHandle hHal,
+			     struct cfg80211_external_auth_params *params)
+{}
+#endif
+
+/**
+ * __wlan_hdd_cfg80211_external_auth() - Handle external auth
+ *
+ * @wiphy: Pointer to wireless phy
+ * @dev: net device
+ * @params: Pointer to external auth params
+ *
+ * Return: 0 on success, negative errno on failure
+ *
+ * Userspace sends status of the external authentication(e.g., SAE) with a peer.
+ * The message carries BSSID of the peer and auth status (WLAN_STATUS_SUCCESS/
+ * WLAN_STATUS_UNSPECIFIED_FAILURE) in params.
+ * Userspace may send PMKID in params, which can be used for
+ * further connections.
+ */
+static int
+__wlan_hdd_cfg80211_external_auth(struct wiphy *wiphy,
+				struct net_device *dev,
+				struct cfg80211_external_auth_params *params)
+{
+	hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
+	hdd_adapter_t *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	int ret;
+	tSirMacAddr peer_mac_addr;
+
+	if (hdd_get_conparam() == VOS_FTM_MODE) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+			FL("Command not allowed in FTM mode"));
+		return -EPERM;
+	}
+
+	ret = wlan_hdd_validate_context(hdd_ctx);
+	if (ret)
+		return ret;
+
+	hddLog(VOS_TRACE_LEVEL_DEBUG,
+	       FL("external_auth status: %d peer mac: " MAC_ADDRESS_STR),
+	       params->status, MAC_ADDR_ARRAY(params->bssid));
+	vos_mem_copy(peer_mac_addr, params->bssid, VOS_MAC_ADDR_SIZE);
+
+	wlan_hdd_extauth_cache_pmkid(adapter, hdd_ctx->hHal, params);
+
+	sme_handle_sae_msg(hdd_ctx->hHal, adapter->sessionId, params->status,
+			   peer_mac_addr);
+
+	return ret;
+}
+
+/**
+ * wlan_hdd_cfg80211_external_auth() - Handle external auth
+ * @wiphy: Pointer to wireless phy
+ * @dev: net device
+ * @params: Pointer to external auth params
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+static int
+wlan_hdd_cfg80211_external_auth(struct wiphy *wiphy,
+				struct net_device *dev,
+				struct cfg80211_external_auth_params *params)
+{
+	int ret;
+
+	vos_ssr_protect(__func__);
+	ret = __wlan_hdd_cfg80211_external_auth(wiphy, dev, params);
+	vos_ssr_unprotect(__func__);
+
+	return ret;
 }
 #endif
 
@@ -25944,6 +26223,94 @@ void wlan_hdd_cfg80211_extscan_callback(void *ctx, const tANI_U16 evType,
 
 #endif /* FEATURE_WLAN_EXTSCAN */
 
+#ifdef CFG80211_EXTERNAL_DH_UPDATE_SUPPORT
+/**
+ * __wlan_hdd_cfg80211_update_owe_info() - update OWE info
+ * @wiphy: Pointer to wiphy
+ * @dev: Pointer to network device
+ * @owe_info: Pointer to OWE info
+ *
+ * Return: 0 for success, non-zero for failure
+ */
+static int
+__wlan_hdd_cfg80211_update_owe_info(struct wiphy *wiphy,
+				    struct net_device *dev,
+				    struct cfg80211_update_owe_info *owe_info)
+{
+	hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
+	hdd_adapter_t *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	VOS_STATUS status;
+	int errno;
+
+	ENTER();
+
+	errno = wlan_hdd_validate_context(hdd_ctx);
+	if (errno)
+		return errno;
+
+	if (VOS_FTM_MODE == hdd_get_conparam()) {
+		hddLog(LOGE, FL("Command not allowed in FTM mode"));
+		return -EINVAL;
+	}
+
+	hddLog(LOG1, FL("owe_status %d"), owe_info->status);
+
+	status = wlansap_update_owe_info(WLAN_HDD_GET_SAP_CTX_PTR(adapter),
+					 owe_info->peer, owe_info->ie,
+					 owe_info->ie_len, owe_info->status);
+	if (!VOS_IS_STATUS_SUCCESS(status)) {
+		hddLog(LOGE, FL("Failed to update OWE info"));
+		errno = vos_status_to_os_return(status);
+	}
+
+	EXIT();
+	return errno;
+}
+
+/**
+ * wlan_hdd_cfg80211_update_owe_info() - update OWE info
+ * @wiphy: Pointer to wiphy
+ * @dev: Pointer to network device
+ * @owe_info: Pointer to OWE info
+ *
+ * Return: 0 for success, non-zero for failure
+ */
+static int
+wlan_hdd_cfg80211_update_owe_info(struct wiphy *wiphy,
+				  struct net_device *net_dev,
+				  struct cfg80211_update_owe_info *owe_info)
+{
+	int errno;
+
+	vos_ssr_protect(__func__);
+
+	errno = __wlan_hdd_cfg80211_update_owe_info(wiphy, net_dev, owe_info);
+
+	vos_ssr_unprotect(__func__);
+
+	return errno;
+}
+
+void hdd_send_update_owe_info_event(hdd_adapter_t *adapter,
+				    uint8_t sta_addr[],
+				    uint8_t *owe_ie,
+				    uint32_t owe_ie_len)
+{
+	struct cfg80211_update_owe_info owe_info;
+	struct net_device *dev = adapter->dev;
+
+	ENTER();
+
+	vos_mem_copy(owe_info.peer, sta_addr, ETH_ALEN);
+	owe_info.ie = owe_ie;
+	owe_info.ie_len = owe_ie_len;
+
+	cfg80211_update_owe_info_event(dev, &owe_info, GFP_KERNEL);
+
+	EXIT();
+}
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,5,0)) || \
     defined(CFG80211_ABORT_SCAN)
 /**
@@ -26047,6 +26414,9 @@ static struct cfg80211_ops wlan_hdd_cfg80211_ops =
 #if defined(WLAN_FEATURE_VOWIFI_11R) && defined(KERNEL_SUPPORT_11R_CFG80211)
      .update_ft_ies = wlan_hdd_cfg80211_update_ft_ies,
 #endif
+#ifdef CFG80211_EXTERNAL_DH_UPDATE_SUPPORT
+     .update_owe_info = wlan_hdd_cfg80211_update_owe_info,
+#endif
 #ifdef FEATURE_WLAN_TDLS
      .tdls_mgmt = wlan_hdd_cfg80211_tdls_mgmt,
      .tdls_oper = wlan_hdd_cfg80211_tdls_oper,
@@ -26074,5 +26444,9 @@ static struct cfg80211_ops wlan_hdd_cfg80211_ops =
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,5,0)) || \
     defined(CFG80211_ABORT_SCAN)
      .abort_scan = wlan_hdd_cfg80211_abort_scan,
+#endif
+#if defined(WLAN_FEATURE_SAE) && \
+    defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
+    .external_auth = wlan_hdd_cfg80211_external_auth,
 #endif
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1831,6 +1831,32 @@ static void __limProcessClearDfsChannelList(tpAniSirGlobal pMac,
                   sizeof(tSirDFSChannelList), 0);
 }
 
+#ifdef WLAN_FEATURE_SAE
+/**
+ * lim_update_sae_config()- This API update SAE session info to csr config
+ * from join request.
+ * @session: PE session
+ * @sme_join_req: pointer to join request
+ *
+ * Return: None
+ */
+static void lim_update_sae_config(tpPESession session,
+				tpSirSmeJoinReq sme_join_req)
+{
+	session->sae_pmk_cached = sme_join_req->sae_pmk_cached;
+
+	VOS_TRACE(VOS_MODULE_ID_PE,
+		VOS_TRACE_LEVEL_DEBUG,
+		FL("pmk_cached %d for BSSID=" MAC_ADDRESS_STR),
+		session->sae_pmk_cached,
+		MAC_ADDR_ARRAY(sme_join_req->bssDescription.bssId));
+}
+#else
+static inline void lim_update_sae_config(tpPESession session,
+				tpSirSmeJoinReq sme_join_req)
+{}
+#endif
+
 /**
  * __limProcessSmeJoinReq()
  *
@@ -2157,7 +2183,7 @@ __limProcessSmeJoinReq(tpAniSirGlobal pMac, tANI_U32 *pMsgBuf)
         psessionEntry->isFastRoamIniFeatureEnabled = pSmeJoinReq->isFastRoamIniFeatureEnabled;
 #endif
         psessionEntry->txLdpcIniFeatureEnabled = pSmeJoinReq->txLdpcIniFeatureEnabled;
-
+        lim_update_sae_config(psessionEntry, pSmeJoinReq);
         if (psessionEntry->bssType == eSIR_INFRASTRUCTURE_MODE)
         {
             psessionEntry->limSystemRole = eLIM_STA_ROLE;
@@ -4144,7 +4170,7 @@ void limProcessSmeDelBssRsp(
   void
 __limProcessSmeAssocCnfNew(tpAniSirGlobal pMac, tANI_U32 msgType, tANI_U32 *pMsgBuf)
 {
-    tSirSmeAssocCnf    assocCnf;
+    tSirSmeAssocCnf    assocCnf = {0};
     tpDphHashNode      pStaDs = NULL;
     tpPESession        psessionEntry= NULL;
     tANI_U8            sessionId;
@@ -4231,24 +4257,40 @@ __limProcessSmeAssocCnfNew(tpAniSirGlobal pMac, tANI_U32 msgType, tANI_U32 *pMsg
          * Association Response frame to the requesting BTAMP-STA.
          */
         pStaDs->mlmStaContext.mlmState = eLIM_MLM_LINK_ESTABLISHED_STATE;
+        pStaDs->mlmStaContext.owe_ie = assocCnf.owe_ie;
+        pStaDs->mlmStaContext.owe_ie_len = assocCnf.owe_ie_len;
         limLog(pMac, LOG1, FL("sending Assoc Rsp frame to STA (assoc id=%d) "), pStaDs->assocId);
         limSendAssocRspMgmtFrame( pMac, eSIR_SUCCESS, pStaDs->assocId, pStaDs->staAddr,
                                   pStaDs->mlmStaContext.subType, pStaDs, psessionEntry);
+        pStaDs->mlmStaContext.owe_ie = NULL;
+        pStaDs->mlmStaContext.owe_ie_len = 0;
         goto end;
     } // (assocCnf.statusCode == eSIR_SME_SUCCESS)
     else
     {
+        uint8_t add_pre_auth_context = true;
         // SME_ASSOC_CNF status is non-success, so STA is not allowed to be associated
         /*Since the HAL sta entry is created for denied STA we need to remove this HAL entry.So to do that set updateContext to 1*/
+        tSirMacStatusCodes mac_status_code = eSIR_MAC_UNSPEC_FAILURE_STATUS;
+
         if(!pStaDs->mlmStaContext.updateContext)
            pStaDs->mlmStaContext.updateContext = 1;
-        limLog(pMac, LOG1, FL("Receive Assoc Cnf with status Code : %d(assoc id=%d) "),
-                           assocCnf.statusCode, pStaDs->assocId);
+        limLog(pMac, LOG1,
+               FL("Receive Assoc Cnf with status Code : %d(assoc id=%d) Reason code: %d"),
+               assocCnf.statusCode, pStaDs->assocId, assocCnf.mac_status_code);
+        if (assocCnf.mac_status_code)
+            mac_status_code = assocCnf.mac_status_code;
+        if (assocCnf.mac_status_code == eSIR_MAC_INVALID_PMKID ||
+            assocCnf.mac_status_code ==
+            eSIR_MAC_AUTH_ALGO_NOT_SUPPORTED_STATUS)
+            add_pre_auth_context = false;
         limRejectAssociation(pMac, pStaDs->staAddr,
                              pStaDs->mlmStaContext.subType,
-                             true, pStaDs->mlmStaContext.authType,
+                             add_pre_auth_context,
+                             pStaDs->mlmStaContext.authType,
                              pStaDs->assocId, true,
-                             eSIR_MAC_UNSPEC_FAILURE_STATUS, psessionEntry);
+                             mac_status_code,
+                             psessionEntry);
     }
 
 end:
@@ -4267,7 +4309,7 @@ end:
             psessionEntry->parsedAssocReq[pStaDs->assocId] = NULL;
         }
     }
-
+    vos_mem_free(assocCnf.owe_ie);
 } /*** end __limProcessSmeAssocCnfNew() ***/
 
 #ifdef SAP_AUTH_OFFLOAD

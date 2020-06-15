@@ -1334,6 +1334,25 @@ enum
 #define CFG_ENABLE_RAMDUMP_COLLECTION_MAX          ( 1 )
 #define CFG_ENABLE_RAMDUMP_COLLECTION_DEFAULT      ( 1 )
 
+/*
+ * gStaAuthRetriesForCode17
+ * It is for an IOT issue.
+ * When DUT receives MAX_ASSOC_STA_REACHED_STATUS as
+ * response for Auth frame this ini decides how many
+ * times DUT has to retry.
+ *
+ * This is mainly for an AP where it wants to force
+ * the Station to connect to its 5G profile session
+ * (Dual band AP) by rejecting the Auth on 2.4G band.
+ * But if a station is only 2.4G capable it can try
+ * 3 times where third time AP will allow the
+ * station to connect to this AP.
+ */
+#define CFG_STA_AUTH_RETRIES_FOR_CODE17_NAME      "gStaAuthRetriesForCode17"
+#define CFG_STA_AUTH_RETRIES_FOR_CODE17_MIN       ( 0 )
+#define CFG_STA_AUTH_RETRIES_FOR_CODE17_MAX       ( 5 )
+#define CFG_STA_AUTH_RETRIES_FOR_CODE17_DEFAULT   ( 0 )
+
 typedef enum
 {
     eHDD_LINK_SPEED_REPORT_ACTUAL = 0,
@@ -4020,6 +4039,28 @@ enum dot11p_mode {
 #define CFG_ACTIVE_MODE_OFFLOAD_MAX        (1)
 #define CFG_ACTIVE_MODE_OFFLOAD_DEFAULT    (0)
 
+/*
+ * <ini>
+ * enable_sae_for_sap - Enable/Disable SAE support in driver for SAP
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to enable/disable SAE support in driver for SAP mode
+ * Driver will process/drop the SAE authentication frames based on this config.
+ *
+ * Related: None
+ *
+ * Supported Feature: SAE
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_ENABLE_SAE_FOR_SAP_NAME    "enable_sae_for_sap"
+#define CFG_ENABLE_SAE_FOR_SAP_DEFAULT (1)
+#define CFG_ENABLE_SAE_FOR_SAP_MIN     (0)
+#define CFG_ENABLE_SAE_FOR_SAP_MAX     (1)
 
 /*
  * maximum interval (in seconds) for a
@@ -4038,6 +4079,29 @@ enum dot11p_mode {
 #define CFG_MAX_SCHED_SCAN_PLAN_ITRNS_MIN        (1)
 #define CFG_MAX_SCHED_SCAN_PLAN_ITRNS_MAX        (100)
 #define CFG_MAX_SCHED_SCAN_PLAN_ITRNS_DEFAULT    (10)
+
+/*
+ * <ini>
+ * sae_enabled - Enable/Disable SAE support in driver
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable/disable SAE support in driver
+ * Driver will update config to supplicant based on this config.
+ *
+ * Related: None
+ *
+ * Supported Feature: SAE
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_IS_SAE_ENABLED_NAME    "sae_enabled"
+#define CFG_IS_SAE_ENABLED_DEFAULT (1)
+#define CFG_IS_SAE_ENABLED_MIN     (0)
+#define CFG_IS_SAE_ENABLED_MAX     (1)
 
 /*---------------------------------------------------------------------------
   Type declarations
@@ -4825,6 +4889,11 @@ struct hdd_config {
    bool                        active_mode_offload;
    uint32_t                    max_sched_scan_plan_interval;
    uint32_t                    max_sched_scan_plan_iterations;
+#ifdef WLAN_FEATURE_SAE
+   bool is_sae_enabled;
+   bool enable_sae_for_sap;
+#endif
+   uint32_t                    sta_auth_retries_for_code17;
 };
 
 typedef struct hdd_config hdd_config_t;

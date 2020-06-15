@@ -4710,6 +4710,27 @@ REG_TABLE_ENTRY g_registry_table[] =
                 CFG_MAX_SCHED_SCAN_PLAN_ITRNS_MIN,
                 CFG_MAX_SCHED_SCAN_PLAN_ITRNS_MAX),
 
+#ifdef WLAN_FEATURE_SAE
+	REG_VARIABLE(CFG_IS_SAE_ENABLED_NAME, WLAN_PARAM_Integer,
+		struct hdd_config, is_sae_enabled,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_IS_SAE_ENABLED_DEFAULT,
+		CFG_IS_SAE_ENABLED_MIN,
+		CFG_IS_SAE_ENABLED_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_SAE_FOR_SAP_NAME, WLAN_PARAM_Integer,
+		struct hdd_config, enable_sae_for_sap,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_ENABLE_SAE_FOR_SAP_DEFAULT,
+		CFG_ENABLE_SAE_FOR_SAP_MIN,
+		CFG_ENABLE_SAE_FOR_SAP_MAX),
+#endif
+   REG_VARIABLE( CFG_STA_AUTH_RETRIES_FOR_CODE17_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, sta_auth_retries_for_code17,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_STA_AUTH_RETRIES_FOR_CODE17_DEFAULT,
+                CFG_STA_AUTH_RETRIES_FOR_CODE17_MIN,
+                CFG_STA_AUTH_RETRIES_FOR_CODE17_MAX ),
 };
 
 
@@ -4976,6 +4997,29 @@ config_exit:
    return vos_status;
 }
 
+#ifdef WLAN_FEATURE_SAE
+static void hdd_cfg_print_sae(hdd_context_t *hdd_ctx)
+{
+	hddLog(LOG2, "Name = [%s] value = [%u]",
+	       CFG_IS_SAE_ENABLED_NAME,
+	       hdd_ctx->cfg_ini->is_sae_enabled);
+}
+
+static void hdd_cfg_print_sae_sap(hdd_context_t *hdd_ctx)
+{
+	hddLog(LOG2, "Name = [%s] value = [%u]",
+	       CFG_ENABLE_SAE_FOR_SAP_NAME,
+	       hdd_ctx->cfg_ini->enable_sae_for_sap);
+}
+#else
+static void hdd_cfg_print_sae(hdd_context_t *hdd_ctx)
+{
+}
+
+static void hdd_cfg_print_sae_sap(hdd_context_t *hdd_ctx)
+{
+}
+#endif
 
 void print_hdd_cfg(hdd_context_t *pHddCtx)
 {
@@ -5453,6 +5497,10 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
             "Name = [gEnableDumpCollect] Value = [%u]",
                      pHddCtx->cfg_ini->is_ramdump_enabled);
 
+  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
+        "Name = [sta_auth_retries_for_code17] Value = [%u] ",
+         pHddCtx->cfg_ini->sta_auth_retries_for_code17);
+
   hddLog(LOG2, "Name = [gP2PListenDeferInterval] Value = [%u]",
                    pHddCtx->cfg_ini->p2p_listen_defer_interval);
 
@@ -5558,6 +5606,10 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
                  pHddCtx->cfg_ini->active_mode_offload);
 
   hdd_ndp_print_ini_config(pHddCtx);
+
+  hdd_cfg_print_sae(pHddCtx);
+
+  hdd_cfg_print_sae_sap(pHddCtx);
 }
 
 #define CFG_VALUE_MAX_LEN 256
@@ -5652,7 +5704,6 @@ static VOS_STATUS hdd_cfg_get_config(REG_TABLE_ENTRY *reg_table,
 #else
       printk(KERN_INFO "%s", configStr);
 #endif // RETURN_IN_BUFFER
-
 }
 
 #ifndef RETURN_IN_BUFFER
@@ -7528,6 +7579,9 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
 
    smeConfig->snr_monitor_enabled = pHddCtx->cfg_ini->fEnableSNRMonitoring;
 
+   smeConfig->csrConfig.sta_auth_retries_for_code17 =
+                        pHddCtx->cfg_ini->sta_auth_retries_for_code17;
+
    halStatus = sme_UpdateConfig( pHddCtx->hHal, smeConfig);
    if ( !HAL_STATUS_SUCCESS( halStatus ) )
    {
@@ -7538,7 +7592,6 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
    vos_mem_free(smeConfig);
    return status;
 }
-
 
 /**---------------------------------------------------------------------------
 
