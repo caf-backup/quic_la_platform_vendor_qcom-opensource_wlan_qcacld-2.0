@@ -1642,13 +1642,15 @@ static int __is_driver_dfs_capable(struct wiphy *wiphy,
         return -EPERM;
     }
 
-#if defined (DFS_MASTER_OFFLOAD_IND_SUPPORT) || defined(WITH_BACKPORTS)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)) || \
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 4, 0)) || \
+	defined (DFS_MASTER_OFFLOAD_IND_SUPPORT) || defined(WITH_BACKPORTS)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)) || \
 	defined(CFG80211_DFS_OFFLOAD_BACKPORT)
+
 	dfs_capability =
 		wiphy_ext_feature_isset(wiphy,
 					NL80211_EXT_FEATURE_DFS_OFFLOAD);
-#elif (LINUX_VERSION_CODE > KERNEL_VERSION(3,4,0))
+#else
     dfs_capability = !!(wiphy->flags & WIPHY_FLAG_DFS_OFFLOAD);
 #endif
 #endif
