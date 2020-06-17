@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1297,6 +1297,7 @@ typedef struct sAniSirGlobal
     uint8_t  sub20_channelwidth;
     uint8_t  sub20_dynamic_channelwidth;
     uint8_t  sta_sub20_current_channelwidth;
+    uint8_t  sub20_action_frame_enable;
     bool     sta_change_cc_via_beacon;
     bool     mcs_tx_force2chain;
     bool max_power_cmd_pending;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -5328,6 +5328,13 @@ REG_TABLE_ENTRY g_registry_table[] =
                 CFG_SUB_20_CHANNEL_WIDTH_MIN,
                 CFG_SUB_20_CHANNEL_WIDTH_MAX),
 
+   REG_VARIABLE(CFG_SUB_20_ACTION_FRAME_NAME, WLAN_PARAM_Integer,
+                hdd_config_t, sub20_action_frame,
+                VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                CFG_SUB_20_ACTION_FRAME_DEFAULT,
+                CFG_SUB_20_ACTION_FRAME_DISABLE,
+                CFG_SUB_20_ACTION_FRAME_ENABLE),
+
    REG_VARIABLE(CFG_RX_WAKELOCK_TIMEOUT_NAME, WLAN_PARAM_Integer,
                 hdd_config_t, rx_wakelock_timeout,
                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -6403,6 +6410,10 @@ void print_hdd_cfg(hdd_context_t *pHddCtx)
   hddLog(LOG2, "Name = [%s] Value = [%u]",
          CFG_SUB_20_CHANNEL_WIDTH_NAME,
          pHddCtx->cfg_ini->sub_20_channel_width);
+
+  hddLog(LOG2, "Name = [%s] Value = [%u]",
+         CFG_SUB_20_ACTION_FRAME_NAME,
+         pHddCtx->cfg_ini->sub20_action_frame);
 
   hddLog(LOG2, "Name = [%s] Value = [%u]",
          CFG_STA_CHANGE_COUNTRYCODE_DYN_NAME ,
@@ -8593,6 +8604,8 @@ VOS_STATUS hdd_set_sme_config( hdd_context_t *pHddCtx )
               hdd_cfg_get_static_sub20_channel_width(pHddCtx);
    smeConfig->sub20_dynamic_channelwidth =
               hdd_cfg_get_sub20_dyn_capabilities(pHddCtx);
+   smeConfig->sub20_action_frame_enable =
+        pHddCtx->cfg_ini->sub20_action_frame;
 
    smeConfig->csrConfig.sta_auth_retries_for_code17 =
                         pHddCtx->cfg_ini->sta_auth_retries_for_code17;
