@@ -1491,6 +1491,8 @@ struct hdd_adapter_s
     uint8_t restrict_offchannel_cnt;
 
     bool spectral_enabled;
+	/* WLM latency level */
+	uint16_t latency_level;
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(pAdapter) (&(pAdapter)->sessionCtx.station)
@@ -2215,8 +2217,8 @@ struct hdd_context_s
     bool  restrict_offchan_flag;
     hdd_spectral_t *hdd_spec;
 
-    /* ultra low latency mode enabled */
-    bool llm_enabled;
+    /* max latency_level of all adapters */
+    uint16_t latency_level;
 };
 
 /*---------------------------------------------------------------------------
@@ -2257,6 +2259,8 @@ VOS_STATUS hdd_add_adapter_front( hdd_context_t *pHddCtx,
  */
 uint32_t hdd_get_current_vdev_sta_count(hdd_context_t *hdd_ctx);
 
+void hdd_latency_request_pm_qos(hdd_adapter_t *adapter,
+				     uint16_t latency_level);
 hdd_adapter_t* hdd_open_adapter( hdd_context_t *pHddCtx, tANI_U8 session_type,
                                  const char* name, tSirMacAddr macAddr,
                                  unsigned char name_assign_type,
@@ -2383,6 +2387,7 @@ static inline void hdd_stop_bus_bw_computer_timer(hdd_adapter_t *pAdapter)
 }
 #endif
 
+bool hdd_is_llm_enabled(void);
 int hdd_wlan_startup(struct device *dev, void *hif_sc);
 void __hdd_wlan_exit(void);
 int hdd_wlan_notify_modem_power_state(int state);
