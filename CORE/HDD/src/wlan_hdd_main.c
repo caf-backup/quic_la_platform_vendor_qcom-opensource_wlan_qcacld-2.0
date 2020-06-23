@@ -12011,6 +12011,68 @@ uint32_t hdd_get_current_vdev_sta_count(hdd_context_t *hdd_ctx)
 	return vdev_sta_cnt;
 }
 
+#ifdef LATENCY_OPTIMIZE
+void hdd_latency_request_pm_qos(hdd_adapter_t *adapter,
+				     uint16_t latency_level)
+{
+	hdd_context_t *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	hdd_adapter_list_node_t *adapter_node = NULL, *next = NULL;
+	VOS_STATUS status;
+	hdd_adapter_t *adp;
+
+	adapter->latency_level = latency_level;
+	hdd_ctx->latency_level =
+		QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_INVALID;
+
+	status = hdd_get_front_adapter(hdd_ctx, &adapter_node);
+	while (NULL != adapter_node && VOS_STATUS_SUCCESS == status) {
+		adp = adapter_node->pAdapter;
+
+		if (adp->latency_level > hdd_ctx->latency_level)
+			hdd_ctx->latency_level = adp->latency_level;
+		status = hdd_get_next_adapter(hdd_ctx, adapter_node,
+				&next);
+		adapter_node = next;
+	}
+
+	if (hdd_ctx->latency_level ==
+	    QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_ULTRALOW) {
+		if (!hdd_ctx->hbw_requested) {
+			vos_request_pm_qos_type(PM_QOS_CPU_DMA_LATENCY,
+						DISABLE_KRAIT_IDLE_PS_VAL);
+			hdd_ctx->hbw_requested = true;
+		}
+	} else if (hdd_ctx->hbw_requested) {
+		vos_remove_pm_qos();
+		hdd_ctx->hbw_requested = false;
+	}
+}
+#else
+void hdd_latency_request_pm_qos(hdd_adapter_t *adapter,
+				     uint16_t latency_level)
+{
+	hdd_context_t *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	hdd_adapter_list_node_t *adapter_node = NULL, *next = NULL;
+	VOS_STATUS status;
+	hdd_adapter_t *adp;
+
+	adapter->latency_level = latency_level;
+	hdd_ctx->latency_level =
+		QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_INVALID;
+
+	status = hdd_get_front_adapter(hdd_ctx, &adapter_node);
+	while (NULL != adapter_node && VOS_STATUS_SUCCESS == status) {
+		adp = adapter_node->pAdapter;
+
+		if (adp->latency_level > hdd_ctx->latency_level)
+			hdd_ctx->latency_level = adp->latency_level;
+		status = hdd_get_next_adapter(hdd_ctx, adapter_node,
+				&next);
+		adapter_node = next;
+	}
+}
+#endif
+
 hdd_adapter_t *hdd_open_adapter(hdd_context_t *hdd_ctx,
 				uint8_t session_type,
 				const char *iface_name,
@@ -12369,6 +12431,8 @@ hdd_adapter_t *hdd_open_adapter(hdd_context_t *hdd_ctx,
 	hdd_ctx->current_intf_count++;
 
 	adapter->tsf_id = HDD_TSF2;
+	hdd_latency_request_pm_qos(adapter,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_NORMAL);
 
 	hddLog(VOS_TRACE_LEVEL_DEBUG,
 	       "%s: current_intf_count=%d", __func__,
@@ -12796,6 +12860,7 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
    union iwreq_data wrqu;
    tSirUpdateIE updateIE ;
    unsigned long rc;
+	uint16_t orig_latency_level;
 
    ENTER();
 
@@ -12804,6 +12869,16 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
    hddLog(LOG1, FL("Disabling queues"));
    wlan_hdd_netif_queue_control(pAdapter, WLAN_NETIF_TX_DISABLE_N_CARRIER,
                                     WLAN_CONTROL_PATH);
+
+	/* Reset WLM level to normal for firmware */
+	orig_latency_level = pHddCtx->latency_level;
+	hdd_latency_request_pm_qos(pAdapter,
+			QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_NORMAL);
+	if (pHddCtx->latency_level < orig_latency_level) {
+		wma_set_wlm_latency_level(pAdapter->sessionId,
+			pHddCtx->latency_level - 1);
+	}
+
    switch(pAdapter->device_mode)
    {
       case WLAN_HDD_INFRA_STATION:
@@ -14938,7 +15013,8 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    adf_os_spin_unlock(&pHddCtx->acs_skip_lock);
 #endif
 
-	pHddCtx->llm_enabled = false;
+	pHddCtx->latency_level =
+		QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_INVALID;
 	if (pHddCtx->hbw_requested) {
 		vos_remove_pm_qos();
 		pHddCtx->hbw_requested = false;
@@ -15869,7 +15945,7 @@ void hdd_cnss_request_bus_bandwidth(hdd_context_t *pHddCtx,
         vos_request_bus_bandwidth(dev, next_vote_level);
 
         if (next_vote_level <= CNSS_BUS_WIDTH_LOW) {
-            if (pHddCtx->hbw_requested && !pHddCtx->llm_enabled) {
+            if (pHddCtx->hbw_requested && !hdd_is_llm_enabled()) {
                 vos_remove_pm_qos();
                 pHddCtx->hbw_requested = false;
             }
@@ -16908,7 +16984,8 @@ bool hdd_is_llm_enabled(void)
 	void *vos = vos_get_global_context(VOS_MODULE_ID_HDD, NULL);
 	hdd_ctx = vos_get_context(VOS_MODULE_ID_HDD, vos);
 
-	return (hdd_ctx->llm_enabled);
+	return (hdd_ctx->latency_level ==
+		QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_ULTRALOW);
 }
 #else
 bool hdd_is_llm_enabled(void)
@@ -17191,7 +17268,8 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
        pHddCtx->fw_log_settings.dl_mod_loglevel[i] = 0;
    }
 
-	pHddCtx->llm_enabled = false;
+	pHddCtx->latency_level =
+		QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_INVALID;
 
    if (VOS_FTM_MODE != hdd_get_conparam()) {
        vos_set_multicast_logging(pHddCtx->cfg_ini->multicast_host_fw_msgs);
@@ -20273,7 +20351,7 @@ void hdd_stop_bus_bw_compute_timer(hdd_adapter_t *pAdapter)
 
     if (can_stop == VOS_TRUE) {
         vos_timer_stop(&pHddCtx->bus_bw_timer);
-        if (pHddCtx->hbw_requested && !pHddCtx->llm_enabled) {
+        if (pHddCtx->hbw_requested && !hdd_is_llm_enabled()) {
             vos_remove_pm_qos();
             pHddCtx->hbw_requested = false;
         }

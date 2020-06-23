@@ -10775,33 +10775,6 @@ static int wlan_hdd_handle_restrict_offchan_config(hdd_adapter_t *adapter,
 }
 #endif
 
-#ifdef LATENCY_OPTIMIZE
-static void wlan_hdd_vendor_cmd_set_wlm_mode(hdd_context_t* hdd_ctx,
-					     uint16_t latency_level)
-{
-	if (latency_level ==
-	    QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL_ULTRALOW) {
-		hdd_ctx->llm_enabled = true;
-		if (!hdd_ctx->hbw_requested) {
-			vos_request_pm_qos_type(PM_QOS_CPU_DMA_LATENCY,
-						DISABLE_KRAIT_IDLE_PS_VAL);
-			hdd_ctx->hbw_requested = true;
-		}
-	}
-	else {
-		if (hdd_ctx->hbw_requested) {
-			vos_remove_pm_qos();
-			hdd_ctx->hbw_requested = false;
-		}
-		hdd_ctx->llm_enabled = false;
-	}
-}
-#else
-static void wlan_hdd_vendor_cmd_set_wlm_mode(hdd_context_t* hdd_ctx,
-					     uint16_t latency_level)
-{}
-#endif
-
 /**
  * __wlan_hdd_cfg80211_wifi_configuration_set() - Wifi configuration
  * vendor command
@@ -11206,14 +11179,18 @@ static int __wlan_hdd_cfg80211_wifi_configuration_set(struct wiphy *wiphy,
 			return -EINVAL;
 		}
 
-		wlan_hdd_vendor_cmd_set_wlm_mode(pHddCtx, latency_level);
 		/* Mapping the latency value to the level which fw expected
 		 * 0 - normal, 1 - moderate, 2 - low, 3 - ultralow
 		 */
 		latency_level = latency_level - 1;
 		vos_status = wma_set_wlm_latency_level(pAdapter->sessionId,
 						       latency_level);
-		if (vos_status != VOS_STATUS_SUCCESS) {
+		if (vos_status == VOS_STATUS_SUCCESS) {
+			/*
+			 * Record user set value, for get command output.
+			 */
+			hdd_latency_request_pm_qos(pAdapter, latency_level + 1);
+		} else {
 			hddLog(LOGE, FL("set Wlan latency level failed"));
 			ret_val = -EINVAL;
 		}
@@ -11480,6 +11457,7 @@ __wlan_hdd_cfg80211_wifi_configuration_get(struct wiphy *wiphy,
 	uint32_t skb_len = 0, count = 0;
 	struct net_device *dev = wdev->netdev;
 	hdd_adapter_t *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	uint16_t latency_level = 0;
 
 	ENTER();
 
@@ -11522,6 +11500,12 @@ __wlan_hdd_cfg80211_wifi_configuration_get(struct wiphy *wiphy,
 		count++;
 	}
 
+	if (tb_vendor[QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL]) {
+		latency_level = adapter->latency_level;
+		skb_len += sizeof(latency_level);
+		count++;
+	}
+
 	if (count == 0) {
 		hddLog(LOGE, FL("unknown attribute in get_wifi_cfg request"));
 		return -EINVAL;
@@ -11537,6 +11521,13 @@ __wlan_hdd_cfg80211_wifi_configuration_get(struct wiphy *wiphy,
 		if (nla_put_u32(reply_skb,
 				QCA_WLAN_VENDOR_ATTR_CONFIG_SUB20_CHAN_WIDTH,
 				sub20_chan_width))
+		goto error_nla_fail;
+	}
+
+	if (tb_vendor[QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL]) {
+		if (nla_put_u16(reply_skb,
+				QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL,
+				latency_level))
 		goto error_nla_fail;
 	}
 
