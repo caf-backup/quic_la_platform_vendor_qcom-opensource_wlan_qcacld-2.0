@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -7645,20 +7645,17 @@ limProcessSmeDfsCsaIeRequest(tpAniSirGlobal pMac, tANI_U32 *pMsg)
                        psessionEntry->gLimChannelSwitch.switchCount );
         /**
          * Send Action frame after updating the beacon
-         * Action frame is not required if sub20 enabled
          */
-        if (pDfsCsaIeRequest->sub20_switch_mode == 0) {
-            if (CHAN_HOP_ALL_BANDS_ENABLE)
-                lim_send_chan_switch_action_frame
+        if (CHAN_HOP_ALL_BANDS_ENABLE)
+            lim_send_chan_switch_action_frame
                     (pMac, psessionEntry->gLimChannelSwitch.primaryChannel,
                      psessionEntry->gLimChannelSwitch.secondarySubBand,
                      psessionEntry);
-            else
-                send_extended_chan_switch_action_frame
+        else
+            send_extended_chan_switch_action_frame
                     (pMac, psessionEntry->gLimChannelSwitch.primaryChannel,
                      psessionEntry->gLimChannelSwitch.secondarySubBand,
                      psessionEntry);
-        }
     }
     return;
 }
