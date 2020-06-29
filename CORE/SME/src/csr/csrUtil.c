@@ -3299,10 +3299,15 @@ tANI_U8 csrConstructRSNIe( tHalHandle hHal, tANI_U32 sessionId, tCsrRoamProfile 
 #endif
     tDot11fBeaconIEs *pIesLocal = pIes;
     eCsrAuthType negAuthType = eCSR_AUTH_TYPE_UNKNOWN;
-    tDot11fIERSN rsn_ie;
-
+    tDot11fIERSN *dot11RSNIE = NULL;
     smsLog(pMac, LOGW, "%s called...", __func__);
 
+    dot11RSNIE = vos_mem_malloc(sizeof(tDot11fIERSN));
+    if (!dot11RSNIE) {
+	smsLog(pMac, LOGW, "dot11RSNIE alloc fail");
+	return cbRSNIe;
+    }
+    vos_mem_zero(dot11RSNIE, sizeof(tDot11fIERSN));
     do
     {
         if ( !csrIsProfileRSN( pProfile ) ) break;
@@ -3318,14 +3323,14 @@ tANI_U8 csrConstructRSNIe( tHalHandle hHal, tANI_U32 sessionId, tCsrRoamProfile 
 	if (pProfile->pRSNReqIE && pProfile->nRSNReqIELength) {
 		ret = dot11fUnpackIeRSN(pMac,
 					   pProfile->pRSNReqIE + 2,
-			  pProfile->nRSNReqIELength -2, &rsn_ie);
+			  pProfile->nRSNReqIELength -2, dot11RSNIE);
 		if (!DOT11F_FAILED(ret)) {
 			pIesLocal->RSN.RSN_Cap[0] =
 					pIesLocal->RSN.RSN_Cap[0] &
-					rsn_ie.RSN_Cap[0];
+					dot11RSNIE->RSN_Cap[0];
 			pIesLocal->RSN.RSN_Cap[1] =
 					pIesLocal->RSN.RSN_Cap[1] &
-					rsn_ie.RSN_Cap[1];
+					dot11RSNIE->RSN_Cap[1];
 		}
 	}
 
@@ -3434,6 +3439,8 @@ tANI_U8 csrConstructRSNIe( tHalHandle hHal, tANI_U32 sessionId, tCsrRoamProfile 
         //locally allocated
         vos_mem_free(pIesLocal);
     }
+    if (dot11RSNIE)
+        vos_mem_free(dot11RSNIE);
 
     return( cbRSNIe );
 }
