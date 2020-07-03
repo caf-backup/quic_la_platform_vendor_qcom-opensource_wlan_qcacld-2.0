@@ -7308,13 +7308,10 @@ static int wma_csa_offload_handler(void *handle, u_int8_t *event, u_int32_t len)
 	wmi_csa_event_fixed_param *csa_event;
 	u_int8_t bssid[IEEE80211_ADDR_LEN];
 	u_int8_t vdev_id = 0;
-	u_int8_t cur_chan = 0;
-	uint8_t cur_sb20_channelwidth = 0;
 	struct ieee80211_channelswitch_ie *csa_ie;
 	tpCSAOffloadParams csa_offload_event;
 	struct ieee80211_extendedchannelswitch_ie *xcsa_ie;
 	struct ieee80211_ie_wide_bw_switch *wb_ie;
-	struct wma_txrx_node *intr = wma->interfaces;
 
 	param_buf = (WMI_CSA_HANDLING_EVENTID_param_tlvs *) event;
 
@@ -7397,20 +7394,12 @@ static int wma_csa_offload_handler(void *handle, u_int8_t *event, u_int32_t len)
 			csa_offload_event->channel,
 			csa_offload_event->bssId);
 
-	cur_chan = vos_freq_to_chan(intr[vdev_id].mhz);
-
-	cur_sb20_channelwidth =
-		 vos_phy_channel_width_to_sub20(intr[vdev_id].channelwidth);
 	/*
 	 * basic sanity check: requested channel should not be 0
 	 * and equal to home channel
 	 */
-	if( (0 == csa_offload_event->channel) ||
-	    (cur_chan == csa_offload_event->channel &&
-	     cur_sb20_channelwidth ==
-	     csa_offload_event->new_sub20_channelwidth)) {
-		WMA_LOGE("CSA Event with channel %d. Ignore !!",
-		csa_offload_event->channel);
+	if(0 == csa_offload_event->channel) {
+		WMA_LOGE("CSA Event with invalid channel Num");
 		vos_mem_free(csa_offload_event);
 		return -EINVAL;
 	}
