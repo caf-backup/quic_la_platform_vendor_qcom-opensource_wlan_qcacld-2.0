@@ -2399,13 +2399,13 @@ void hdd_sendMgmtFrameOverMonitorIface( hdd_adapter_t *pMonAdapter,
  * Set the flag NL80211_RXMGMT_FLAG_EXTERNAL_AUTH if supported.
  */
 static void
-wlan_hdd_set_rxmgmt_external_auth_flag(enum nl80211_rxmgmt_flags *nl80211_flag)
+wlan_hdd_set_rxmgmt_external_auth_flag(uint32_t *nl80211_flag)
 {
 	*nl80211_flag |= NL80211_RXMGMT_FLAG_EXTERNAL_AUTH;
 }
 #else
 static void
-wlan_hdd_set_rxmgmt_external_auth_flag(enum nl80211_rxmgmt_flags *nl80211_flag)
+wlan_hdd_set_rxmgmt_external_auth_flag(uint32_t *nl80211_flag)
 {
 }
 #endif
@@ -2420,7 +2420,7 @@ wlan_hdd_set_rxmgmt_external_auth_flag(enum nl80211_rxmgmt_flags *nl80211_flag)
  */
 static int
 wlan_hdd_cfg80211_convert_rxmgmt_flags(enum rxmgmt_flags flag,
-				       enum nl80211_rxmgmt_flags *nl80211_flag)
+				       uint32_t *nl80211_flag)
 {
 	int ret = -EINVAL;
 
@@ -2449,7 +2449,7 @@ void __hdd_indicate_mgmt_frame(hdd_adapter_t *pAdapter,
     VOS_STATUS status;
     hdd_remain_on_chan_ctx_t* pRemainChanCtx = NULL;
     hdd_context_t *pHddCtx;
-    enum nl80211_rxmgmt_flags nl80211_flag = 0;
+    uint32_t nl80211_flag = 0;
 
     hddLog(VOS_TRACE_LEVEL_INFO, "%s: Frame Type = %d Frame Length = %d",
             __func__, frameType, nFrameLength);
