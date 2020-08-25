@@ -11057,7 +11057,8 @@ void csrRoamCheckForLinkStatusChange( tpAniSirGlobal pMac, tSirSmeRsp *pSirMsg )
                         status = csrRoamCallCallback(pMac, sessionId, pRoamInfo, 0, eCSR_ROAM_INFRA_IND, eCSR_ROAM_RESULT_INFRA_ASSOCIATION_IND);
                         if (!HAL_STATUS_SUCCESS(status)) {
                             pRoamInfo->statusCode = eSIR_SME_ASSOC_REFUSED;// Refused due to Mac filtering
-                        } else if (pAssocInd->rsnIE.length) {
+                        } else if (pAssocInd->rsnIE.length && SIR_MAC_RSN_EID ==
+                                   pAssocInd->rsnIE.rsnIEdata[0]) {
                             tDot11fIERSN rsn_ie = {0};
 
                             if (dot11fUnpackIeRSN(
@@ -11612,10 +11613,14 @@ void csrRoamCheckForLinkStatusChange( tpAniSirGlobal pMac, tSirSmeRsp *pSirMsg )
                         }
                         if(!HAL_STATUS_SUCCESS(status))
                         {
-                            if(pRoamInfo->pbFrames)
+                            if(pRoamInfo->pbFrames) {
                                 vos_mem_free(pRoamInfo->pbFrames);
-                            if(pRoamInfo->pBssDesc)
+                                pRoamInfo->pbFrames = NULL;
+                            }
+                            if(pRoamInfo->pBssDesc) {
                                 vos_mem_free(pRoamInfo->pBssDesc);
+                                pRoamInfo->pBssDesc = NULL;
+                            }
                         }
                     }
                     if ((eCSR_ENCRYPT_TYPE_NONE ==
