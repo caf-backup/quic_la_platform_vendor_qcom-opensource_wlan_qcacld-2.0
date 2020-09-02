@@ -726,6 +726,12 @@ ol_tx_completion_handler(
         adf_os_assert(tx_desc);
         tx_desc->status = status;
         netbuf = tx_desc->netbuf;
+        if (netbuf == NULL) {
+            TXRX_PRINT(TXRX_PRINT_LEVEL_ERR,
+                       "%s:%d: drop due to invalid msdu id = %x\n",
+                       __func__, __LINE__, tx_desc_id);
+            continue;
+        }
 
         if (txtstamp_list)
             ol_tx_timestamp(pdev, status, netbuf,
@@ -1247,10 +1253,16 @@ static int
 ol_tx_delay_category(struct ol_txrx_pdev_t *pdev, u_int16_t msdu_id)
 {
 #ifdef QCA_COMPUTE_TX_DELAY_PER_TID
-    struct ol_tx_desc_t *tx_desc = ol_tx_desc_find(pdev, msdu_id);
+    struct ol_tx_desc_t *tx_desc = ol_tx_desc_find_check(pdev, msdu_id);
     u_int8_t tid;
+    adf_nbuf_t msdu = NULL;
 
-    adf_nbuf_t msdu = tx_desc->netbuf;
+    if (tx_desc == NULL)
+        return -1;
+
+    msdu = tx_desc->netbuf;
+    if (msdu == NULL)
+        return -1;
     tid = adf_nbuf_get_tid(msdu);
     if (tid == ADF_NBUF_TX_EXT_TID_INVALID) {
         tid = ol_tx_delay_tid_from_l3_hdr(pdev, msdu, tx_desc);
@@ -1340,8 +1352,11 @@ ol_tx_delay_compute(
 
     for (i = 0; i < num_msdus; i++) {
         uint16_t id = desc_ids[i];
-        struct ol_tx_desc_t *tx_desc = ol_tx_desc_find(pdev, id);
+        struct ol_tx_desc_t *tx_desc = ol_tx_desc_find_check(pdev, id);
         int bin;
+
+        if (tx_desc == NULL)
+            continue;
 
         tx_delay_queue_ticks = now_ticks - tx_desc->entry_timestamp_ticks;
 
