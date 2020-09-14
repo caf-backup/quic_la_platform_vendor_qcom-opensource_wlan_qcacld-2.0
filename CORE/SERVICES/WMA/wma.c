@@ -3279,6 +3279,12 @@ static int wma_stats_event_handler(void *handle, u_int8_t *cmd_param_info,
 
 	rssi_event = param_buf->chain_stats;
 	if (rssi_event) {
+		if (rssi_event->num_per_chain_rssi_stats >
+			param_buf->num_rssi_stats) {
+			WMA_LOGE("%s: Invalid num_per_chain_rssi_stats:%d",
+				__func__, rssi_event->num_per_chain_rssi_stats);
+			return -EINVAL;
+		}
 		if ((((rssi_event->tlv_header & 0xFFFF0000) >> 16) ==
 				WMITLV_TAG_STRUC_wmi_per_chain_rssi_stats) &&
 			 ((rssi_event->tlv_header & 0x0000FFFF) ==
@@ -3519,8 +3525,10 @@ static int wma_peer_info_event_handler(void *handle, u_int8_t *cmd_param_info,
 	if (event->num_peers >
 		((WMA_SVC_MSG_MAX_SIZE -
 		  sizeof(wmi_peer_stats_info_event_fixed_param))/
-		 sizeof(wmi_peer_stats_info))) {
-		WMA_LOGE("Excess num of peers from fw %d", event->num_peers);
+		  sizeof(wmi_peer_stats_info)) || event->num_peers >
+		param_buf->num_peer_stats_info) {
+		WMA_LOGE("Excess num of peers from fw %d, num_peer_stats_info:%d",
+		event->num_peers, param_buf->num_peer_stats_info);
 		return -EINVAL;
 	}
 	buf_size = sizeof(wmi_peer_stats_info_event_fixed_param) +
@@ -5335,9 +5343,12 @@ static int wma_unified_radio_tx_power_level_stats_event_handler(void *handle,
 	}
 
 	if (fixed_param->num_tx_power_levels > ((WMA_SVC_MSG_MAX_SIZE -
-	    sizeof(*fixed_param)) / sizeof(uint32_t))) {
-		WMA_LOGE("%s: excess tx_power buffers:%d", __func__,
-			fixed_param->num_tx_power_levels);
+	    sizeof(*fixed_param)) / sizeof(uint32_t)) ||
+		fixed_param->num_tx_power_levels >
+		param_tlvs->num_tx_time_per_power_level) {
+		WMA_LOGE("%s: excess tx_power buffers:%d, num_tx_time_per_power_level:%d",
+			__func__, fixed_param->num_tx_power_levels,
+			param_tlvs->num_tx_time_per_power_level);
 		return -EINVAL;
 	}
 
@@ -5474,7 +5485,8 @@ static int wma_unified_link_radio_stats_event_handler(void *handle,
 	}
 
 	if (radio_stats->num_channels >
-	    NUM_2_4GHZ_CHANNELS + NUM_5GHZ_CHANNELS) {
+	    (NUM_2_4GHZ_CHANNELS + NUM_5GHZ_CHANNELS) ||
+		radio_stats->num_channels > param_tlvs->num_channel_stats) {
 		WMA_LOGE("%s: Too many channels %d",
 			 __func__, radio_stats->num_channels);
 		return -EINVAL;
@@ -8457,6 +8469,19 @@ static int wma_roam_synch_event_handler(void *handle, u_int8_t *event, u_int32_t
 	if (synch_event->vdev_id >= wma->max_bssid) {
 		WMA_LOGE("%s: received invalid vdev_id %d",
 			 __func__, synch_event->vdev_id);
+		return -EINVAL;
+	}
+
+	if (synch_event->bcn_probe_rsp_len >
+		param_buf->num_bcn_probe_rsp_frame ||
+		synch_event->reassoc_req_len >
+		param_buf->num_reassoc_req_frame ||
+		synch_event->reassoc_rsp_len >
+		param_buf->num_reassoc_rsp_frame) {
+		WMA_LOGE("Invalid synch payload: LEN bcn:%d, req:%d, rsp:%d",
+			synch_event->bcn_probe_rsp_len,
+			synch_event->reassoc_req_len,
+			synch_event->reassoc_rsp_len);
 		return -EINVAL;
 	}
 
