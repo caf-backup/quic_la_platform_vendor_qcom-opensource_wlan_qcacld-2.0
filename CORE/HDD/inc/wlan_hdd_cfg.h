@@ -6039,6 +6039,11 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_HOST_LOG_CUSTOM_NETLINK_PROTO_MIN     (0)
 #define CFG_HOST_LOG_CUSTOM_NETLINK_PROTO_MAX     (32)
 #endif
+
+#define CFG_CONCURRENT_IFACE_MAX_LEN      16
+#define CFG_ENABLE_CONCURRENT_STA_NAME    "gEnableConcurrentSTA"
+#define CFG_ENABLE_CONCURRENT_STA_DEFAULT ""
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -7002,6 +7007,8 @@ struct hdd_config {
 	uint32_t wlm_latency_flags_moderate;
 	uint32_t wlm_latency_flags_low;
 	uint32_t wlm_latency_flags_ultralow;
+
+   uint8_t enable_concurrent_sta[CFG_CONCURRENT_IFACE_MAX_LEN];
 };
 
 typedef struct hdd_config hdd_config_t;
