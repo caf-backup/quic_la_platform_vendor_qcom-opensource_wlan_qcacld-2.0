@@ -1361,6 +1361,7 @@ struct hdd_adapter_s
    uint64_t invalid_target_time[MAX_INVALD_TIME_NUM];
    uint64_t invalid_host_time[MAX_INVALD_TIME_NUM];
    uint8_t invalid_time_num;
+   tCsrBssid last_bssid;
 #ifdef WLAN_FEATURE_TSF_PLUS
    /* spin lock for read/write timestamps */
    adf_os_spinlock_t host_target_sync_lock;
