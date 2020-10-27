@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017, 2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -110,7 +110,8 @@ wlan_cfgInit(tpAniSirGlobal pMac)
 
 } /*** end wlan_cfgInit() ***/
 
-void cfg_get_str_index(tpAniSirGlobal mac_ctx, uint16_t cfg_id)
+struct cfgstatic_string *cfg_get_str_index(tpAniSirGlobal mac_ctx,
+                                           uint16_t cfg_id)
 {
     uint16_t i = 0;
 
@@ -122,11 +123,10 @@ void cfg_get_str_index(tpAniSirGlobal mac_ctx, uint16_t cfg_id)
     if (i == CFG_MAX_STATIC_STRING) {
         PELOGE(cfgLog(mac_ctx, LOGE,
                FL("Entry not found for cfg id :%d"), cfg_id);)
-        cfg_static[cfg_id].p_str_data = NULL;
-        return;
+        return NULL;
     }
 
-    cfg_static[cfg_id].p_str_data = &cfg_static_string[i];
+    return &cfg_static_string[i];
 }
 
 
@@ -143,10 +143,10 @@ tSirRetStatus cfgInit(tpAniSirGlobal pMac)
 
     pMac->cfg.gCfgMaxIBufSize = CFG_STA_IBUF_MAX_SIZE;
     pMac->cfg.gCfgMaxSBufSize = CFG_STA_SBUF_MAX_SIZE;
-
     for (i = 0; i < WNI_CFG_MAX; i++) {
         if (!(cfg_static[i].control & CFG_CTL_INT))
-            cfg_get_str_index(pMac, i);
+            cfg_static[i].p_str_data =
+                      cfg_get_str_index(pMac, cfg_static[i].cfg_id);
         else
             cfg_static[i].p_str_data = NULL;
     }
@@ -348,7 +348,8 @@ wlan_cfgGetInt(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 *pValue)
 
     if (index >= CFG_STA_IBUF_MAX_SIZE)
     {
-        PELOGE(cfgLog(pMac, LOGE, FL("cfg index out of bounds %d"), index);)
+        PELOGE(cfgLog(pMac, LOGE,
+               FL("cfg %d index out of bounds %d"), cfgId, index);)
         retVal = eSIR_CFG_INVALID_ID;
         return retVal;
     }
