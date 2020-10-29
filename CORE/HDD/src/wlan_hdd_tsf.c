@@ -465,6 +465,7 @@ static inline void hdd_reset_host_time_amend(hdd_adapter_t *adapter)
 static inline void hdd_reset_timestamps(hdd_adapter_t *adapter)
 {
 	adf_os_spin_lock_bh(&adapter->host_target_sync_lock);
+	memset(adapter->last_bssid, 0, VOS_MAC_ADDR_SIZE);
 	adapter->cur_host_time = 0;
 	adapter->cur_target_time = 0;
 	adapter->last_host_time = 0;
@@ -1038,15 +1039,20 @@ static bool update_target_host_time(hdd_adapter_t *adapter)
 	int num_index = 0;
 	int i = 0;
 	bool update_time = false;
+	hdd_station_ctx_t *hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 
 	delt_host_time = adapter->cur_host_time - adapter->last_host_time;
 	delt_target_time = adapter->cur_target_time - adapter->last_target_time;
 
 	if ((!adapter->last_target_time) ||
+		memcmp(adapter->last_bssid, hdd_sta_ctx->conn_info.bssId,
+		       VOS_MAC_ADDR_SIZE) ||
 		is_target_host_valid(delt_host_time, delt_target_time)) {
 		adapter->last_host_time = adapter->cur_host_time;
 		adapter->last_target_time = adapter->cur_target_time;
 		adapter->invalid_time_num = 0;
+		memcpy(adapter->last_bssid, hdd_sta_ctx->conn_info.bssId,
+		       VOS_MAC_ADDR_SIZE);
 		return true;
 	} else if (adapter->invalid_time_num >= MAX_INVALD_TIME_NUM) {
 		update_time = true;
@@ -1504,8 +1510,10 @@ int hdd_start_tsf_sync(hdd_adapter_t *adapter)
 		return -EINVAL;
 
 	hddctx = WLAN_HDD_GET_CTX(adapter);
-	if (hddctx->cfg_ini->tsf_by_register)
+	if (hddctx->cfg_ini->tsf_by_register) {
+		hdd_reset_timestamps(adapter);
 		return 0;
+	}
 
 	ret = hdd_tsf_sync_init(adapter);
 	if (ret != HDD_TSF_OP_SUCC) {
