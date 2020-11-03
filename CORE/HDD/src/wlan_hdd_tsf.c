@@ -499,7 +499,7 @@ static inline void hdd_reset_timestamps(hdd_adapter_t *adapter)
 void hdd_round_tsf_sec_pull_gpio(hdd_adapter_t *adapter)
 {
 	uint64_t reg_qtime, qtime;
-	uint64_t qtime_delta, tsf_now, tsf_next_sec;
+	uint64_t qtime_delta, tsf_now, tsf_next_sec, div_temp;
 	uint64_t tsf_left_ns, qtime_left_ns, timer_val;
 
 	GET_CURRENT_QTIME;
@@ -509,13 +509,19 @@ void hdd_round_tsf_sec_pull_gpio(hdd_adapter_t *adapter)
 	 * is within 2000 us, below error is less than 1 us
 	 */
 	tsf_now = qtime_delta + adapter->cur_target_time;
-	tsf_next_sec = (tsf_now / US_PER_SEC) * US_PER_SEC + US_PER_SEC;
+	div_temp = tsf_now;
+	do_div(div_temp, US_PER_SEC);
+	tsf_next_sec = div_temp * US_PER_SEC + US_PER_SEC;
 	tsf_left_ns = (tsf_next_sec - tsf_now) * NSEC_PER_USEC;
-	qtime_left_ns = tsf_left_ns * adapter->slope / SLOPE_TIMES;
+	div_temp = tsf_left_ns * adapter->slope;
+	do_div(div_temp, SLOPE_TIMES);
+	qtime_left_ns = div_temp;
 	timer_val = qtime_left_ns - PRETRIGGER_NS;
 	hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
 	       FL("tsf_next_sec: %llu"), tsf_next_sec);
-	adapter->qtime_next_sec = qtime + (qtime_left_ns / NSEC_PER_USEC);
+	div_temp = qtime_left_ns;
+	do_div(div_temp, NSEC_PER_USEC);
+	adapter->qtime_next_sec = qtime + div_temp;
 	hrtimer_start(&adapter->tsf_sync_debug_timer,
 		      ktime_set(0, timer_val), HRTIMER_MODE_REL);
 }
@@ -581,7 +587,7 @@ void hdd_round_tsf_sec_pull_gpio(hdd_adapter_t *adapter)
 
 void hdd_tsf_amend_host_time(hdd_adapter_t *adapter)
 {
-	uint64_t qtime;
+	uint64_t qtime, div_temp;
 	int64_t offset, amendment;
 	bool calc_amend = false;
 
@@ -593,9 +599,9 @@ void hdd_tsf_amend_host_time(hdd_adapter_t *adapter)
 		calc_amend = true;
 
 	if (calc_amend) {
-		offset = ((int64_t)adapter->cur_qtime -
-			 (int64_t)((adapter->slope
-			 * adapter->cur_target_time) / SLOPE_TIMES));
+		div_temp = adapter->slope * adapter->cur_target_time;
+		do_div(div_temp, SLOPE_TIMES);
+		offset = ((int64_t)adapter->cur_qtime - (int64_t)div_temp);
 		if (adapter->offset_min == 0 || offset < adapter->offset_min) {
 			adapter->offset_min = offset;
 			adapter->offset_cnt = 0;
@@ -644,7 +650,7 @@ enum hdd_ts_status hdd_check_timestamp_status(hdd_adapter_t *adapter)
 	uint64_t cur_host_time = adapter->cur_host_time;
 	uint64_t qtime_delta, tsf_delta;
 	uint64_t slope_to_1st, slope_delta;
-	uint64_t delta_ns, delta_target_time, delta_host_time;
+	uint64_t delta_ns, delta_target_time, delta_host_time, div_temp;
 
 	/* one or more are not updated, need to wait */
 	if (cur_target_time == 0 || cur_host_time == 0)
@@ -689,7 +695,9 @@ enum hdd_ts_status hdd_check_timestamp_status(hdd_adapter_t *adapter)
 		qtime_delta = (adapter->cur_qtime - adapter->first_qtime);
 		tsf_delta = (adapter->cur_target_time -
 			     adapter->first_target_time);
-		slope_to_1st = (qtime_delta * SLOPE_TIMES) / tsf_delta;
+		div_temp = qtime_delta * SLOPE_TIMES;
+		do_div(div_temp, tsf_delta);
+		slope_to_1st = div_temp;
 		hddLog(HDD_TSF_QTIME_AMEND_DEBUG_LEVEL,
 		       FL("slope_to_1st: %llu cnt: %u"), slope_to_1st,
 		       adapter->slope_cnt);
