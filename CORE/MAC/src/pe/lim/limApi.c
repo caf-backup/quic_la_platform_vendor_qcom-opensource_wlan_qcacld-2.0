@@ -814,7 +814,7 @@ limCleanup(tpAniSirGlobal pMac)
 /**
  * lim_is_assoc_req_for_drop()- function to decides to drop assoc\reassoc
  *  frames.
- * @mac: pointer to global mac structure
+ * @pMac: pointer to global mac structure
  * @rx_pkt_info: rx packet meta information
  *
  * This function is called before enqueuing the frame to PE queue to
@@ -823,16 +823,18 @@ limCleanup(tpAniSirGlobal pMac)
  * Return: true for dropping the frame otherwise false
  */
 
-bool lim_is_assoc_req_for_drop(tpAniSirGlobal mac, uint8_t *rx_pkt_info)
+bool lim_is_assoc_req_for_drop(tpAniSirGlobal pMac, uint8_t *rx_pkt_info)
 {
 	uint8_t session_id;
 	uint16_t aid;
 	tpPESession session_entry;
 	tpSirMacMgmtHdr mac_hdr;
 	tpDphHashNode sta_ds;
+	bool status;
+	eHalStatus lock_status = eHAL_STATUS_SUCCESS;
 
 	mac_hdr = WDA_GET_RX_MAC_HEADER(rx_pkt_info);
-	session_entry = peFindSessionByBssid(mac, mac_hdr->bssId, &session_id);
+	session_entry = peFindSessionByBssid(pMac, mac_hdr->bssId, &session_id);
 	if (!session_entry) {
 		PELOG1(limLog(pMac, LOG1,
 			FL("session does not exist for given STA [%pM]"),
@@ -840,26 +842,43 @@ bool lim_is_assoc_req_for_drop(tpAniSirGlobal mac, uint8_t *rx_pkt_info)
 		return false;
 	}
 
-	sta_ds = dphLookupHashEntry(mac, mac_hdr->sa, &aid,
+	lock_status =  pe_AcquireGlobalLock(&pMac->lim);
+	if (lock_status != eHAL_STATUS_SUCCESS)
+	{
+		limLog(pMac, LOGE, FL("pe_AcquireGlobalLock error"));
+		return TRUE;
+	}
+
+	sta_ds = dphLookupHashEntry(pMac, mac_hdr->sa, &aid,
 				&session_entry->dph.dphHashTable);
 	if (!sta_ds) {
 		PELOG1(limLog(pMac, LOG1, FL("pStaDs is NULL")););
-		return false;
+		status = false;
+		goto end;
 	}
 
-	if (!sta_ds->rmfEnabled)
-		return false;
+	if (!sta_ds->rmfEnabled) {
+		status = false;
+		goto end;
+	}
 
-	if (sta_ds->pmfSaQueryState == DPH_SA_QUERY_IN_PROGRESS)
-		return true;
+	if (sta_ds->pmfSaQueryState == DPH_SA_QUERY_IN_PROGRESS) {
+		status = true;
+		goto end;
+	}
 
 	if (sta_ds->last_assoc_received_time &&
 		((vos_timer_get_system_time() -
-			 sta_ds->last_assoc_received_time) < 1000))
-		return true;
+			 sta_ds->last_assoc_received_time) < 1000)) {
+		status =true;
+		goto end;
+	}
 
 	sta_ds->last_assoc_received_time = vos_timer_get_system_time();
-	return false;
+	status = false;
+end:
+	pe_ReleaseGlobalLock(&pMac->lim);
+	return status;
 }
 #endif
 /**
