@@ -4518,11 +4518,6 @@ limSendChannelSwitchMgmtFrame(tpAniSirGlobal pMac,
     frm.ChanSwitchAnn.switchCount   = nCount;
     frm.ChanSwitchAnn.present = 1;
 
-    if (pMac->sub20_action_frame_enable)
-        populate_dot11f_sub_20_channel_width_ie(pMac,
-                                                &frm.QComVendorIE,
-                                                psessionEntry);
-
     nStatus = dot11fGetPackedChannelSwitchSize( pMac, &frm, &nPayload );
     if ( DOT11F_FAILED( nStatus ) )
     {
@@ -4665,10 +4660,6 @@ lim_send_extended_chan_switch_action_frame(tpAniSirGlobal mac_ctx,
 	frm.ext_chan_switch_ann_action.new_channel = new_channel;
 	frm.ext_chan_switch_ann_action.switch_count = count;
 
-	if (mac_ctx->sub20_action_frame_enable)
-		populate_dot11f_sub_20_channel_width_ie(mac_ctx,
-							&frm.QComVendorIE,
-							session_entry);
 
 	status = dot11fGetPackedext_channel_switch_action_frameSize(mac_ctx,
 							    &frm, &n_payload);

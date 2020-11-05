@@ -3731,7 +3731,6 @@ FRAME ChannelSwitch
     MANDIE ChanSwitchAnn;
     OPTIE  sec_chan_offset_ele;
     OPTIE  WiderBWChanSwitchAnn;
-    OPTIE  QComVendorIE;
 }
 
 FRAME MeasurementRequest
@@ -4173,7 +4172,6 @@ FRAME ext_channel_switch_action_frame
     FF     Category;
     FF     Action;
     FF     ext_chan_switch_ann_action;
-    OPTIE  QComVendorIE;
 }
 
 // Local Variables:
