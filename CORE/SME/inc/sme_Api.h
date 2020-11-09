@@ -130,7 +130,6 @@ typedef struct _smeConfigParams
     uint8_t      sub20_config_info;
     uint8_t      sub20_channelwidth;
     uint8_t      sub20_dynamic_channelwidth;
-    bool         sub20_action_frame_enable;
     bool         sta_change_cc_via_beacon;
     bool         mcs_tx_force2chain;
 } tSmeConfigParams, *tpSmeConfigParams;

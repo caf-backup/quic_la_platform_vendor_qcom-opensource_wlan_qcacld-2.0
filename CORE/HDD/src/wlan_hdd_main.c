@@ -9443,7 +9443,6 @@ void hdd_update_tgt_cfg(void *context, void *param)
             hddLog(VOS_TRACE_LEVEL_WARN,
                    FL("requests 5/10M, target not support"));
             hdd_ctx->cfg_ini->sub_20_channel_width = 0;
-            hdd_ctx->cfg_ini->sub20_action_frame = 0;
     }
 
     /* first store the INI band capability */

@@ -1892,8 +1892,6 @@ eHalStatus sme_UpdateConfig(tHalHandle hHal, tpSmeConfigParams pSmeConfigParams)
    pMac->sub20_channelwidth = pSmeConfigParams->sub20_channelwidth;
    pMac->sub20_dynamic_channelwidth =
        pSmeConfigParams->sub20_dynamic_channelwidth;
-   pMac->sub20_action_frame_enable =
-       pSmeConfigParams->sub20_action_frame_enable;
 
    pMac->sta_auth_retries_for_code17 =
          pSmeConfigParams->csrConfig.sta_auth_retries_for_code17;
@@ -5183,7 +5181,6 @@ eHalStatus sme_GetConfigParam(tHalHandle hHal, tSmeConfigParams *pParam)
       pParam->sub20_config_info = pMac->sub20_config_info;
       pParam->sub20_channelwidth = pMac->sub20_channelwidth;
       pParam->sub20_dynamic_channelwidth = pMac->sub20_dynamic_channelwidth;
-      pParam->sub20_action_frame_enable = pMac->sub20_action_frame_enable;
       pParam->sta_change_cc_via_beacon = pMac->sta_change_cc_via_beacon;
       pParam->mcs_tx_force2chain = pMac->mcs_tx_force2chain;
       pParam->csrConfig.gStaLocalEDCAEnable =

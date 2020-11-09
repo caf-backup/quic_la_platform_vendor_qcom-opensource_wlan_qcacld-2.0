@@ -5159,26 +5159,6 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_SUB_20_CHANNEL_WIDTH_MAX             (6)
 #define CFG_SUB_20_CHANNEL_WIDTH_DEFAULT         (0)
 
-/*
- * <ini>
- * g_sub20_action_frame - enable action frame while 5/10M mode enabled
- * @Min: 0
- * @Max: 1
- * @Default: 0
- *
- * This ini is used to enable action frame while 5/10M mode enabled.
- *
- * Related: none
- *
- * Usage: External
- *
- * </ini>
- */
-#define CFG_SUB_20_ACTION_FRAME_NAME     "g_sub20_action_frame"
-#define CFG_SUB_20_ACTION_FRAME_ENABLE   (1)
-#define CFG_SUB_20_ACTION_FRAME_DISABLE  (0)
-#define CFG_SUB_20_ACTION_FRAME_DEFAULT  (0)
-
 #define CFG_STA_CHANGE_COUNTRYCODE_DYN_NAME     "g_sta_change_cc_via_beacon"
 #define CFG_STA_CHANGE_COUNTRYCODE_DYN_ENABLE   (1)
 #define CFG_STA_CHANGE_COUNTRYCODE_DYN_DISABLE  (0)
@@ -6661,7 +6641,6 @@ struct hdd_config {
    uint8_t probe_req_ouis[MAX_PRB_REQ_VENDOR_OUI_INI_LEN];
    /* parameter for indicating sub20 channel width */
    uint8_t                     sub_20_channel_width;
-   bool                        sub20_action_frame;
    bool                        sta_change_cc_via_beacon;
    uint32_t                    rx_wakelock_timeout;
    /* beacon count before channel switch */
