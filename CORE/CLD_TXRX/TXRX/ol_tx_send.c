@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -34,7 +34,7 @@
 
 #include <queue.h>            /* TAILQ */
 #ifdef QCA_COMPUTE_TX_DELAY
-#include <ieee80211.h>        /* ieee80211_frame, etc. */
+#include <linux/ieee80211.h>  /* ieee80211_frame, etc. */
 #include <enet.h>             /* ethernet_hdr_t, etc. */
 #include <ipv6_defs.h>        /* IPV6_TRAFFIC_CLASS */
 #endif

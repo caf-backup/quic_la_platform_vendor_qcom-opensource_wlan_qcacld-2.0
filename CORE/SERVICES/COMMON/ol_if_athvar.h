@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -298,7 +298,7 @@ struct ol_softc {
     u_int8_t                max_no_of_peers;
 #ifdef CONFIG_NON_QC_PLATFORM_PCI
     struct non_qc_platform_pci_fw_files fw_files;
-#elif defined(HIF_PCI)
+#elif defined(HIF_PCI) && defined(CONFIG_CNSS)
     struct cnss_fw_files fw_files;
 #elif defined(HIF_SDIO)
     struct ol_fw_files fw_files;
