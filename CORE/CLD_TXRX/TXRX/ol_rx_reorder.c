@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018,2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -30,7 +30,7 @@
 #include <adf_nbuf.h>          /* adf_nbuf_t, etc. */
 #include <adf_os_mem.h>        /* adf_os_mem_alloc */
 
-#include <ieee80211.h>         /* IEEE80211_SEQ_MAX */
+#include <linux/ieee80211.h>         /* IEEE80211_SEQ_MAX */
 
 /* external interfaces */
 #include <ol_txrx_api.h>       /* ol_txrx_pdev_handle */

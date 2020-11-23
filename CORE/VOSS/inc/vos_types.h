@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014,2016,2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -41,7 +41,6 @@
   Include Files
   ------------------------------------------------------------------------*/
 #include "i_vos_types.h"
-#include <string.h>
 
 /*--------------------------------------------------------------------------
   Preprocessor definitions and constants
