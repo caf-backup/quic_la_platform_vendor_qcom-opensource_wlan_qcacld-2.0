@@ -1383,6 +1383,18 @@ static inline void hdd_tsf_timestamp_rx(hdd_context_t *hdd_ctx,
 }
 #endif
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 6, 0))
+static bool hdd_is_gratuitous_arp_unsolicited_na(struct sk_buff *skb)
+{
+        return false;
+}
+#else
+static bool hdd_is_gratuitous_arp_unsolicited_na(struct sk_buff *skb)
+{
+        return cfg80211_is_gratuitous_arp_unsolicited_na(skb);
+}
+#endif
+
 /**============================================================================
   @brief hdd_rx_packet_cbk() - Receive callback registered with TL.
   TL will call this to notify the HDD when one or more packets were
@@ -1446,7 +1458,7 @@ VOS_STATUS hdd_rx_packet_cbk(v_VOID_t *vosContext,
       skb_next = skb->next;
 
       if (((pHddStaCtx->conn_info.proxyARPService) &&
-         cfg80211_is_gratuitous_arp_unsolicited_na(skb)) ||
+         hdd_is_gratuitous_arp_unsolicited_na(skb)) ||
          vos_is_load_unload_in_progress(VOS_MODULE_ID_VOSS, NULL)) {
             ++pAdapter->hdd_stats.hddTxRxStats.rxDropped[cpu_index];
             VOS_TRACE(VOS_MODULE_ID_HDD_DATA, VOS_TRACE_LEVEL_INFO,
