@@ -13538,14 +13538,59 @@ void hdd_connect_result(struct net_device *dev,
 }
 #endif /* CFG80211_CONNECT_BSS */
 
+#if defined MSM_PLATFORM && (LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0))
+/**
+ * hdd_stop_p2p_go() - call cfg80211 API to stop P2P GO
+ * @adapter: pointer to adapter
+ *
+ * This function calls cfg80211 API to stop P2P GO
+ *
+ * Return: None
+ */
+static void hdd_stop_p2p_go(hdd_adapter_t *adapter)
+{
+	hddLog(VOS_TRACE_LEVEL_ERROR, "[SSR] send stop ap to supplicant");
+	cfg80211_ap_stopped(adapter->dev, GFP_KERNEL);
+}
+
+static inline void hdd_delete_sta(hdd_adapter_t *adapter)
+{
+}
+
+#else
+static void hdd_stop_p2p_go(hdd_adapter_t *adapter)
+{
+	hdd_context_t *hdd_ctx = (hdd_context_t *)adapter->pHddCtx;
+
+	hddLog(VOS_TRACE_LEVEL_ERROR, "[SSR] send stop iface ap to supplicant");
+	cfg80211_stop_iface(hdd_ctx->wiphy, &adapter->wdev, GFP_KERNEL);
+}
+
+/**
+ * hdd_delete_sta() - call cfg80211 API to delete STA
+ * @adapter: pointer to adapter
+ *
+ * This function calls cfg80211 API to delete STA
+ *
+ * Return: None
+ */
+static void hdd_delete_sta(hdd_adapter_t *adapter)
+{
+	v_MACADDR_t bcast_mac = VOS_MAC_ADDR_BROADCAST_INITIALIZER;
+
+	hddLog(VOS_TRACE_LEVEL_ERROR, "[SSR] send restart supplicant");
+	/* event supplicant to restart */
+	cfg80211_del_sta(adapter->dev,
+			 (const u8 *)&bcast_mac.bytes[0],
+			 GFP_KERNEL);
+}
+#endif
+
 VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
 {
    hdd_adapter_list_node_t *pAdapterNode = NULL, *pNext = NULL;
    VOS_STATUS status;
    hdd_adapter_t      *pAdapter;
-#if !defined(MSM_PLATFORM) || defined(WITH_BACKPORTS)
-   v_MACADDR_t  bcastMac = VOS_MAC_ADDR_BROADCAST_INITIALIZER;
-#endif
    eConnectionState  connState;
 
    ENTER();
@@ -13640,17 +13685,9 @@ VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
             break;
 
          case WLAN_HDD_P2P_GO:
-#if defined(MSM_PLATFORM) && !defined(WITH_BACKPORTS)
-            hddLog(VOS_TRACE_LEVEL_ERROR, "%s [SSR] send stop ap to supplicant",
-                                                       __func__);
-            cfg80211_ap_stopped(pAdapter->dev, GFP_KERNEL);
-#else
-            hddLog(VOS_TRACE_LEVEL_ERROR, "%s [SSR] send restart supplicant",
-                                                       __func__);
-            /* event supplicant to restart */
-            cfg80211_del_sta(pAdapter->dev,
-                      (const u8 *)&bcastMac.bytes[0], GFP_KERNEL);
-#endif
+            hdd_delete_sta(pAdapter);
+            if (test_bit(DEVICE_IFACE_OPENED, &pAdapter->event_flags))
+                hdd_stop_p2p_go(pAdapter);
             break;
 
          case WLAN_HDD_MONITOR:
