@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014,2016,2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -30,7 +30,6 @@
 #include "vos_status.h"
 #include "vos_mq.h"
 #include "vos_api.h"
-#include "msg.h"
 #include "halTypes.h"
 #include "vos_types.h"
 #include <wlan_ptt_sock_svc.h>

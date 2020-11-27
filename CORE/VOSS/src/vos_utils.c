@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -76,7 +76,7 @@
 #ifdef CONFIG_CNSS
 #include <linux/qcomwlan_secif.h>
 #endif
-#include <errno.h>
+#include <linux/errno.h>
 
 #include "ieee80211_common.h"
 /*----------------------------------------------------------------------------

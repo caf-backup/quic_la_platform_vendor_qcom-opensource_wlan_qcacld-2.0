@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2014, 2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2014,2017,2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -39,7 +39,7 @@
 #include <ol_txrx_dbg.h>
 #include <enet.h>          /* ETHERNET_HDR_LEN, etc. */
 #include <ipv4.h>          /* IPV4_HDR_LEN, etc. */
-#include <ipv6.h>          /* IPV6_HDR_LEN, etc. */
+#include <linux/ipv6.h>          /* IPV6_HDR_LEN, etc. */
 #include <ip_prot.h>       /* IP_PROTOCOL_TCP, etc. */
 
 #ifdef ATH_11AC_TXCOMPACT
