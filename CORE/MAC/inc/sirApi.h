@@ -46,6 +46,9 @@
 typedef struct sAniSirGlobal *tpAniSirGlobal;
 #endif
 
+#ifdef WLAN_FEATURE_FILS_SK
+#include "lim_fils_defs.h"
+#endif
 #include "sirTypes.h"
 #include "sirMacProtDef.h"
 #include "aniSystemDefs.h"
@@ -63,6 +66,8 @@ typedef struct sAniSirGlobal *tpAniSirGlobal;
 #define SIR_MAX_SUPPORTED_CHANNEL_LIST      96
 
 #define SIR_MDIE_SIZE               3
+
+#define SIR_MAX_ELEMENT_ID          255
 
 // Increase dwell time for P2P search in ms
 #define P2P_SEARCH_DWELL_TIME_INCREASE   20
@@ -100,6 +105,13 @@ typedef tANI_U8 tSirVersionString[SIR_VERSION_STRING_LEN];
 #define PROBE_REQ_BITMAP_LEN 8
 
 #define MAX_LEN_UDP_RESP_OFFLOAD 128
+
+/* Maximum number of realms present in fils indication element */
+#define SIR_MAX_REALM_COUNT 7
+/* Realm length */
+#define SIR_REALM_LEN 2
+/* Cache ID length */
+#define CACHE_ID_LEN 2
 
 /* Maximum peer station number query one time */
 #define MAX_PEER_STA 12
@@ -378,6 +390,20 @@ typedef enum eSirResultCodes
     eSIR_SME_SAP_AUTH_OFFLOAD_PEER_UPDATE_STATUS,
     eSIR_DONOT_USE_RESULT_CODE = SIR_MAX_ENUM_SIZE
 } tSirResultCodes;
+
+#ifdef WLAN_FEATURE_FILS_SK
+struct fils_join_rsp_params {
+    uint8_t *fils_pmk;
+    uint8_t fils_pmk_len;
+    uint8_t fils_pmkid[PMKID_LEN];
+    uint8_t kek[MAX_KEK_LEN];
+    uint8_t kek_len;
+    uint8_t tk[MAX_TK_LEN];
+    uint8_t tk_len;
+    uint8_t gtk_len;
+    uint8_t gtk[MAX_GTK_LEN];
+};
+#endif
 
 #define RMENABLEDCAP_MAX_LEN 5
 
@@ -721,6 +747,24 @@ typedef struct sSirSmeStartBssReq
 
 #define WSCIE_PROBE_RSP_LEN (317 + 2)
 
+#ifdef WLAN_FEATURE_FILS_SK
+/* struct fils_ind_elements: elements parsed from fils indication present
+ * in beacon/probe resp
+ * @realm_cnt: number of realm present
+ * @realm: realms
+ * @is_fils_sk_supported: if FILS SK supported
+ * @is_cache_id_present: if cache id present
+ * @cache_id: cache id
+ */
+struct fils_ind_elements {
+    uint16_t realm_cnt;
+    uint8_t realm[SIR_MAX_REALM_COUNT][SIR_REALM_LEN];
+    bool is_fils_sk_supported;
+    bool is_cache_id_present;
+    uint8_t cache_id[CACHE_ID_LEN];
+};
+#endif
+
 typedef struct sSirBssDescription
 {
     //offset of the ieFields from bssId.
@@ -765,6 +809,9 @@ typedef struct sSirBssDescription
     tANI_U8              reservedPadding4;
     tANI_U32             tsf_delta;
 
+#ifdef WLAN_FEATURE_FILS_SK
+    struct fils_ind_elements fils_info_element;
+#endif
     tANI_U32             ieFields[1];
 } tSirBssDescription, *tpSirBssDescription;
 
@@ -1088,6 +1135,7 @@ typedef struct sSirSmeJoinReq
     tANI_U8             cc_switch_mode;
 #endif
     tVOS_CON_MODE       staPersona;             //Persona
+    bool sae_pmk_cached;
     bool                osen_association;
     bool                wps_registration;
     ePhyChanBondState   cbMode;                 // Pass CB mode value in Join.
@@ -1162,6 +1210,9 @@ typedef struct sSirSmeJoinReq
     tSirMacPowerCapInfo powerCap;
     tSirSupChnl         supportedChannels;
     uint8_t             sub20_channelwidth;
+#ifdef WLAN_FEATURE_FILS_SK
+    struct cds_fils_connection_info fils_con_info;
+#endif
     tSirBssDescription  bssDescription;
 } tSirSmeJoinReq, *tpSirSmeJoinReq;
 
@@ -1216,6 +1267,16 @@ typedef struct sSirSmeJoinRsp
 #endif
 
     bool supported_nss_1x1;
+    tDot11fIEHTCaps ht_caps;
+    tDot11fIEVHTCaps vht_caps;
+    tDot11fIEHTInfo ht_operation;
+    tDot11fIEVHTOperation vht_operation;
+    tDot11fIEhs20vendor_ie hs20vendor_ie;
+#ifdef WLAN_FEATURE_FILS_SK
+    bool is_fils_connection;
+    uint16_t fils_seq_num;
+    struct fils_join_rsp_params *fils_join_rsp;
+#endif
     /* Add new members before 'frames' to avoid memory corruption of 'frames' */
     tANI_U8         frames[ 1 ];
 } tSirSmeJoinRsp, *tpSirSmeJoinRsp;
@@ -1285,6 +1346,7 @@ typedef struct sSirSmeAssocInd
     tANI_U8              uniSig;  // DPU signature for unicast packets
     tANI_U8              bcastSig; // DPU signature for broadcast packets
     tAniAuthType         authType;
+    enum ani_akm_type    akm_type;
     tAniSSID             ssId; // SSID used by STA to associate
     tSirWAPIie           wapiIE;//WAPI IE received from peer
     tSirRSNie            rsnIE;// RSN IE received from peer
@@ -1319,9 +1381,21 @@ typedef struct sSirSmeAssocInd
     uint8_t              max_mcs_idx;
     uint8_t              rx_mcs_map;
     uint8_t              tx_mcs_map;
+    bool                 is_sae_authenticated;
+    const uint8_t *      owe_ie;
+    uint32_t             owe_ie_len;
+    uint16_t             owe_status;
 } tSirSmeAssocInd, *tpSirSmeAssocInd;
 
-
+/**
+ * struct owe_assoc_ind - owe association indication
+ * @node : List entry element
+ * @assoc_ind: pointer to assoc ind
+ */
+struct owe_assoc_ind {
+	vos_list_node_t node;
+	struct sSirSmeAssocInd *assoc_ind;
+};
 /// Definition for Association confirm
 /// ---> MAC
 typedef struct sSirSmeAssocCnf
@@ -1334,6 +1408,9 @@ typedef struct sSirSmeAssocCnf
     tANI_U16             aid;
     tSirMacAddr          alternateBssId;
     tANI_U8              alternateChannelId;
+    tSirMacStatusCodes   mac_status_code;
+    uint8_t *            owe_ie;
+    uint32_t             owe_ie_len;
 } tSirSmeAssocCnf, *tpSirSmeAssocCnf;
 
 /// Definition for Reassociation indication from peer
@@ -3645,6 +3722,17 @@ typedef struct sSirSmeCoexInd
     tANI_U32        coexIndData[SIR_COEX_IND_DATA_SIZE];
 }tSirSmeCoexInd, *tpSirSmeCoexInd;
 
+/**
+ * enum rxmgmt_flags - flags for received management frame.
+ * @RXMGMT_FLAG_NONE: Default value to indicate no flags are set.
+ * @RXMGMT_FLAG_EXTERNAL_AUTH: frame can be used for external authentication
+ *                             by upper layers.
+ */
+enum rxmgmt_flags {
+	RXMGMT_FLAG_NONE,
+	RXMGMT_FLAG_EXTERNAL_AUTH = 1 << 1,
+};
+
 typedef struct sSirSmeMgmtFrameInd
 {
     uint16_t        frame_len;
@@ -3652,6 +3740,7 @@ typedef struct sSirSmeMgmtFrameInd
     tANI_U8        sessionId;
     tANI_U8         frameType;
     tANI_S8         rxRssi;
+    enum rxmgmt_flags rx_flags;
     tANI_U8  frameBuf[1]; //variable
 }tSirSmeMgmtFrameInd, *tpSirSmeMgmtFrameInd;
 
@@ -8385,4 +8474,35 @@ struct action_frame_random_filter {
 	uint8_t mac_addr[VOS_MAC_ADDR_SIZE];
 };
 
+/**
+ * struct sae_info - SAE info used for commit/confirm messages
+ * @msg_type: Message type
+ * @msg_len: length of message
+ * @vdev_id: vdev id
+ * @peer_mac_addr: peer MAC address
+ * @ssid: SSID
+ */
+struct sir_sae_info {
+	uint16_t msg_type;
+	uint16_t msg_len;
+	uint32_t vdev_id;
+	v_MACADDR_t peer_mac_addr;
+	tSirMacSSid ssid;
+};
+
+/**
+ * struct sir_sae_msg - SAE msg used for message posting
+ * @message_type: message type
+ * @length: message length
+ * @session_id: SME session id
+ * @sae_status: SAE status, 0: Success, Non-zero: Failure.
+ * @peer_mac_addr: peer MAC address
+ */
+struct sir_sae_msg {
+	uint16_t message_type;
+	uint16_t length;
+	uint16_t session_id;
+	uint8_t sae_status;
+	tSirMacAddr peer_mac_addr;
+};
 #endif /* __SIR_API_H */

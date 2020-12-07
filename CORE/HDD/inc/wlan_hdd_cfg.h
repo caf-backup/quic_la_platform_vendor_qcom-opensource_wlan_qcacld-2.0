@@ -3213,6 +3213,27 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
 #define CFG_REORDER_OFFLOAD_SUPPORT_MAX     ( 1 )
 #define CFG_REORDER_OFFLOAD_SUPPORT_DEFAULT ( 0 )
 
+/*
+ * <ini>
+ * gEnableHostapdEdca - Use hostapd EDCA local params
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable using hostapd
+ * EDCA local params.
+ *
+ * Supported Feature: EDCA
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_EDCA_FROM_HOSTAPD                      "gEnableHostapdEdcaLocal"
+#define CFG_EDCA_FROM_HOSTAPD_MIN                  ( 0 )
+#define CFG_EDCA_FROM_HOSTAPD_MAX                  ( 1 )
+#define CFG_EDCA_FROM_HOSTAPD_DEFAULT              ( 0 )
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 #define CFG_ROAMING_OFFLOAD_NAME                "gRoamOffloadEnabled"
 #define CFG_ROAMING_OFFLOAD_MIN                 (0)
@@ -4653,6 +4674,52 @@ FG_BTC_BT_INTERVAL_PAGE_P2P_STA_DEFAULT
 #define CFG_SAP_PROBE_RESP_OFFLOAD_DEFAULT (1)
 
 
+/*
+ * <ini>
+ * enable_sae_for_sap - Enable/Disable SAE support in driver for SAP
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to enable/disable SAE support in driver for SAP mode
+ * Driver will process/drop the SAE authentication frames based on this config.
+ *
+ * Related: None
+ *
+ * Supported Feature: SAE
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_ENABLE_SAE_FOR_SAP_NAME    "enable_sae_for_sap"
+#define CFG_ENABLE_SAE_FOR_SAP_DEFAULT (1)
+#define CFG_ENABLE_SAE_FOR_SAP_MIN     (0)
+#define CFG_ENABLE_SAE_FOR_SAP_MAX     (1)
+
+/*
+ * <ini>
+ * sae_enabled - Enable/Disable SAE support in driver
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable/disable SAE support in driver
+ * Driver will update config to supplicant based on this config.
+ *
+ * Related: None
+ *
+ * Supported Feature: SAE
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_IS_SAE_ENABLED_NAME    "sae_enabled"
+#define CFG_IS_SAE_ENABLED_DEFAULT (1)
+#define CFG_IS_SAE_ENABLED_MIN     (0)
+#define CFG_IS_SAE_ENABLED_MAX     (1)
+
 /*---------------------------------------------------------------------------
   Type declarations
   -------------------------------------------------------------------------*/
@@ -5237,6 +5304,7 @@ struct hdd_config {
    bool                        crash_inject_enabled;
    v_S31_t                     dfsRadarPriMultiplier;
    v_U8_t                      reorderOffloadSupport;
+   uint8_t                     enable_hostapd_edca_local;
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
    v_BOOL_t                    isRoamOffloadEnabled;
@@ -5507,6 +5575,10 @@ struct hdd_config {
    /* parameter to control probe resp offloads */
    bool                        sap_probe_resp_offload;
    uint32_t                    sta_auth_retries_for_code17;
+#ifdef WLAN_FEATURE_SAE
+   bool is_sae_enabled;
+   bool enable_sae_for_sap;
+#endif
 };
 
 typedef struct hdd_config hdd_config_t;

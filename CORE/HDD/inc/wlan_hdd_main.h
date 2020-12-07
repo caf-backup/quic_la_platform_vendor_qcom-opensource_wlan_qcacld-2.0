@@ -2331,6 +2331,18 @@ int hdd_set_mas(hdd_adapter_t *hostapd_adapter, uint8_t filter_type);
 uint8_t hdd_is_mcc_in_24G(hdd_context_t *hdd_ctx);
 bool wlan_hdd_get_fw_state(hdd_adapter_t *adapter);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
+static inline void hdd_dev_setup_destructor(struct net_device *dev)
+{
+	dev->destructor = free_netdev;
+}
+#else
+static inline void hdd_dev_setup_destructor(struct net_device *dev)
+{
+	dev->needs_free_netdev = true;
+}
+#endif /* KERNEL_VERSION(4, 12, 0) */
+
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
 static inline bool hdd_link_layer_stats_supported(void)
 {
@@ -2580,6 +2592,31 @@ static inline void wlan_hdd_restart_sap(hdd_adapter_t *ap_adapter)
 }
 #endif
 
+/**
+ * hdd_send_update_owe_info_event - Send update OWE info event
+ * @adapter: Pointer to adapter
+ * @sta_addr: MAC address of peer STA
+ * @owe_ie: OWE IE
+ * @owe_ie_len: Length of OWE IE
+ *
+ * Send update OWE info event to hostapd
+ *
+ * Return: none
+ */
+#ifdef CFG80211_EXTERNAL_DH_UPDATE_SUPPORT
+void hdd_send_update_owe_info_event(hdd_adapter_t *adapter,
+				    uint8_t sta_addr[],
+				    uint8_t *owe_ie,
+				    uint32_t owe_ie_len);
+#else
+static inline void hdd_send_update_owe_info_event(hdd_adapter_t *adapter,
+						  uint8_t sta_addr[],
+						  uint8_t *owe_ie,
+						  uint32_t owe_ie_len)
+{
+}
+#endif
+
 int hdd_reassoc(hdd_adapter_t *pAdapter, const tANI_U8 *bssid,
 		const tANI_U8 channel, const handoff_src src);
 
@@ -2608,4 +2645,20 @@ void hdd_chip_pwr_save_fail_detected_cb(void *hddctx,
  */
 int hdd_drv_cmd_validate(tANI_U8 *command, int len);
 
+/**
+ * hdd_chan_change_notify() - Function to notify cfg80211 about channel change
+ * @adapter: adapter
+ * @dev: Net device structure
+ * @oper_chan: New operating channel
+ * @eCsrPhyMode: phy mode
+ *
+ * This function is used to notify cfg80211 about the channel change
+ *
+ * Return: Success on intimating userspace
+ *
+ */
+VOS_STATUS hdd_chan_change_notify(hdd_adapter_t *adapter,
+				  struct net_device *dev,
+				  uint8_t oper_chan,
+				  eCsrPhyMode phy_mode);
 #endif    // end #if !defined( WLAN_HDD_MAIN_H )

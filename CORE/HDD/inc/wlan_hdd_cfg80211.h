@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -124,6 +124,36 @@ typedef struct {
    u32 age;
    u32 tsf_delta;
 }__attribute__((packed)) qcom_ie_age ;
+#endif
+
+#ifndef NL80211_AUTHTYPE_FILS_SK
+#define NL80211_AUTHTYPE_FILS_SK 5
+#endif
+#ifndef NL80211_AUTHTYPE_FILS_SK_PFS
+#define NL80211_AUTHTYPE_FILS_SK_PFS 6
+#endif
+#ifndef NL80211_AUTHTYPE_FILS_PK
+#define NL80211_AUTHTYPE_FILS_PK 7
+#endif
+#ifndef WLAN_AKM_SUITE_FILS_SHA256
+#define WLAN_AKM_SUITE_FILS_SHA256 0x000FAC0E
+#endif
+#ifndef WLAN_AKM_SUITE_FILS_SHA384
+#define WLAN_AKM_SUITE_FILS_SHA384 0x000FAC0F
+#endif
+#ifndef WLAN_AKM_SUITE_FT_FILS_SHA256
+#define WLAN_AKM_SUITE_FT_FILS_SHA256 0x000FAC10
+#endif
+#ifndef WLAN_AKM_SUITE_FT_FILS_SHA384
+#define WLAN_AKM_SUITE_FT_FILS_SHA384 0x000FAC11
+#endif
+
+#ifndef WLAN_AKM_SUITE_SAE
+#define WLAN_AKM_SUITE_SAE 0x000FAC08
+#endif
+
+#ifndef WLAN_AKM_SUITE_OWE
+#define WLAN_AKM_SUITE_OWE 0x000FAC12
 #endif
 
 /* Vendor id to be used in vendor specific command and events
@@ -2756,4 +2786,47 @@ int wlan_hdd_try_disconnect(hdd_adapter_t *pAdapter);
  * Return: None
  */
 void wlan_hdd_cfg80211_scan_block_cb(struct work_struct *work);
+
+#undef nla_parse
+#undef nla_parse_nested
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
+static inline int wlan_cfg80211_nla_parse(struct nlattr **tb,
+					  int maxtype,
+					  const struct nlattr *head,
+					  int len,
+					  const struct nla_policy *policy)
+{
+	return nla_parse(tb, maxtype, head, len, policy);
+}
+
+static inline int
+wlan_cfg80211_nla_parse_nested(struct nlattr *tb[],
+			       int maxtype,
+			       const struct nlattr *nla,
+			       const struct nla_policy *policy)
+{
+	return nla_parse_nested(tb, maxtype, nla, policy);
+}
+#else
+static inline int wlan_cfg80211_nla_parse(struct nlattr **tb,
+					  int maxtype,
+					  const struct nlattr *head,
+					  int len,
+					  const struct nla_policy *policy)
+{
+	return nla_parse(tb, maxtype, head, len, policy, NULL);
+}
+
+static inline int
+wlan_cfg80211_nla_parse_nested(struct nlattr *tb[],
+			       int maxtype,
+			       const struct nlattr *nla,
+			       const struct nla_policy *policy)
+{
+	return nla_parse_nested(tb, maxtype, nla, policy, NULL);
+}
+#endif
+#define nla_parse(...) (obsolete, use wlan_cfg80211_nla_parse)
+#define nla_parse_nested(...) (obsolete, use wlan_cfg80211_nla_parse_nested)
+
 #endif
