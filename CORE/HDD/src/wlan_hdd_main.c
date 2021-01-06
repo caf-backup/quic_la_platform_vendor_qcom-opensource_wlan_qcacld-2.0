@@ -15848,8 +15848,14 @@ static VOS_STATUS wlan_hdd_reg_init(hdd_context_t *hdd_ctx)
 #define tcp_limit_output_bytes "/proc/sys/net/ipv4/tcp_limit_output_bytes"
 #define flush "/proc/sys/net/ipv4/route/flush"
 #define tcp_sack "/proc/sys/net/ipv4/tcp_sack"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
 #define GET_INODE_FROM_FILEP(filp) \
-	(filp)->f_path.dentry->d_inode
+    (filp)->f_path.dentry->d_inode
+#else
+#define GET_INODE_FROM_FILEP(filp) \
+    (filp)->f_dentry->d_inode
+#endif
 
 int _readwrite_file(const char *filename, char *rbuf,
 	const char *wbuf, size_t length, int mode)
@@ -15884,7 +15890,11 @@ int _readwrite_file(const char *filename, char *rbuf,
 		}
 
 		if (wbuf) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0))
+			ret = kernel_write(
+#else
 			ret = vfs_write(
+#endif
 				filp, wbuf, length, &filp->f_pos);
 			if (ret < 0) {
 				printk(KERN_ERR
@@ -15892,7 +15902,11 @@ int _readwrite_file(const char *filename, char *rbuf,
 				break;
 			}
 		} else {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0))
+			ret = kernel_read(
+#else
 			ret = vfs_read(
+#endif
 				filp, rbuf, length, &filp->f_pos);
 			if (ret < 0) {
 				printk(KERN_ERR

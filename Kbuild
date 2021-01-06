@@ -19,7 +19,7 @@ ifeq ($(KERNEL_BUILD),1)
 	# These are provided in external module based builds
 	# Need to explicitly define for Kernel-based builds
 	MODNAME := wlan
-	WLAN_ROOT := drivers/staging/qcacld-2.0
+	WLAN_ROOT := $(srctree)/drivers/net/wireless/qcacld-2.0
 	WLAN_OPEN_SOURCE := 1
 endif
 
@@ -235,7 +235,16 @@ ifeq ($(CONFIG_ROME_IF),usb)
 	CONFIG_QCA_TXDESC_SANITY_CHECKS := 1
 endif
 ifeq ($(CONFIG_QCA_WIFI_SDIO), 1)
-	CONFIG_PER_VDEV_TX_DESC_POOL := 0
+	CONFIG_PER_VDEV_TX_DESC_POOL := 1
+	CONFIG_QCA_LL_TX_FLOW_CT := 1
+	CONFIG_LINUX_QCMBR := y
+	SAP_AUTH_OFFLOAD := y
+	CONFIG_WLAN_FEATURE_FILS := y
+	CONFIG_FEATURE_COEX_PTA_CONFIG_ENABLE := y
+	CONFIG_QCA_SUPPORT_TXRX_DRIVER_TCP_DEL_ACK := y
+	CONFIG_WLAN_WAPI_MODE_11AC_DISABLE := y
+	CONFIG_WLAN_WOW_PULSE := y
+	CONFIG_GPIO_OOB := y
 endif
 ifeq ($(CONFIG_QCA_WIFI_SDIO), 1)
 	CONFIG_TX_DESC_HI_PRIO_RESERVE  := 1
@@ -1042,7 +1051,6 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DWLAN_PERF \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
-		-Werror\
 		-D__linux__ \
 		-DHAL_SELF_STA_PER_BSS=1 \
 		-DWLAN_FEATURE_VOWIFI_11R \
@@ -1214,7 +1222,7 @@ CDEFINES += -DMDNS_OFFLOAD
 endif
 
 ifeq (y,$(findstring y,$(CONFIG_ARCH_MSM) $(CONFIG_ARCH_QCOM)))
-CDEFINES += -DMSM_PLATFORM
+#CDEFINES += -DMSM_PLATFORM
 ifeq ($(CONFIG_CNSS), y)
 ifeq ($(CONFIG_HIF_PCI), 1)
 CDEFINES += -DFEATURE_BUS_BANDWIDTH

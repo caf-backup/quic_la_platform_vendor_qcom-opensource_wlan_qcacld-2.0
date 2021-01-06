@@ -8750,6 +8750,8 @@ wlan_hdd_cfg80211_thermal_cmd(struct wiphy *wiphy,
 	return ret;
 }
 
+#endif /* FEATURE_WLAN_THERMAL_SHUTDOWN */
+
 static const struct nla_policy
 qca_vendor_peer_cfr_capture_cfg_policy[QCA_WLAN_VENDOR_ATTR_PEER_CFR_MAX + 1] = {
     [QCA_WLAN_VENDOR_ATTR_CFR_PEER_MAC_ADDR] = { .type = NLA_UNSPEC, .len = ETH_ALEN },
@@ -8919,8 +8921,6 @@ wlan_hdd_cfr_capture_cfg_handler(struct wiphy *wiphy,
     vos_ssr_unprotect(__func__);
     return ret;
 }
-
-#endif /* FEATURE_WLAN_THERMAL_SHUTDOWN */
 
 #ifdef FEATURE_WLAN_TDLS
 /* EXT TDLS */
@@ -16319,7 +16319,7 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
 			WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = wlan_hdd_cfg80211_thermal_cmd,
-		vendor_command_policy(wlan_hdd_thermal_mitigation_policy,
+		vendor_command_policy(qca_wlan_vendor_thermal_cmd_policy,
 				      QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_MAX)
 	},
 #endif /* FEATURE_WLAN_THERMAL_SHUTDOWN */
@@ -16330,6 +16330,8 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
                          WIPHY_VENDOR_CMD_NEED_NETDEV |
                          WIPHY_VENDOR_CMD_NEED_RUNNING,
                 .doit = wlan_hdd_cfr_capture_cfg_handler,
+		vendor_command_policy(qca_vendor_peer_cfr_capture_cfg_policy,
+				      QCA_WLAN_VENDOR_ATTR_PEER_CFR_MAX)
         },
 };
 
@@ -21792,7 +21794,7 @@ wlan_hdd_cfg80211_inform_bss_frame( hdd_adapter_t *pAdapter,
     int rssi = 0;
     hdd_context_t *pHddCtx;
     int status;
-#ifdef CONFIG_CNSS
+#if defined(CONFIG_CNSS) || defined(ANDROID)
     struct timespec ts;
 #endif
     hdd_config_t *cfg_param = NULL;
@@ -21811,7 +21813,7 @@ wlan_hdd_cfg80211_inform_bss_frame( hdd_adapter_t *pAdapter,
 
     memcpy(mgmt->bssid, bss_desc->bssId, ETH_ALEN);
 
-#ifdef CONFIG_CNSS
+#if defined(CONFIG_CNSS) || defined(ANDROID)
     /* Android does not want the time stamp from the frame.
        Instead it wants a monotonic increasing value */
     vos_get_monotonic_boottime_ts(&ts);

@@ -4785,8 +4785,8 @@ hdd_smeRoamCallback(void *pContext, tCsrRoamInfo *pRoamInfo, tANI_U32 roamId,
                 wlan_hdd_netif_queue_control(pAdapter,
                     WLAN_NETIF_TX_DISABLE_N_CARRIER,
                     WLAN_CONTROL_PATH);
-                break;
             }
+            break;
         case eCSR_ROAM_DISASSOCIATED:
             {
                 VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
