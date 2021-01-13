@@ -48,6 +48,10 @@ ifeq ($(KERNEL_BUILD), 0)
 	CONFIG_MOBILE_ROUTER := y
 	endif
 
+	ifeq ($(CONFIG_ARCH_SDXNIGHTJAR), y)
+	CONFIG_MOBILE_ROUTER := y
+	endif
+
 	ifeq ($(CONFIG_ARCH_MSM8917), y)
 		ifeq ($(CONFIG_ROME_IF), sdio)
 			CONFIG_WLAN_SYNC_TSF_PLUS := y
