@@ -2265,6 +2265,7 @@ hdd_adapter_t * hdd_get_adapter( hdd_context_t *pHddCtx, device_mode_t mode );
 hdd_adapter_t * hdd_get_adapter_by_wdev(struct wireless_dev *wdev);
 void hdd_deinit_adapter(hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
                         bool rtnl_held);
+VOS_STATUS hdd_start_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter);
 VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
                              const v_BOOL_t bCloseSession);
 void hdd_set_station_ops( struct net_device *pWlanDev );
