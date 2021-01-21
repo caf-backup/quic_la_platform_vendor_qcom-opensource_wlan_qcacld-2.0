@@ -1640,6 +1640,10 @@ ifeq ($(CONFIG_SMART_ANTENNA), y)
 CDEFINES += -DWLAN_SMART_ANTENNA_FEATURE
 endif
 
+ifdef CONFIG_TGT_NUM_MSDU_DESC
+CDEFINES += -DWLAN_TGT_NUM_MSDU_DESC=$(CONFIG_TGT_NUM_MSDU_DESC)
+endif
+
 # Module information used by KBuild framework
 ifeq ($(CONFIG_FEATURE_LARGE_PREALLOC),y)
 obj-$(CONFIG_QCA_CLD_WLAN) += wlan_prealloc.o

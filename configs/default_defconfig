@@ -23,6 +23,10 @@ ifeq ($(KERNEL_BUILD),1)
 	WLAN_OPEN_SOURCE := 1
 endif
 
+ifeq ($(CONFIG_ARCH_SDXNIGHTJAR), y)
+	CONFIG_TGT_NUM_MSDU_DESC := 1024
+endif
+
 ifeq ($(KERNEL_BUILD), 0)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
