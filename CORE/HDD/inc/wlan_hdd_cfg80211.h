@@ -1798,6 +1798,7 @@ enum qca_wlan_vendor_attr_flush_pending{
 #define WIFI_FEATURE_CONTROL_ROAMING    0x800000  /* Enable/Disable roaming */
 #define WIFI_FEATURE_IE_WHITELIST       0x1000000 /* Support Probe IE white listing */
 #define WIFI_FEATURE_SCAN_RAND          0x2000000 /* Support MAC & Probe Sequence Number randomization */
+#define WIFI_FEATURE_SET_LATENCY_MODE   0x40000000 /* Set latency mode */
 
 
 /* Add more features here */
