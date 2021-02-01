@@ -10032,7 +10032,13 @@ wlan_hdd_cfg80211_do_acs_policy[QCA_WLAN_VENDOR_ATTR_ACS_MAX+1] = {
 	[QCA_WLAN_VENDOR_ATTR_ACS_HT40_ENABLED] = { .type = NLA_FLAG },
 	[QCA_WLAN_VENDOR_ATTR_ACS_VHT_ENABLED] = { .type = NLA_FLAG },
 	[QCA_WLAN_VENDOR_ATTR_ACS_CHWIDTH] = { .type = NLA_U16 },
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0))
 	[QCA_WLAN_VENDOR_ATTR_ACS_CH_LIST] = { .type = NLA_UNSPEC },
+	[QCA_WLAN_VENDOR_ATTR_ACS_FREQ_LIST] = { .type = NLA_UNSPEC },
+#else
+	[QCA_WLAN_VENDOR_ATTR_ACS_CH_LIST] = { .type = NLA_BINARY },
+	[QCA_WLAN_VENDOR_ATTR_ACS_FREQ_LIST] = { .type = NLA_BINARY },
+#endif
 };
 
 
@@ -10359,6 +10365,7 @@ void wlan_hdd_cfg80211_acs_ch_select_evt(hdd_adapter_t *adapter)
 		return;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0))
 	/* Send the IF INDEX to differentiate the ACS event for each interface
 	 * TODO: To be update once cfg80211 APIs are updated to accept if_index
 	 */
@@ -10374,6 +10381,7 @@ void wlan_hdd_cfg80211_acs_ch_select_evt(hdd_adapter_t *adapter)
 
 	nla = nla_nest_start(vendor_event, NL80211_ATTR_VENDOR_DATA);
 	((void **)vendor_event->cb)[2] = nla;
+#endif
 
 	ret_val = nla_put_u8(vendor_event,
 				QCA_WLAN_VENDOR_ATTR_ACS_PRIMARY_CHANNEL,
