@@ -5,7 +5,7 @@ ifeq ($(MODNAME),)
 else
 	KERNEL_BUILD := 0
 endif
-
+CONFIG_CLD_HL_SDIO_CORE := y
 ifeq ($(CONFIG_CLD_HL_SDIO_CORE), y)
 	CONFIG_QCA_WIFI_SDIO := 1
 	CONFIG_ROME_IF = sdio
