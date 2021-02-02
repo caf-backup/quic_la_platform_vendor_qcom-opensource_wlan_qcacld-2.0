@@ -337,14 +337,14 @@ ath_hif_sdio_remove(void *context, void *hif_handle)
     return 0;
 }
 
-static A_STATUS
+static int
 ath_hif_sdio_suspend(void *context)
 {
 	pr_debug("%s TODO\n", __func__);
 	return 0;
 }
 
-static A_STATUS
+static int
 ath_hif_sdio_resume(void *context)
 {
 	pr_debug("%s TODO\n", __func__);
