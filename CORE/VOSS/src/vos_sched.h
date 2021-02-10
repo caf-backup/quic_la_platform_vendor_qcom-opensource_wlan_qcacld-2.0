@@ -416,6 +416,7 @@ typedef struct _VosContextType
    struct list_head wdthread_timer_work_list;
    struct work_struct wdthread_work;
    spinlock_t wdthread_work_lock;
+   bool is_sdio_remove_hif_failure;
 } VosContextType, *pVosContextType;
 
 

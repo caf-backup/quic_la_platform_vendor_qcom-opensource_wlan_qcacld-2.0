@@ -180,6 +180,17 @@ void vos_set_unload_in_progress(v_U8_t value);
 
 v_U8_t vos_is_load_in_progress(VOS_MODULE_ID moduleId, v_VOID_t *moduleContext);
 void vos_set_load_in_progress(VOS_MODULE_ID moduleId, v_U8_t value);
+#ifdef SDIO_CARD_REMOVABLE
+bool vos_is_sdio_remove_hif_failure(void);
+void vos_set_sdio_remove_hif_failure(bool value);
+#else
+static inline bool vos_is_sdio_remove_hif_failure(void)
+{
+	return false;
+}
+static inline void vos_set_sdio_remove_hif_failure(bool value)
+{}
+#endif
 
 bool vos_is_shutdown_in_progress(VOS_MODULE_ID moduleId,
                                  v_VOID_t *moduleContext);
