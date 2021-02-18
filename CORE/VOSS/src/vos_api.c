@@ -1564,6 +1564,44 @@ void vos_set_load_in_progress(VOS_MODULE_ID moduleId, v_U8_t value)
 	gpVosContext->is_load_in_progress = value;
 }
 
+/**
+ * vos_is_sdio_remove_hif_failure - check if sdio remove and hif failure
+ *
+ * Return: true - sdio remove and hif failure
+ *         false - sdio remove and hif failure
+ */
+#ifdef SDIO_CARD_REMOVABLE
+bool vos_is_sdio_remove_hif_failure(void)
+{
+	if (gpVosContext == NULL) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: global voss context is NULL", __func__);
+		return false;
+	}
+
+	return gpVosContext->is_sdio_remove_hif_failure;
+}
+
+/**
+ * vos_set_sdio_remove_hif_failure - set sdio remove hif failure
+ *
+ * @value: true - sdio remove and hif failure
+ *         false - sdio remove not hif failure
+ *
+ * Return: none
+ */
+void vos_set_sdio_remove_hif_failure(bool value)
+{
+	if (gpVosContext == NULL) {
+		VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_ERROR,
+			"%s: global voss context is NULL", __func__);
+		return;
+	}
+
+	gpVosContext->is_sdio_remove_hif_failure = value;
+}
+#endif
+
 v_U8_t vos_is_reinit_in_progress(VOS_MODULE_ID moduleId, v_VOID_t *moduleContext)
 {
   if (gpVosContext == NULL)

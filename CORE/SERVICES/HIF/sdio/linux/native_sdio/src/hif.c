@@ -58,6 +58,7 @@
 #endif
 
 #define MAX_HIF_DEVICES 2
+#define MAX_CONTINUOUS_HIF_FAILURE 5
 
 #ifdef HIF_MBOX_SLEEP_WAR
 #define HIF_MIN_SLEEP_INACTIVITY_TIME_MS     50
@@ -358,6 +359,22 @@ A_STATUS HIFInit(OSDRV_CALLBACKS *callbacks)
     return A_OK;
 }
 
+#ifdef SDIO_CARD_REMOVABLE
+bool continuous_hif_failure(HIF_DEVICE* device)
+{
+	if (device->continuous_hif_failure >= MAX_CONTINUOUS_HIF_FAILURE) {
+		return true;
+	} else {
+		return false;
+	}
+}
+#else
+static inline bool continuous_hif_failure(HIF_DEVICE* device)
+{
+	return false;
+}
+#endif
+
 static A_STATUS
 __HIFReadWrite(HIF_DEVICE *device,
              A_UINT32 address,
@@ -374,6 +391,15 @@ __HIFReadWrite(HIF_DEVICE *device,
 
     if (device == NULL || device->func == NULL)
         return A_ERROR;
+
+    /**
+     * If reach max continuous hif failure, don't issue mmc commands anymore,
+     * wait bus detection to remove card, and probe again. HIF_DEVICE will be initialized
+     * in probe, then device->continuous_hif_failure will be 0 after probe.
+     */
+    if (continuous_hif_failure(device))
+	    return A_ERROR;
+
     AR_DEBUG_PRINTF(ATH_DEBUG_TRACE, ("__HIFReadWrite, addr:0X%06X, len:%08d, %s, %s\n",
                     address,
                     length,
@@ -564,8 +590,11 @@ __HIFReadWrite(HIF_DEVICE *device,
                             length,
                             request & HIF_READ ? "Read " : "Write",
                             request & HIF_ASYNCHRONOUS ? "Async" : "Sync "));
+	    device->continuous_hif_failure++;
             status = A_ERROR;
-        }
+        } else {
+	    device->continuous_hif_failure = 0;
+	}
     } while (FALSE);
 
     return status;
@@ -1417,9 +1446,14 @@ hifIRQHandler(struct sdio_func *func)
 {
     A_STATUS status;
     HIF_DEVICE *device;
+
     AR_DEBUG_PRINTF(ATH_DEBUG_TRACE, ("AR6000: +hifIRQHandler\n"));
 
     device = getHifDevice(func);
+    if (continuous_hif_failure(device)) {
+	sdio_release_irq(device->func);
+	return;
+    }
     atomic_set(&device->irqHandling, 1);
     /* release the host during ints so we can pick it back up when we process cmds */
     sdio_release_host(device->func);
@@ -1517,6 +1551,7 @@ static int hifDeviceInserted(struct sdio_func *func, const struct sdio_device_id
             ("AR6000: hifDeviceInserted, Function: 0x%X, Vendor ID: 0x%X, Device ID: 0x%X, block size: 0x%X/0x%X\n",
              func->num, func->vendor, id->device, func->max_blksize, func->cur_blksize));
 
+    vos_set_sdio_remove_hif_failure(false);
     /* dma_mask should be populated here. Use the parent device's setting. */
     func->dev.dma_mask = mmc_dev(func->card->host)->dma_mask;
 
@@ -1528,6 +1563,7 @@ static int hifDeviceInserted(struct sdio_func *func, const struct sdio_device_id
             hifdevice->powerConfig = HIF_DEVICE_POWER_UP;
             sdio_set_drvdata(func, hifdevice);
             device = getHifDevice(func);
+	    device->continuous_hif_failure = 0;
 
             if (device->is_suspend) {
         AR_DEBUG_PRINTF(ATH_DEBUG_TRACE,("AR6000: hifDeviceInserted, Resume from suspend, need to ReinitSDIO.\n"));
@@ -1542,6 +1578,7 @@ static int hifDeviceInserted(struct sdio_func *func, const struct sdio_device_id
             return -1;
         }
         device = getHifDevice(func);
+	device->continuous_hif_failure = 0;
 
         for (i=0; i<MAX_HIF_DEVICES; ++i) {
             if (hif_devices[i] == NULL) {
@@ -2452,6 +2489,9 @@ static void hifDeviceRemoved(struct sdio_func *func)
             }
         }
     }
+
+    if (device->continuous_hif_failure > 0)
+	vos_set_sdio_remove_hif_failure(true);
 
     if (device->claimedContext != NULL) {
         status = osdrvCallbacks.deviceRemovedHandler(device->claimedContext, device);
