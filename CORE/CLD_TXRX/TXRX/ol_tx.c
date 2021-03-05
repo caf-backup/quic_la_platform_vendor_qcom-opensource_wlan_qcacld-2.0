@@ -638,7 +638,7 @@ ol_tx_hl_base(
                                         TXRX_HL_TX_DESC_HI_PRIO_RESERVED) {
             tx_desc = ol_tx_desc_hl(pdev, vdev, msdu, &tx_msdu_info);
         } else if ((adf_nbuf_is_dhcp_pkt(msdu) == A_STATUS_OK)
-                          || (adf_nbuf_is_eapol_pkt(msdu) == A_STATUS_OK)) {
+                          || adf_nbuf_is_eapol_pkt(msdu)) {
             tx_desc = ol_tx_desc_hl(pdev, vdev, msdu, &tx_msdu_info);
             TXRX_PRINT(TXRX_PRINT_LEVEL_ERR,
                 "Provided tx descriptor from reserve pool for DHCP/EAPOL\n");
