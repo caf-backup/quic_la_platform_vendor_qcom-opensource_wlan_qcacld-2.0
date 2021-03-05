@@ -53,11 +53,15 @@
 #define NBUF_PKT_TRAC_TYPE_MGMT_ACTION    0x08
 #define NBUF_PKT_TRAC_MAX_STRING   12
 #define NBUF_PKT_TRAC_PROTO_STRING 4
+#define ADF_NBUF_PKT_ERROR         1
 
 #define ADF_NBUF_TRAC_IPV4_OFFSET       14
 #define ADF_NBUF_TRAC_IPV4_HEADER_SIZE  20
 #define ADF_NBUF_TRAC_DHCP_SRV_PORT     67
 #define ADF_NBUF_TRAC_DHCP_CLI_PORT     68
+
+#define ADF_NBUF_TRAC_ETH_TYPE_OFFSET   12
+#define ADF_NBUF_TRAC_EAPOL_ETH_TYPE    0x888E
 
 /**
  * @brief Platform indepedent packet abstraction
@@ -1149,6 +1153,21 @@ static inline a_status_t
 adf_nbuf_is_dhcp_pkt(adf_nbuf_t buf)
 {
     return (__adf_nbuf_is_dhcp_pkt(buf));
+}
+
+/**
+ * adf_nbuf_is_eapol_pkt() - check if it is EAPOL packet.
+ * @buf: Pointer to EAPOL packet buffer
+ *
+ * This func. checks whether it is a EAPOL packet or not.
+ *
+ * Return: TRUE if it is a EAPOL packet
+ *         FALSE if not
+ */
+static inline
+bool adf_nbuf_is_eapol_pkt(adf_nbuf_t buf)
+{
+	return __adf_nbuf_data_is_eapol_pkt(adf_nbuf_data(buf));
 }
 
 #endif
