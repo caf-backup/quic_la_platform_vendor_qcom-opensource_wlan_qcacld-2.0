@@ -1808,9 +1808,12 @@ int vos_update_band(v_U8_t  band_capability)
 					IEEE80211_CHAN_DISABLED;
 				continue;
 			}
+#ifdef CLD_REGDB
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
 			if (NV_CHANNEL_DISABLE != channel_enabled_state)
 				band->channels[j].flags = flags;
-
+#endif
+#endif
 		}
 	}
 	return 0;
