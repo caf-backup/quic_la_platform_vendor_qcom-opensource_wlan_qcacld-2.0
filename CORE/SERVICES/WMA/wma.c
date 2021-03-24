@@ -9694,6 +9694,7 @@ VOS_STATUS WDA_open(v_VOID_t *vos_context, v_VOID_t *os_ctx,
 	olCfg.uc_tx_partition_base = mac_params->ucTxPartitionBase;
 #endif /* IPA_UC_OFFLOAD*/
 
+	olCfg.max_throughput_mbps = mac_params->max_throughput_mbps;
 	wma_handle->tx_chain_mask_cck = mac_params->tx_chain_mask_cck;
 	wma_handle->self_gen_frm_pwr = mac_params->self_gen_frm_pwr;
 	wma_handle->max_mgmt_tx_fail_count = mac_params->max_mgmt_tx_fail_count;

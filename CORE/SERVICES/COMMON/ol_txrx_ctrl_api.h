@@ -1088,6 +1088,7 @@ struct txrx_pdev_cfg_param_t {
 #ifdef WLAN_FEATURE_TSF_PLUS
     a_bool_t is_ptp_enabled;
 #endif
+    uint32_t max_throughput_mbps;
     struct ol_tx_sched_wrr_ac_specs_t ac_specs[OL_TX_NUM_WMM_AC];
 };
 
