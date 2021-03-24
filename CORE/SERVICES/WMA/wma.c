@@ -41519,11 +41519,42 @@ void wma_dfs_configure(struct ieee80211com *ic)
 		rinfo.b5pulses = dfs_fcc_bin5pulses;
 		rinfo.numb5radars = ARRAY_LENGTH(dfs_fcc_bin5pulses);
 		break;
+	case DFS_CN_DOMAIN:
+		WMA_LOGI("%s: FCC domain -- Country China(156)"
+			 " override FCC radar pattern",__func__);
+		rinfo.dfsdomain = DFS_FCC_DOMAIN;
+		/*
+		 * China uses a radar pattern that is similar to ETSI but it
+		 * follows FCC in all other respect like transmit power, CCA
+		 * threshold etc.
+		 */
+		rinfo.dfs_radars = dfs_china_radars;
+		rinfo.numradars = ARRAY_LENGTH(dfs_china_radars);
+		rinfo.b5pulses = NULL;
+		rinfo.numb5radars = 0;
+		break;
 	case DFS_ETSI_DOMAIN:
 		WMA_LOGI("%s: DFS-ETSI domain",__func__);
 		rinfo.dfsdomain = DFS_ETSI_DOMAIN;
 		rinfo.dfs_radars = dfs_etsi_radars;
 		rinfo.numradars = ARRAY_LENGTH(dfs_etsi_radars);
+		rinfo.b5pulses = NULL;
+		rinfo.numb5radars = 0;
+		break;
+	case DFS_KR_DOMAIN:
+		WMA_LOGI("%s: ETSI domain -- Korea(412)",__func__);
+		rinfo.dfsdomain = DFS_ETSI_DOMAIN;
+
+		/*
+		 * So far we have treated Korea as part of ETSI and did not
+		 * support any radar patters specific to Korea other than
+		 * standard ETSI radar patterns. Ideally we would want to
+		 * treat Korea as a different domain. This is something that
+		 * we will address in the future. However, for now override
+		 * ETSI tables for Korea.
+		 */
+		rinfo.dfs_radars = dfs_korea_radars;
+		rinfo.numradars = ARRAY_LENGTH(dfs_korea_radars);
 		rinfo.b5pulses = NULL;
 		rinfo.numb5radars = 0;
 		break;
@@ -41676,7 +41707,7 @@ wma_dfs_configure_channel(struct ieee80211com *dfs_ic,
 void wma_set_dfs_regdomain(tp_wma_handle wma, uint8_t dfs_region)
 {
 	/* dfs information is passed */
-	if (dfs_region > DFS_MKK4_DOMAIN || dfs_region == DFS_UNINIT_DOMAIN)
+	if (dfs_region >= DFS_UNDEF_DOMAIN || dfs_region == DFS_UNINIT_DOMAIN)
 		/* assign DFS_FCC_DOMAIN as default domain*/
 		wma->dfs_ic->current_dfs_regdomain = DFS_FCC_DOMAIN;
 	else
