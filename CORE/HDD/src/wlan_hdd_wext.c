@@ -2736,6 +2736,8 @@ static int __iw_set_genie(struct net_device *dev, struct iw_request_info *info,
                 memcpy( pWextState->WPARSNIE, genie - 2, (eLen + 2));
                 pWextState->roamProfile.pRSNReqIE = pWextState->WPARSNIE;
                 pWextState->roamProfile.nRSNReqIELength = eLen + 2;
+                wlan_hdd_mask_unsupported_rsn_caps(pWextState->WPARSNIE + 2,
+						   eLen);
               break;
 
          default:
