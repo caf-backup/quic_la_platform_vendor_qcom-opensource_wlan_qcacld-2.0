@@ -384,7 +384,7 @@ __adf_nbuf_reg_trace_cb(adf_nbuf_trace_update_t cb_func_ptr)
    return;
 }
 
-a_status_t
+bool
 __adf_nbuf_is_dhcp_pkt(struct sk_buff *skb)
 {
    a_uint16_t    SPort;
@@ -400,11 +400,11 @@ __adf_nbuf_is_dhcp_pkt(struct sk_buff *skb)
        ((ADF_NBUF_TRAC_DHCP_CLI_PORT == adf_os_cpu_to_be16(SPort)) &&
        (ADF_NBUF_TRAC_DHCP_SRV_PORT == adf_os_cpu_to_be16(DPort))))
     {
-        return A_STATUS_OK;
+        return true;
     }
     else
     {
-        return A_STATUS_FAILED;
+        return false;
     }
 }
 

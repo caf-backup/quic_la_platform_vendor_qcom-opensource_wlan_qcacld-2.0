@@ -1147,9 +1147,9 @@ adf_nbuf_get_tx_parallel_dnload_frm(adf_nbuf_t buf)
  *
  * @param[in] buf       buffer
  *
- * @return A_STATUS_OK if packet is DHCP packet
+ * @return true if packet is DHCP packet
  */
-static inline a_status_t
+static inline bool
 adf_nbuf_is_dhcp_pkt(adf_nbuf_t buf)
 {
     return (__adf_nbuf_is_dhcp_pkt(buf));

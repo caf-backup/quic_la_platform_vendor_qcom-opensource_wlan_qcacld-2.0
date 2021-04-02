@@ -278,7 +278,7 @@ ol_tx_tid(
         tx_msdu_info->htt.info.l2_hdr_type = htt_pkt_type_ethernet;
 
         ol_tx_set_ether_type(datap, tx_msdu_info);
-        if (A_STATUS_OK == adf_nbuf_is_dhcp_pkt(tx_nbuf)) {
+        if (adf_nbuf_is_dhcp_pkt(tx_nbuf)) {
             /* DHCP frame to go with voice priority */
             tid = TX_DHCP_TID;
         } else {
@@ -352,8 +352,7 @@ ol_tx_classify(
                     vdev->mac_addr.raw[2], vdev->mac_addr.raw[3],
                     vdev->mac_addr.raw[4], vdev->mac_addr.raw[5]);
                 return NULL; /* error */
-            } else if (A_STATUS_OK ==
-                            adf_nbuf_is_dhcp_pkt(tx_nbuf)) {
+            } else if (adf_nbuf_is_dhcp_pkt(tx_nbuf)) {
                 /* DHCP frame to go with voice priority */
                 txq = &peer->txqs[TX_DHCP_TID];
                 tx_msdu_info->htt.info.ext_tid = TX_DHCP_TID;
