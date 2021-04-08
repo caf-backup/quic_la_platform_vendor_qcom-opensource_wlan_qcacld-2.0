@@ -33631,7 +33631,8 @@ void wlan_hdd_cfg80211_chainrssi_callback(void *ctx, void *pmsg)
 	return;
 }
 
-#ifdef CFG80211_EXTERNAL_DH_UPDATE_SUPPORT
+#if defined(CFG80211_EXTERNAL_DH_UPDATE_SUPPORT) || \
+    (LINUX_VERSION_CODE > KERNEL_VERSION(5, 2, 0))
 /**
  * __wlan_hdd_cfg80211_update_owe_info() - update OWE info
  * @wiphy: Pointer to wiphy
@@ -33822,7 +33823,8 @@ static struct cfg80211_ops wlan_hdd_cfg80211_ops =
 #if defined(WLAN_FEATURE_VOWIFI_11R) && defined(KERNEL_SUPPORT_11R_CFG80211)
      .update_ft_ies = wlan_hdd_cfg80211_update_ft_ies,
 #endif
-#ifdef CFG80211_EXTERNAL_DH_UPDATE_SUPPORT
+#if defined(CFG80211_EXTERNAL_DH_UPDATE_SUPPORT) || \
+    (LINUX_VERSION_CODE > KERNEL_VERSION(5, 2, 0))
      .update_owe_info = wlan_hdd_cfg80211_update_owe_info,
 #endif
 #ifdef FEATURE_WLAN_TDLS
