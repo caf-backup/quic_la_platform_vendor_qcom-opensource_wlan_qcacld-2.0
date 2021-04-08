@@ -16522,7 +16522,8 @@ hdd_wiphy_set_max_sched_scans(struct wiphy *wiphy, uint8_t max_scans)
 #endif /* KERNEL_VERSION(4, 12, 0) */
 
 #if defined(WLAN_FEATURE_SAE) && \
-	defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
+	(defined(CFG80211_EXTERNAL_AUTH_SUPPORT) || \
+	 LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0))
 /**
  * wlan_hdd_cfg80211_set_wiphy_sae_feature() - Indicates support of SAE feature
  * @wiphy: Pointer to wiphy
@@ -28955,7 +28956,8 @@ static int wlan_hdd_cfg80211_flush_pmksa(struct wiphy *wiphy,
 #endif
 
 #if defined(WLAN_FEATURE_SAE) && \
-	defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
+	(defined(CFG80211_EXTERNAL_AUTH_SUPPORT) || \
+	  LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0))
 #if defined(CFG80211_EXTERNAL_AUTH_AP_SUPPORT)
 /**
  * wlan_hdd_extauth_cache_pmkid() - Extract and cache pmkid
@@ -33851,7 +33853,8 @@ static struct cfg80211_ops wlan_hdd_cfg80211_ops =
      .abort_scan = wlan_hdd_cfg80211_abort_scan,
 #endif
 #if defined(WLAN_FEATURE_SAE) && \
-    defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
+    (defined(CFG80211_EXTERNAL_AUTH_SUPPORT) || \
+     LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0))
     .external_auth = wlan_hdd_cfg80211_external_auth,
 #endif
 };
