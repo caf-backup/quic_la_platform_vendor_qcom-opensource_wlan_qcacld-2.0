@@ -209,7 +209,7 @@ static tANI_U8* smeTraceGetCommandString( tANI_U32 command )
             break;
     }
 }
-static void smeTraceDump(tpAniSirGlobal pMac, tpvosTraceRecord pRecord,
+static void smeTraceDump(void *pMac, tpvosTraceRecord pRecord,
                                                             tANI_U16 recIndex)
 {
 	switch (pRecord->code) {

@@ -5562,6 +5562,9 @@ __wlan_hdd_cfg80211_get_features(struct wiphy *wiphy,
 	}
 #endif
 
+	wlan_hdd_cfg80211_set_feature(feature_flags,
+		QCA_WLAN_VENDOR_FEATURE_SUPPORT_HW_MODE_ANY);
+
 	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, sizeof(feature_flags) +
 		NLMSG_HDRLEN);
 
@@ -8352,6 +8355,13 @@ wlan_hdd_cfg80211_get_wifi_info(struct wiphy *wiphy,
 
 	return ret;
 }
+
+static const struct
+nla_policy
+qca_wlan_vendor_get_logger_supp_feature_policy[
+				QCA_WLAN_VENDOR_ATTR_LOGGER_MAX +1] = {
+	[QCA_WLAN_VENDOR_ATTR_LOGGER_SUPPORTED] = {.type = NLA_U32 },
+};
 
 /**
  * __wlan_hdd_cfg80211_get_logger_supp_feature() - Get the wifi logger features
@@ -12171,6 +12181,8 @@ static int hdd_unmap_req_id_to_pattern_id(hdd_context_t *hdd_ctx,
 		QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_SRC_MAC_ADDR
 #define PARAM_DST_MAC_ADDR \
 		QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_DST_MAC_ADDR
+#define PARAM_ETHER_PROTO_TYPE \
+		QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_ETHER_PROTO_TYPE
 #define PARAM_PERIOD QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_PERIOD
 
 /**
@@ -12316,11 +12328,13 @@ static const struct nla_policy offloaded_packet_policy[
 			PARAM_MAX + 1] = {
 		[PARAM_REQUEST_ID] = { .type = NLA_U32 },
 		[PARAM_CONTROL] = { .type = NLA_U32 },
+		[PARAM_IP_PACKET] = { .type = NLA_BINARY },
 		[PARAM_SRC_MAC_ADDR] = { .type = NLA_BINARY,
 					.len = VOS_MAC_ADDR_SIZE },
 		[PARAM_DST_MAC_ADDR] = { .type = NLA_BINARY,
 					.len = VOS_MAC_ADDR_SIZE },
 		[PARAM_PERIOD] = { .type = NLA_U32 },
+		[PARAM_ETHER_PROTO_TYPE] = { .type = NLA_U16 },
 };
 
 /**
@@ -12944,7 +12958,7 @@ wlan_hdd_bpf_offload_policy[BPF_MAX + 1] = {
 	[BPF_FILTER_ID] = {.type = NLA_U32},
 	[BPF_PACKET_SIZE] = {.type = NLA_U32},
 	[BPF_CURRENT_OFFSET] = {.type = NLA_U32},
-	[BPF_PROGRAM] = {.type = NLA_U8},
+	[BPF_PROGRAM] = {.type = NLA_BINARY},
 };
 
 /**
@@ -13426,6 +13440,12 @@ static int wlan_hdd_cfg80211_get_bus_size(struct wiphy *wiphy,
 #define PARAM_PNO_MATCH_CNT \
 		QCA_WLAN_VENDOR_ATTR_PNO_MATCH_CNT
 
+static const struct nla_policy
+wlan_hdd_get_wakelock_stats_policy[QCA_WLAN_VENDOR_GET_WAKE_STATS_MAX +1] =
+{
+	[QCA_WLAN_VENDOR_ATTR_CMD_EVENT_WAKE_CNT_SZ] = {.type = NLA_U32 },
+	[QCA_WLAN_VENDOR_ATTR_DRIVER_FW_LOCAL_WAKE_CNT_SZ] = {.type = NLA_U32 },
+};
 
 /**
  * hdd_send_wakelock_stats() - API to send wakelock stats
@@ -16109,7 +16129,8 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
 			WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = wlan_hdd_cfg80211_get_logger_supp_feature,
-		vendor_command_policy(VENDOR_CMD_RAW_DATA, 0)
+		vendor_command_policy(qca_wlan_vendor_get_logger_supp_feature_policy,
+				      QCA_WLAN_VENDOR_ATTR_LOGGER_MAX)
 	},
 	{
 		.info.vendor_id = QCA_NL80211_VENDOR_ID,
@@ -16219,7 +16240,8 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] =
 			 WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = wlan_hdd_cfg80211_get_wakelock_stats,
-		vendor_command_policy(VENDOR_CMD_RAW_DATA, 0)
+		vendor_command_policy(wlan_hdd_get_wakelock_stats_policy,
+				      QCA_WLAN_VENDOR_GET_WAKE_STATS_MAX)
 	},
 #ifdef WLAN_FEATURE_NAN_DATAPATH
 	{
