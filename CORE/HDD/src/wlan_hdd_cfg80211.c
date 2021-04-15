@@ -10197,7 +10197,27 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	else
 		sap_config->acs_cfg.ch_width = eHT_CHANNEL_WIDTH_20MHZ;
 
-	if (tb[QCA_WLAN_VENDOR_ATTR_ACS_CH_LIST]) {
+	/* Firstly try to get channel frequencies */
+	if (tb[QCA_WLAN_VENDOR_ATTR_ACS_FREQ_LIST]) {
+		uint32_t *freq = nla_data(tb[QCA_WLAN_VENDOR_ATTR_ACS_FREQ_LIST]);
+		sap_config->acs_cfg.ch_list_count = nla_len(
+			tb[QCA_WLAN_VENDOR_ATTR_ACS_FREQ_LIST]) / sizeof(uint32_t);
+		if (sap_config->acs_cfg.ch_list_count) {
+			sap_config->acs_cfg.ch_list = vos_mem_malloc(
+					sizeof(uint8_t) *
+					sap_config->acs_cfg.ch_list_count);
+			if (sap_config->acs_cfg.ch_list == NULL) {
+				hddLog(LOGE, FL("ACS config alloc fail"));
+				status = -ENOMEM;
+				goto out;
+			}
+			for (i = 0; i < sap_config->acs_cfg.ch_list_count; i++) {
+				sap_config->acs_cfg.ch_list[i] =
+					vos_freq_to_chan(freq[i]);
+			}
+		}
+
+	} else if (tb[QCA_WLAN_VENDOR_ATTR_ACS_CH_LIST]) {
 		char *tmp = nla_data(tb[QCA_WLAN_VENDOR_ATTR_ACS_CH_LIST]);
 		sap_config->acs_cfg.ch_list_count = nla_len(
 					tb[QCA_WLAN_VENDOR_ATTR_ACS_CH_LIST]);
@@ -10214,6 +10234,13 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 					sap_config->acs_cfg.ch_list_count);
 		}
 	}
+
+	if (!sap_config->acs_cfg.ch_list_count) {
+		hddLog(LOGE, FL("acs config chan count 0"));
+		status = -EINVAL;
+		goto out;
+	}
+
 	wlan_hdd_set_mcc_to_scc_switch(adapter);
 	wlan_hdd_set_acs_ch_range(sap_config, ht_enabled, vht_enabled);
 
