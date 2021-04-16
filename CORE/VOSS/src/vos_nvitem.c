@@ -2261,6 +2261,20 @@ static void hdd_debug_cc_timer_expired_handler(void *arg)
 }
 
 /*
+ * Override cfg80211 regulatory_request dfs_region for CN and KR
+ * which have different pattern table
+ */
+static void vos_set_dfs_region_cn_kr(struct regulatory_request *request)
+{
+	if ((request->alpha2[0] == 'C') &&
+	    (request->alpha2[1] == 'N'))
+		request->dfs_region = DFS_CN_DOMAIN;
+	else if ((request->alpha2[0] == 'K') &&
+	    (request->alpha2[1] == 'R'))
+		request->dfs_region = DFS_KR_DOMAIN;
+}
+
+/*
  * Function: wlan_hdd_linux_reg_notifier
  * This function is called from cfg80211 core to provide regulatory settings
  * after new country is requested or intersected (init, user input or 11d)
@@ -2459,6 +2473,7 @@ int __wlan_hdd_linux_reg_notifier(struct wiphy *wiphy,
             regdmn_set_regval(&pHddCtx->reg);
         }
 
+	vos_set_dfs_region_cn_kr(request);
         /* set dfs_region info */
         vos_nv_set_dfs_region(request->dfs_region);
 
