@@ -748,6 +748,15 @@ ifeq ($(CONFIG_WLAN_LOGGING_SOCK_SVC), y)
 CDEFINES += -DWLAN_LOGGING_SOCK_SVC_ENABLE
 endif
 
+# Add sdio cnss dlkm support, just only support cnss_sdio,
+# and need to extend if adding pci cnss dlmk support.
+ifeq ($(CONFIG_CNSS),m)
+ifeq ($(CONFIG_CNSS_SDIO),y)
+CONFIG_CNSS := y
+CDEFINES += -DCONFIG_CNSS
+endif
+endif
+
 ifeq ($(CONFIG_CUSTOMIZE_SDIO_CCCR_VALUE), y)
 CDEFINES += -DCCCR1=0x15
 CDEFINES += -DCCCR1_VALUE=0x30
