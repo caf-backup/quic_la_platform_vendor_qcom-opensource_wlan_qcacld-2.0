@@ -405,6 +405,7 @@ const tRfChannelProps rfChannels[NUM_RF_CHANNELS] =
     { 5920, 184, RF_SUBBAND_5_HIGH_GHZ},     //RF_CHAN_184,
 #else
     { 5865, 173, RF_SUBBAND_5_HIGH_GHZ},     //RF_CHAN_173,
+    { 5885, 177, RF_SUBBAND_5_HIGH_GHZ},     //RF_CHAN_177,
 #endif
     { 2422, 3  , NUM_RF_SUBBANDS},           //RF_CHAN_BOND_3,
     { 2427, 4  , NUM_RF_SUBBANDS},           //RF_CHAN_BOND_4,
