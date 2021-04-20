@@ -40823,7 +40823,8 @@ tANI_U8 wma_getFwWlanFeatCaps(tANI_U8 featEnumValue)
 }
 
 void wma_send_regdomain_info(u_int32_t reg_dmn, u_int16_t regdmn2G,
-			     u_int16_t regdmn5G, int8_t ctl2G, int8_t ctl5G)
+			     u_int16_t regdmn5G, int8_t ctl2G, int8_t ctl5G,
+			     u_int32_t ctl_5g_bm)
 {
 	wmi_buf_t buf;
 	wmi_pdev_set_regdomain_cmd_fixed_param *cmd;
@@ -40853,7 +40854,16 @@ void wma_send_regdomain_info(u_int32_t reg_dmn, u_int16_t regdmn2G,
 	cmd->reg_domain_2G = regdmn2G;
 	cmd->reg_domain_5G = regdmn5G;
 	cmd->conformance_test_limit_2G = ctl2G;
-	cmd->conformance_test_limit_5G = ctl5G;
+	cmd->conformance_test_limit_5G = ctl5G | REGDOMAIN_5G_SUBBAND_FLAG_MASK;
+	cmd->conformance_test_limit_5G_subband_UNII1 = CTL_UNII1_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII2a = CTL_UNII2a_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII2c = CTL_UNII2c_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII3 = CTL_UNII3_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII4 = CTL_UNII4_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_6G_subband_UNII5 = UNUSED;
+	cmd->conformance_test_limit_6G_subband_UNII6 = UNUSED;
+	cmd->conformance_test_limit_6G_subband_UNII7 = UNUSED;
+	cmd->conformance_test_limit_6G_subband_UNII8 = UNUSED;
 
 	if (wmi_unified_cmd_send(wma->wmi_handle, buf, len,
 				WMI_PDEV_SET_REGDOMAIN_CMDID)) {
