@@ -325,6 +325,7 @@ const static struct ieee80211_channel hdd_channels_5_GHZ[] =
 static const struct ieee80211_channel hdd_etsi_srd_chan[] = {
 	HDD5GHZCHAN(5845, 169, 0),
 	HDD5GHZCHAN(5865, 173, 0),
+	HDD5GHZCHAN(5885, 177, 0),
 };
 
 static const struct ieee80211_channel hdd_channels_dot11p[] = {
