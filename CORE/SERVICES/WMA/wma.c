@@ -42137,11 +42137,6 @@ VOS_STATUS wma_set_wlm_latency_level(uint8_t vdev_id, uint16_t latency_level)
 		return VOS_STATUS_E_FAILURE;
 	}
 
-	if (!(wma_handle->interfaces[vdev_id].vdev_up)) {
-		WMA_LOGE("%s: vdev id %d is not up", __func__, vdev_id);
-		return VOS_STATUS_E_FAILURE;
-	}
-
 	if (!mac_ctx->roam.configParam.wlm_latency_enable) {
 		WMA_LOGE("%s: WLM latency level setting is disabled",
 			   __func__);
