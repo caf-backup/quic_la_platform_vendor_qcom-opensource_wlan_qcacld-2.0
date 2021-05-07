@@ -3696,13 +3696,15 @@ int hdd_ipa_suspend(hdd_context_t *hdd_ctx)
 	if (atomic_read(&hdd_ipa->tx_ref_cnt))
 		return -EAGAIN;
 
-	adf_os_spin_lock_bh(&hdd_ipa->rm_lock);
+	if (hdd_ipa_is_rm_enabled(hdd_ipa)) {
+		adf_os_spin_lock_bh(&hdd_ipa->rm_lock);
 
-	if (hdd_ipa->rm_state != HDD_IPA_RM_RELEASED) {
+		if (hdd_ipa->rm_state != HDD_IPA_RM_RELEASED) {
+			adf_os_spin_unlock_bh(&hdd_ipa->rm_lock);
+			return -EAGAIN;
+		}
 		adf_os_spin_unlock_bh(&hdd_ipa->rm_lock);
-		return -EAGAIN;
 	}
-	adf_os_spin_unlock_bh(&hdd_ipa->rm_lock);
 
 	adf_os_spin_lock_bh(&hdd_ipa->pm_lock);
 	hdd_ipa->suspended = true;
