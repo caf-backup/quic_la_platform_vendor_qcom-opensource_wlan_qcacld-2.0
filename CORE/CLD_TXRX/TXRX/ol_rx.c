@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -609,16 +609,6 @@ ol_rx_indication_handler(
                 OL_RX_ERR_STATISTICS_2(
                     pdev, vdev, peer, rx_mpdu_desc, msdu, status);
 
-                if (status == htt_rx_status_err_fcs &&
-                    vdev && peer) {
-                    /*
-                     * CVE2020-26140 FW marked plaintext
-                     */
-                    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_INFO,
-                        "\n%s:QSV2020006 discard pkts from FW special marking\n",
-                        __FUNCTION__);
-                }
-
                 if (status == htt_rx_status_tkip_mic_err &&
                     vdev != NULL &&  peer != NULL)
                 {
@@ -1089,7 +1079,6 @@ ol_rx_deliver(
     struct ol_rx_decap_info_t info;
     adf_os_mem_set(&info, 0, sizeof(info));
 #endif
-    int index;              /* unicast vs. multicast */
 
     msdu = msdu_list;
     /*
@@ -1107,26 +1096,6 @@ ol_rx_deliver(
             adf_nbuf_pull_head(msdu,
                     htt_rx_msdu_rx_desc_size_hl(htt_pdev,
                         rx_desc));
-        }
-
-        /*
-         * CVE2020-26140
-         *
-         * Rx side implementation must drop un-encrypted frames
-         * for secure connections either in HW or SW
-         */
-        index = htt_rx_msdu_is_wlan_mcast(htt_pdev, rx_desc) ?
-                    txrx_sec_mcast : txrx_sec_ucast;
-        if (peer->security[index].sec_type != htt_sec_type_none &&
-            !htt_rx_mpdu_is_encrypted(htt_pdev, rx_desc)) {
-            discard = 1;
-
-            VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
-                "%s: QSV2020006, Unencrypted frame received in security mode %d\n",
-                __FUNCTION__,
-                peer->security[index].sec_type);
-
-            goto DONE;
         }
 
 #ifdef QCA_SUPPORT_SW_TXRX_ENCAP
@@ -1160,7 +1129,9 @@ ol_rx_deliver(
             filter = ol_rx_filter(vdev, peer, msdu, rx_desc);
         }
 
+#ifdef QCA_SUPPORT_SW_TXRX_ENCAP
 DONE:
+#endif
         htt_rx_msdu_desc_free(htt_pdev, msdu);
         if (discard || (A_TRUE == filter)) {
             OL_TXRX_FRMS_DUMP(
