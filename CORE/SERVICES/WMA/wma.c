@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -113,6 +113,7 @@
 #include "wma_nan_datapath.h"
 #include "adf_trace.h"
 
+#include "ol_rx_reorder.h"
 /* ################### defines ################### */
 /*
  * TODO: Following constant should be shared by firwmare in
@@ -10093,7 +10094,8 @@ static VOS_STATUS wma_vdev_detach(tp_wma_handle wma_handle,
 				pdel_sta_self_req_param->selfMacAddr,
 				vdev_id, peer, VOS_FALSE);
 	}
-	if (adf_os_atomic_read(&iface->bss_status) == WMA_BSS_STATUS_STARTED) {
+	if (!vos_is_sdio_remove_hif_failure() &&
+	    adf_os_atomic_read(&iface->bss_status) == WMA_BSS_STATUS_STARTED) {
 		WMA_LOGA("BSS is not yet stopped. Defering vdev(vdev id %x) deletion",
 				vdev_id);
 		iface->del_staself_req = pdel_sta_self_req_param;
@@ -20080,6 +20082,12 @@ static void wma_set_stakey(tp_wma_handle wma_handle, tpSetStaKeyParams key_info)
 		}
 	}
 
+        WMA_LOGD("%s: QSV2020002, vid(%u), rx cleanup for peer(%pM) after key install",
+            __func__,
+            txrx_vdev->vdev_id,
+            peer->mac_addr.raw);
+        ol_rx_reorder_peer_cleanup(txrx_vdev, peer);
+
         /* In IBSS mode, set the BSS KEY for this peer
          ** BSS key is supposed to be cache into wma_handle
         */
@@ -20395,6 +20403,9 @@ static void wma_delete_bss(tp_wma_handle wma, tpDeleteBssParams params)
 			 __func__, __LINE__);
 		timeout = WMA_DEL_BSS_TIMEOUT_IN_SSR;
 	}
+
+	if (vos_is_sdio_remove_hif_failure())
+		goto out;
 
 	msg = wma_fill_vdev_req(wma, params->smesessionId, WDA_DELETE_BSS_REQ,
 				WMA_TARGET_REQ_TYPE_VDEV_STOP, params,
@@ -37908,7 +37919,8 @@ int wma_suspend_target(WMA_HANDLE handle, int disable_target_intr)
 		timeout = WMA_SUSPEND_TIMEOUT_IN_SSR;
 	}
 
-	if (vos_wait_single_event(&wma_handle->target_suspend,
+	if (!vos_is_sdio_remove_hif_failure() &&
+	    vos_wait_single_event(&wma_handle->target_suspend,
 				  timeout)
 				  != VOS_STATUS_SUCCESS) {
 		WMA_LOGE("Failed to get ACK from firmware for pdev suspend");

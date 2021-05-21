@@ -26597,6 +26597,9 @@ int wlan_hdd_scan_abort(hdd_adapter_t *pAdapter)
         hdd_abort_mac_scan(pHddCtx, pAdapter->sessionId,
                            eCSR_SCAN_ABORT_DEFAULT);
 
+	if (vos_is_sdio_remove_hif_failure())
+            return -ETIME;
+
         rc = wait_for_completion_timeout(
                            &pScanInfo->abortscan_event_var,
                            msecs_to_jiffies(5000));

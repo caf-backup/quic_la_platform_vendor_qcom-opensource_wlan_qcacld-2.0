@@ -120,6 +120,7 @@ struct hif_device {
     /* mailbox swapping for control and data svc*/
     A_BOOL swap_mailbox;
     bool ctrl_response_timeout;
+    uint32_t continuous_hif_failure;
 };
 
 #define HIF_DMA_BUFFER_SIZE (4 * 1024)

@@ -1144,6 +1144,8 @@ static int __hdd_netdev_notifier_call(struct notifier_block * nb,
            INIT_COMPLETION(pAdapter->scan_info.abortscan_event_var);
            hdd_abort_mac_scan(pAdapter->pHddCtx, pAdapter->sessionId,
                               eCSR_SCAN_ABORT_DEFAULT);
+	   if (vos_is_sdio_remove_hif_failure())
+		   break;
            rc = wait_for_completion_timeout(
                                &pAdapter->scan_info.abortscan_event_var,
                                msecs_to_jiffies(WLAN_WAIT_TIME_ABORTSCAN));
