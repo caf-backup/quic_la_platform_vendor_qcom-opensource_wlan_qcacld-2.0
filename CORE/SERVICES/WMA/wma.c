@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -112,6 +112,7 @@
 #include "wma_ocb.h"
 #include "wma_nan_datapath.h"
 
+#include "ol_rx_reorder.h"
 /* ################### defines ################### */
 /*
  * TODO: Following constant should be shared by firwmare in
@@ -18242,6 +18243,12 @@ static void wma_set_stakey(tp_wma_handle wma_handle, tpSetStaKeyParams key_info)
 		}
 	}
 
+        WMA_LOGD("%s: QSV2020002, vid(%u), rx cleanup for peer(%pM) after key install",
+            __func__,
+            txrx_vdev->vdev_id,
+            peer->mac_addr.raw);
+        ol_rx_reorder_peer_cleanup(txrx_vdev, peer);
+
         /* In IBSS mode, set the BSS KEY for this peer
          ** BSS key is supposed to be cache into wma_handle
         */
@@ -21658,8 +21665,7 @@ wma_wow_get_pkt_proto_subtype(uint8_t *data,
 				return ADF_PROTO_INVALID;
 			} else if (proto_type == ADF_NBUF_TRAC_UDP_TYPE) {
 				if (len >= WMA_IS_DHCP_GET_MIN_LEN) {
-					if (adf_nbuf_data_is_dhcp_pkt(data) ==
-						    A_STATUS_OK) {
+					if (adf_nbuf_data_is_dhcp_pkt(data)) {
 						if (len >=
 						   WMA_DHCP_SUBTYPE_GET_MIN_LEN)
 						  return adf_nbuf_data_get_dhcp_subtype(data);

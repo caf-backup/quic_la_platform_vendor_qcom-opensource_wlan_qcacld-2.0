@@ -798,10 +798,10 @@ __adf_nbuf_data_get_ipv6_proto(uint8_t *data)
  *
  * This func. checks whether it is a DHCP packet or not.
  *
- * Return: A_STATUS_OK if it is a DHCP packet
- *         A_STATUS_FAILED if not
+ * Return: true if it is a DHCP packet
+ *         false if not
  */
-a_status_t
+bool
 __adf_nbuf_data_is_dhcp_pkt(uint8_t *data)
 {
    a_uint16_t    SPort;
@@ -817,11 +817,11 @@ __adf_nbuf_data_is_dhcp_pkt(uint8_t *data)
        ((ADF_NBUF_TRAC_DHCP_CLI_PORT == adf_os_cpu_to_be16(SPort)) &&
        (ADF_NBUF_TRAC_DHCP_SRV_PORT == adf_os_cpu_to_be16(DPort))))
     {
-        return A_STATUS_OK;
+        return true;
     }
     else
     {
-        return A_STATUS_FAILED;
+        return false;
     }
 }
 
@@ -831,10 +831,10 @@ __adf_nbuf_data_is_dhcp_pkt(uint8_t *data)
  *
  * This func. checks whether it is a EAPOL packet or not.
  *
- * Return: A_STATUS_OK if it is a EAPOL packet
- *         A_STATUS_FAILED if not
+ * Return: true if it is a EAPOL packet
+ *         false if not
  */
-a_status_t
+bool
 __adf_nbuf_data_is_eapol_pkt(uint8_t *data)
 {
     a_uint16_t    ether_type;
@@ -843,11 +843,11 @@ __adf_nbuf_data_is_eapol_pkt(uint8_t *data)
 			ADF_NBUF_TRAC_ETH_TYPE_OFFSET));
     if (ADF_NBUF_TRAC_EAPOL_ETH_TYPE == adf_os_cpu_to_be16(ether_type))
     {
-        return A_STATUS_OK;
+        return true;
     }
     else
     {
-        return A_STATUS_FAILED;
+        return false;
     }
 }
 

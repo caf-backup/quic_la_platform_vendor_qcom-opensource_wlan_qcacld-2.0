@@ -1536,10 +1536,10 @@ adf_nbuf_data_get_ipv6_proto(uint8_t *data)
  *
  * This func. checks whether it is a DHCP packet or not.
  *
- * Return: A_STATUS_OK if it is a DHCP packet
- *         A_STATUS_FAILED if not
+ * Return: true if it is a DHCP packet
+ *         false if not
  */
-static inline a_status_t
+static inline bool
 adf_nbuf_is_dhcp_pkt(adf_nbuf_t buf)
 {
 	return __adf_nbuf_data_is_dhcp_pkt(adf_nbuf_data(buf));
@@ -1551,10 +1551,10 @@ adf_nbuf_is_dhcp_pkt(adf_nbuf_t buf)
  *
  * This func. checks whether it is a DHCP packet or not.
  *
- * Return: A_STATUS_OK if it is a DHCP packet
- *         A_STATUS_FAILED if not
+ * Return: true if it is a DHCP packet
+ *         false if not
  */
-static inline a_status_t
+static inline bool
 adf_nbuf_data_is_dhcp_pkt(uint8_t *data)
 {
 	return __adf_nbuf_data_is_dhcp_pkt(data);
@@ -1566,10 +1566,10 @@ adf_nbuf_data_is_dhcp_pkt(uint8_t *data)
  *
  * This func. checks whether it is a EAPOL packet or not.
  *
- * Return: A_STATUS_OK if it is a EAPOL packet
- *         A_STATUS_FAILED if not
+ * Return: true if it is a EAPOL packet
+ *         false if not
  */
-static inline a_status_t
+static inline bool
 adf_nbuf_is_eapol_pkt(adf_nbuf_t buf)
 {
 	return __adf_nbuf_data_is_eapol_pkt(adf_nbuf_data(buf));
@@ -1581,10 +1581,10 @@ adf_nbuf_is_eapol_pkt(adf_nbuf_t buf)
  *
  * This func. checks whether it is a EAPOL packet or not.
  *
- * Return: A_STATUS_OK if it is a EAPOL packet
- *         A_STATUS_FAILED if not
+ * Return: true if it is a EAPOL packet
+ *         false if not
  */
-static inline a_status_t
+static inline bool
 adf_nbuf_data_is_eapol_pkt(uint8_t *data)
 {
 	return __adf_nbuf_data_is_eapol_pkt(data);
