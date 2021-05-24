@@ -332,7 +332,8 @@ void vos_pkt_trace_buf_update
 {
    v_U32_t slot;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0))
-	struct timespec64 tv;
+   struct timespec64 tv;
+   uint64_t nsec;
 #else
    struct timeval tv;
 #endif
@@ -354,7 +355,8 @@ void vos_pkt_trace_buf_update
    vos_timer_get_timeval(&tv);
    trace_buffer[slot].event_sec_time = tv.tv_sec;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0))
-   trace_buffer[slot].event_msec_time = do_div(tv.tv_nsec, NSEC_PER_MSEC);
+   nsec = (uint64_t)tv.tv_nsec;
+   trace_buffer[slot].event_msec_time = do_div(nsec, NSEC_PER_MSEC);
 #else
    trace_buffer[slot].event_msec_time = tv.tv_usec;
 #endif
