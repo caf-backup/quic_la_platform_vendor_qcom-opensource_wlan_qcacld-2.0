@@ -28121,6 +28121,8 @@ static VOS_STATUS wma_process_mcbc_set_filter_req(tp_wma_handle wma_handle,
 	uint8_t vdev_id = 0;
 	int i;
 
+	const tSirMacAddr mDNS_addr = {0x01, 0x00, 0x5e, 0x00, 0x00, 0xfb};
+
 	if (mcbc_param->ulMulticastAddrCnt <= 0 ||
 		mcbc_param->ulMulticastAddrCnt >
 			CFG_TGT_MAX_MULTICAST_FILTER_ENTRIES) {
@@ -28144,6 +28146,10 @@ static VOS_STATUS wma_process_mcbc_set_filter_req(tp_wma_handle wma_handle,
 					mcbc_param->multicastAddr[i],
 					(mcbc_param->action == 0));
 	}
+
+	/* Handle mDNS */
+	wma_add_clear_mcbc_filter(wma_handle, vdev_id,
+				  mDNS_addr, (mcbc_param->action == 0));
 	return VOS_STATUS_SUCCESS;
 }
 
