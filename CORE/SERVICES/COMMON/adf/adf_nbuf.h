@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1165,4 +1165,20 @@ adf_nbuf_is_eapol_pkt(adf_nbuf_t buf)
 {
     return (__adf_nbuf_is_eapol_pkt(buf));
 }
+
+/**
+ * adf_nbuf_data_is_eapol_pkt() - check if it is EAPOL packet.
+ * @data: Pointer to EAPOL packet data buffer
+ *
+ * This func. checks whether it is a EAPOL packet or not.
+ *
+ * Return: TRUE if it is a EAPOL packet
+ *         FALSE if not
+ */
+static inline
+bool adf_nbuf_data_is_eapol_pkt(uint8_t *data)
+{
+	return __adf_nbuf_data_is_eapol_pkt(data);
+}
+
 #endif

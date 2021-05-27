@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, 2014, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -181,6 +181,7 @@ ol_rx_fwd_check(
 
         if (!vdev->disable_intrabss_fwd &&
             htt_rx_msdu_forward(pdev->htt_pdev, rx_desc)) {
+            int do_not_fwd = 0;
             /*
              * Use the same vdev that received the frame to
              * transmit the frame.
@@ -213,15 +214,43 @@ ol_rx_fwd_check(
              * Check whether it also needs to be sent to the OS shim,
              * in which case we need to make a copy (or clone?).
              */
-            if (htt_rx_msdu_discard(pdev->htt_pdev, rx_desc)) {
-                htt_rx_msdu_desc_free(pdev->htt_pdev, msdu);
-                ol_rx_fwd_to_tx(tx_vdev, msdu);
-                msdu = NULL; /* already handled this MSDU */
-            } else {
-				adf_nbuf_t copy;
-				copy = adf_nbuf_copy(msdu);
-                if (copy) {
-					ol_rx_fwd_to_tx(tx_vdev, copy);
+            if (!do_not_fwd) {
+                u_int16_t off = 0;
+                // for HL, point to payload right now
+                if (pdev->cfg.is_high_latency) {
+                    off = htt_rx_msdu_rx_desc_size_hl(pdev->htt_pdev,
+                                                      rx_desc);
+                }
+
+                /*
+                 * CR 2868053
+                 * discard EAPOL frame for intrabss forwarding
+                 */
+                if ((vdev->opmode == wlan_op_mode_ap) &&
+                    __adf_nbuf_data_is_eapol_pkt(adf_nbuf_data(msdu) + off)) {
+                    VOS_TRACE(VOS_MODULE_ID_TXRX, VOS_TRACE_LEVEL_ERROR,
+                        "\n%s:QSV2020005 EAPOL forwarding discard \n",
+                        __FUNCTION__);
+                    /* Drop the packet*/
+                    htt_rx_msdu_desc_free(pdev->htt_pdev, msdu);
+                    TXRX_STATS_MSDU_LIST_INCR(
+                        pdev, tx.dropped.host_reject, msdu);
+                    /* add NULL terminator */
+                    adf_nbuf_set_next(msdu, NULL);
+                    adf_nbuf_tx_free(msdu, 1);
+                    msdu = msdu_list;
+                    continue;
+                }
+	            if (htt_rx_msdu_discard(pdev->htt_pdev, rx_desc)) {
+	                htt_rx_msdu_desc_free(pdev->htt_pdev, msdu);
+	                ol_rx_fwd_to_tx(tx_vdev, msdu);
+	                msdu = NULL; /* already handled this MSDU */
+	            } else {
+					adf_nbuf_t copy;
+					copy = adf_nbuf_copy(msdu);
+	                if (copy) {
+						ol_rx_fwd_to_tx(tx_vdev, copy);
+		            }
                 }
             }
         }

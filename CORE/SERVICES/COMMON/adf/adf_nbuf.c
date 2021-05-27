@@ -423,6 +423,32 @@ __adf_nbuf_is_eapol_pkt(struct sk_buff *skb)
     }
 }
 
+/**
+ * __adf_nbuf_data_is_eapol_pkt() - check if it is EAPOL packet.
+ * @data: Pointer to EAPOL packet data buffer
+ *
+ * This func. checks whether it is a EAPOL packet or not.
+ *
+ * Return: TRUE if it is a EAPOL packet
+ *         FALSE if not
+ */
+bool __adf_nbuf_data_is_eapol_pkt(uint8_t *data)
+{
+    a_uint16_t    ether_type;
+
+    ether_type = (a_uint16_t)(*(a_uint16_t *)(data +
+			ADF_NBUF_TRAC_ETH_TYPE_OFFSET));
+    if (ADF_NBUF_TRAC_EAPOL_ETH_TYPE == adf_os_cpu_to_be16(ether_type))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+
 #ifdef QCA_PKT_PROTO_TRACE
 void
 __adf_nbuf_trace_update(struct sk_buff *buf, char *event_string)

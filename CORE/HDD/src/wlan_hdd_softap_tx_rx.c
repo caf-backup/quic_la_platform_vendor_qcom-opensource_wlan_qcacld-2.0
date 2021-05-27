@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1265,8 +1265,34 @@ VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
    }
 #endif /* QCA_PKT_PROTO_TRACE */
 
-   VOS_TRACE( VOS_MODULE_ID_HDD_SAP_DATA, VOS_TRACE_LEVEL_INFO_LOW,
-              "%s: send one packet to kernel", __func__);
+      if (pHddCtx->cfg_ini->gEnableSapEapolChecking) {
+          if (adf_nbuf_is_eapol_pkt(skb) == A_STATUS_OK) {
+              /* CR 2868053 */
+              VOS_TRACE(VOS_MODULE_ID_HDD_DATA, VOS_TRACE_LEVEL_INFO,
+                  "%s: QSV2020005, dev, mode=%d, session=%u, %s, addr (%pM)",
+                  __FUNCTION__,
+                  pAdapter->device_mode,
+                  pAdapter->sessionId,
+                  pAdapter->dev->name,
+                  pAdapter->dev->dev_addr);
+              VOS_TRACE(VOS_MODULE_ID_HDD_DATA, VOS_TRACE_LEVEL_INFO,
+                  "%s:QSV2020005 pkt addr (%pM)",
+                  __FUNCTION__,
+                  skb->data);
+              if (adf_os_mem_cmp(pAdapter->dev->dev_addr,
+                skb->data, VOS_MAC_ADDR_SIZE)) {
+                  /* CR 2868053, discard this EAPOL */
+                  VOS_TRACE(VOS_MODULE_ID_HDD_DATA, VOS_TRACE_LEVEL_ERROR,
+                      "%s:QSV2020005 discard invalid EAPOL frame, dev=%pM, "
+                      "pkt_da=%pM",
+                      __FUNCTION__,
+                      pAdapter->dev->dev_addr,
+                      skb->data);
+
+                  return VOS_STATUS_E_FAILURE;
+              }
+          }
+      }
 
    skb->protocol = eth_type_trans(skb, skb->dev);
 #ifdef WLAN_FEATURE_HOLD_RX_WAKELOCK
