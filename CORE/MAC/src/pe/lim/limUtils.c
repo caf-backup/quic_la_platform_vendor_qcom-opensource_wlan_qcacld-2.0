@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -5063,7 +5063,7 @@ limProcessDelTsInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
   tpDphHashNode         pSta;
   tpDelTsParams         pDelTsParam = (tpDelTsParams) (limMsg->bodyptr);
   tpSirDeltsReq         pDelTsReq = NULL;
-  tSirMacAddr           peerMacAddr;
+  tSirMacAddr           peerMacAddr = {0};
   tpSirDeltsReqInfo     pDelTsReqInfo;
   tpLimTspecInfo        pTspecInfo;
   tpPESession           psessionEntry;

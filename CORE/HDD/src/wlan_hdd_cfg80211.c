@@ -6722,7 +6722,7 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 	if (tb[QCA_WLAN_VENDOR_ATTR_LL_STATS_EXT_PEER_MAC_ADDRESS]) {
 		struct net_device *dev  = wdev->netdev;
 	        hdd_adapter_t *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
-		v_MACADDR_t mac_addr;
+		v_MACADDR_t mac_addr = {0};
 		uint32_t atr_len;
 
 		/* Set primary peer MAC address */
@@ -15074,7 +15074,7 @@ __hdd_cfg80211_get_station_cmd(struct wiphy *wiphy,
 	} else if (tb[STATION_ASSOC_FAIL_REASON]) {
 		status = hdd_get_station_assoc_fail(hdd_ctx, adapter);
 	} else if (tb[STATION_REMOTE]) {
-		v_MACADDR_t mac_addr;
+		v_MACADDR_t mac_addr = {0};
 
 		if (adapter->device_mode != WLAN_HDD_SOFTAP) {
 			hddLog(VOS_TRACE_LEVEL_INFO,
@@ -17576,7 +17576,7 @@ int wlan_hdd_cfg80211_update_apies(hdd_adapter_t* pHostapdAdapter)
     v_U16_t total_ielen = 0;
     int ret = 0;
     tsap_Config_t *pConfig;
-    tSirUpdateIE   updateIE;
+    tSirUpdateIE   updateIE = {0};
     beacon_data_t *pBeacon = NULL;
     v_U16_t proberesp_ies_len;
     v_U8_t *proberesp_ies = NULL;
@@ -25830,7 +25830,7 @@ static int __wlan_hdd_cfg80211_join_ibss(struct wiphy *wiphy,
     int status;
     hdd_station_ctx_t *pHddStaCtx = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
     hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
-    tSirMacAddr bssid;
+    tSirMacAddr bssid = {0};
 
     ENTER();
 
@@ -26022,7 +26022,7 @@ static int __wlan_hdd_cfg80211_leave_ibss(struct wiphy *wiphy,
     tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(pAdapter);
     int status;
     eHalStatus hal_status;
-    tSirUpdateIE updateIE;
+    tSirUpdateIE updateIE = {0};
 
     ENTER();
 
@@ -27412,7 +27412,7 @@ static int wlan_hdd_get_station_remote(struct wiphy *wiphy,
 	hdd_ap_ctx_t *ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
 	hdd_station_info_t *stainfo = NULL;
 	hdd_config_t *cfg = hddctx->cfg_ini;
-	v_MACADDR_t macaddr;
+	v_MACADDR_t macaddr = {0};
 	int status;
 	int i;
 
