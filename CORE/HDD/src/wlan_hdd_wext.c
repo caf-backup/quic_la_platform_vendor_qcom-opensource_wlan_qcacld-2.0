@@ -923,7 +923,7 @@ void hdd_wlan_dump_stats(hdd_adapter_t *pAdapter, int value)
 void hdd_wlan_get_version(hdd_adapter_t *pAdapter, union iwreq_data *wrqu,
                           char *extra)
 {
-    tSirVersionString wcnss_SW_version;
+    tSirVersionString wcnss_SW_version = {0};
     const char *pSWversion;
     const char *pHWversion;
     v_U32_t MSPId = 0, mSPId = 0, SIId = 0, CRMId = 0;
@@ -6151,7 +6151,7 @@ static int __iw_setint_getnone(struct net_device *dev,
         }
         case WE_SET_TX_POWER:
         {
-           tSirMacAddr bssid;
+           tSirMacAddr bssid = {0};
 
            if (NULL == hHal)
                return -EINVAL;
@@ -6168,8 +6168,8 @@ static int __iw_setint_getnone(struct net_device *dev,
         }
         case WE_SET_MAX_TX_POWER:
         {
-           tSirMacAddr bssid;
-           tSirMacAddr selfMac;
+           tSirMacAddr bssid = {0};
+           tSirMacAddr selfMac = {0};
 
            if (NULL == hHal)
                return -EINVAL;
