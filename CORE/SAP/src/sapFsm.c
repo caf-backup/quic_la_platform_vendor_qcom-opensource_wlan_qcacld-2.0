@@ -5409,9 +5409,9 @@ static VOS_STATUS sapGetChannelList(ptSapContext sapContext,
 
             case eCSR_BAND_5G:
                bandStartChannel = RF_CHAN_36;
-               bandEndChannel = RF_CHAN_165;
+               bandEndChannel = RF_CHAN_177;
                startChannelNum = 36;
-               endChannelNum = 165;
+               endChannelNum = 177;
                break;
 
             default:
