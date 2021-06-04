@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -71,10 +71,10 @@ typedef struct sAniSirGlobal *tpAniSirGlobal;
 #define P2P_SEARCH_DWELL_TIME_INCREASE   20
 #define P2P_SOCIAL_CHANNELS              3
 
-/* Max number of channels are 165, but to access 165th element of array,
- *array of 166 is required.
+/* Max number of channels are 177, but to access 165th element of array,
+ *array of 178 is required.
  */
-#define SIR_MAX_24G_5G_CHANNEL_RANGE      166
+#define SIR_MAX_24G_5G_CHANNEL_RANGE      (177 + 1)
 #define SIR_BCN_REPORT_MAX_BSS_DESC       4
 
 #define SIR_NUM_11B_RATES 4   //1,2,5.5,11

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2686,7 +2686,7 @@ typedef enum
 
 #define CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM          "gTDLSPrefOffChanNum"
 #define CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM_MIN      (1)
-#define CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM_MAX      (165)
+#define CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM_MAX      (177)
 #define CFG_TDLS_PREFERRED_OFF_CHANNEL_NUM_DEFAULT  (36)
 
 /* Tdls offchannel bandwidth is now represented in bits as follows.
@@ -2829,7 +2829,7 @@ typedef enum
  */
 #define CFG_IBSS_ADHOC_CHANNEL_5GHZ_NAME          "gAdHocChannel5G"
 #define CFG_IBSS_ADHOC_CHANNEL_5GHZ_MIN           ( 36 )
-#define CFG_IBSS_ADHOC_CHANNEL_5GHZ_MAX           ( 165 )
+#define CFG_IBSS_ADHOC_CHANNEL_5GHZ_MAX           ( 177 )
 #define CFG_IBSS_ADHOC_CHANNEL_5GHZ_DEFAULT       ( 44 )
 
 #define CFG_IBSS_ADHOC_CHANNEL_24GHZ_NAME         "gAdHocChannel24G"

@@ -15078,7 +15078,7 @@ WLAN_PHY_MODE wma_chan_to_mode(uint8_t chan, ePhyChanBondState chan_offset,
 	}
 
 	/* 5.9 GHz Band */
-	if ((chan >= WMA_11P_CHANNEL_BEGIN) && (chan <= WMA_11P_CHANNEL_END)) {
+	if (vos_is_dsrc_channel(vos_chan_to_freq(chan))) {
 		/* Only Legacy Modulation Schemes are supported */
 		phymode = MODE_11A;
 	}
