@@ -3077,7 +3077,7 @@ v_U8_t sapSelectChannel(tHalHandle halHandle, ptSapContext pSapCtx,  tScanResult
         else
         {
             startChannelNum = rfChannels[RF_CHAN_36].channelNum;
-            endChannelNum = rfChannels[RF_CHAN_165].channelNum;
+            endChannelNum = rfChannels[WLAN_END_CHANNEL_ENUM].channelNum;
             operatingBand = eCSR_DOT11_MODE_11a;
         }
     }

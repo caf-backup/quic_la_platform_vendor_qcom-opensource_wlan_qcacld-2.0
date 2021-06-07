@@ -722,7 +722,7 @@ void limSetDFSChannelList(tpAniSirGlobal pMac,tANI_U8 channelNum, tSirDFSChannel
 {
 
     tANI_BOOLEAN passiveToActive = TRUE;
-    if ((1 <= channelNum) && (177 >= channelNum))
+    if ((1 <= channelNum) && (WLAN_END_CHANNEL_NUM >= channelNum))
     {
        if (eANI_BOOLEAN_TRUE == limIsconnectedOnDFSChannel(channelNum))
        {

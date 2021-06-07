@@ -52,7 +52,7 @@
 #define HIGHEST_24GHZ_CHANNEL_NUM  ( 14 )
 
 #define IS_24G_CH(__chNum) ((__chNum > 0) && (__chNum < 15))
-#define IS_5G_CH(__chNum) ((__chNum >= 36) && (__chNum <= 177))
+#define IS_5G_CH(__chNum) ((__chNum >= 36) && (__chNum <= WLAN_END_CHANNEL_NUM))
 #define IS_2X2_CHAIN(__chain) ((__chain & 0x3) == 0x3)
 #define DISABLE_NSS2_MCS 0xC
 

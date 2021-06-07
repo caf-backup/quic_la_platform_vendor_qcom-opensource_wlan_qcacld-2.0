@@ -1240,11 +1240,11 @@ uint8_t vos_nv_skip_dsrc_dfs_2g(uint32_t rf_channel, int32_t skip_group)
 	switch (skip_group){
 	case NV_CHANNEL_SKIP_DSRC:
 		start_channel = RF_CHAN_1;
-		end_channel = RF_CHAN_165;
+		end_channel = WLAN_END_CHANNEL_ENUM;
 		break;
 	case NV_CHANNEL_SKIP_2G:
 		start_channel = RF_CHAN_36;
-		end_channel = RF_CHAN_165;
+		end_channel = WLAN_END_CHANNEL_ENUM;
 		break;
 	default:
 		start_channel = RF_CHAN_1;
@@ -1661,10 +1661,8 @@ bool vos_is_dsrc_channel(uint16_t center_freq)
     case 5852:
     case 5855:
     case 5860:
-    case 5865:
     case 5870:
     case 5880:
-    case 5885:
     case 5890:
     case 5895:
     case 5900:
@@ -2214,27 +2212,13 @@ static int create_linux_regulatory_entry(v_REGDOMAIN_t temp_reg_domain,
                    }
                 }
             } else {
-                /* there are 14 channel in hdd_channels_2_4_GHZ,
-                 * there are 24/25 hdd_channels_5_GHZ,
-                 * there are 2 channel in hdd_etsi_srd_chan
-                 * the last element of wiphy->bands[i]->channels[j]
-                 * is channel 173, and the index is 39/40.*/
-                if((!pHddCtx->cfg_ini->dot11p_mode) && (k > RF_CHAN_169)) {
-                   pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].
-                       channels[RF_CHAN_173].enabled = NV_CHANNEL_ENABLE;
-                   pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].
-                       channels[RF_CHAN_173].pwrLimit =
-                       (tANI_S8) ((wiphy->bands[i]->channels[j].max_power));
-                } else {
-                    /* Enable is only last flag we support */
-                    pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].
-                        channels[k].enabled = NV_CHANNEL_ENABLE;
+                /* Enable is only last flag we support */
+                pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].
+                    channels[k].enabled = NV_CHANNEL_ENABLE;
 
-                    /* max_power is in dBm */
-                    pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].
-                        channels[k].pwrLimit =
-                        (tANI_S8) ((wiphy->bands[i]->channels[j].max_power));
-                }
+                /* max_power is in dBm */
+                pnvEFSTable->halnv.tables.regDomains[temp_reg_domain].channels[k].pwrLimit =
+                    (tANI_S8) ((wiphy->bands[i]->channels[j].max_power));
 
                 /* Disable the center channel if neither HT40+ nor HT40- is allowed
                  */
