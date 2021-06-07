@@ -13985,7 +13985,7 @@ __wlan_hdd_cfg80211_avoid_freq(struct wiphy *wiphy,
 	hdd_context_t *hdd_ctx = wiphy_priv(wiphy);
 	int ret;
 	int unsafe_channel_index;
-	tHddAvoidFreqList *channel_list;
+	tHddAvoidFreqList *channel_list = NULL;
 	tVOS_CON_MODE curr_mode;
 	uint8_t num_args = 0;
 
@@ -14001,39 +14001,43 @@ __wlan_hdd_cfg80211_avoid_freq(struct wiphy *wiphy,
 	if (0 != ret)
 		return -EINVAL;
 
-	if (!data || data_len < (sizeof(channel_list->avoidFreqRangeCount) +
+	if (data) {
+		if (data_len < (sizeof(channel_list->avoidFreqRangeCount) +
 				 sizeof(tHddAvoidFreqRange))) {
-		hddLog(LOGE, FL("Avoid frequency channel list empty"));
-		return -EINVAL;
-	}
-	num_args = (data_len - sizeof(channel_list->avoidFreqRangeCount)) /
-		   sizeof(channel_list->avoidFreqRange[0].startFreq);
+			hddLog(LOGE, FL("Avoid frequency channel list empty %d"), data_len);
+			return -EINVAL;
+		}
+		num_args = (data_len - sizeof(channel_list->avoidFreqRangeCount)) /
+			   sizeof(channel_list->avoidFreqRange[0].startFreq);
 
-	if (num_args < 2 || num_args > HDD_MAX_AVOID_FREQ_RANGES * 2 ||
-	    num_args % 2 != 0) {
-		hddLog(LOGE,FL("Invalid avoid frequency channel list"));
-		return -EINVAL;
-	}
+		if (num_args < 2 || num_args > HDD_MAX_AVOID_FREQ_RANGES * 2 ||
+		    num_args % 2 != 0) {
+			hddLog(LOGE,FL("Invalid avoid frequency channel list %d"), num_args);
+			return -EINVAL;
+		}
 
-	channel_list = (tHddAvoidFreqList *)data;
-	if (channel_list->avoidFreqRangeCount == 0 ||
-	    channel_list->avoidFreqRangeCount > HDD_MAX_AVOID_FREQ_RANGES ||
-	    2 * channel_list->avoidFreqRangeCount != num_args) {
-		hddLog(VOS_TRACE_LEVEL_ERROR, "Invalid freq range count %d",
-		       channel_list->avoidFreqRangeCount);
-		return -EINVAL;
+		channel_list = (tHddAvoidFreqList *)data;
+		if (channel_list->avoidFreqRangeCount == 0 ||
+		    channel_list->avoidFreqRangeCount > HDD_MAX_AVOID_FREQ_RANGES ||
+		    2 * channel_list->avoidFreqRangeCount != num_args) {
+			hddLog(VOS_TRACE_LEVEL_ERROR, "Invalid freq range count %d",
+			       channel_list->avoidFreqRangeCount);
+			return -EINVAL;
+		}
 	}
 
 	vos_get_wlan_unsafe_channel(hdd_ctx->unsafe_channel_list,
 			&(hdd_ctx->unsafe_channel_count),
 			sizeof(hdd_ctx->unsafe_channel_list));
 
-	hdd_ctx->unsafe_channel_count =
-		hdd_validate_avoid_freq_chanlist(hdd_ctx,
-						 channel_list);
+	if (channel_list) {
+		hdd_ctx->unsafe_channel_count =
+			hdd_validate_avoid_freq_chanlist(hdd_ctx,
+							 channel_list);
 
-	vos_set_wlan_unsafe_channel(hdd_ctx->unsafe_channel_list,
-			hdd_ctx->unsafe_channel_count);
+		vos_set_wlan_unsafe_channel(hdd_ctx->unsafe_channel_list,
+					    hdd_ctx->unsafe_channel_count);
+	}
 
 	for (unsafe_channel_index = 0;
 		unsafe_channel_index < hdd_ctx->unsafe_channel_count;
