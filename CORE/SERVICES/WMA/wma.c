@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -114,6 +114,7 @@
 #include "wma_ocb.h"
 #include "wma_nan_datapath.h"
 #include "adf_trace.h"
+#include "ol_rx_reorder.h"
 
 /* ################### defines ################### */
 /*
@@ -21250,6 +21251,12 @@ static void wma_set_stakey(tp_wma_handle wma_handle, tpSetStaKeyParams key_info)
 		}
 	}
 
+        WMA_LOGD("%s: QSV2020002, vid(%u), rx cleanup for peer(%pM) after key install",
+            __func__,
+            txrx_vdev->vdev_id,
+            peer->mac_addr.raw);
+        ol_rx_reorder_peer_cleanup(txrx_vdev, peer);
+
         /* In IBSS mode, set the BSS KEY for this peer
          ** BSS key is supposed to be cache into wma_handle
         */
@@ -40823,7 +40830,8 @@ tANI_U8 wma_getFwWlanFeatCaps(tANI_U8 featEnumValue)
 }
 
 void wma_send_regdomain_info(u_int32_t reg_dmn, u_int16_t regdmn2G,
-			     u_int16_t regdmn5G, int8_t ctl2G, int8_t ctl5G)
+			     u_int16_t regdmn5G, int8_t ctl2G, int8_t ctl5G,
+			     u_int32_t ctl_5g_bm)
 {
 	wmi_buf_t buf;
 	wmi_pdev_set_regdomain_cmd_fixed_param *cmd;
@@ -40853,7 +40861,16 @@ void wma_send_regdomain_info(u_int32_t reg_dmn, u_int16_t regdmn2G,
 	cmd->reg_domain_2G = regdmn2G;
 	cmd->reg_domain_5G = regdmn5G;
 	cmd->conformance_test_limit_2G = ctl2G;
-	cmd->conformance_test_limit_5G = ctl5G;
+	cmd->conformance_test_limit_5G = ctl5G | REGDOMAIN_5G_SUBBAND_FLAG_MASK;
+	cmd->conformance_test_limit_5G_subband_UNII1 = CTL_UNII1_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII2a = CTL_UNII2a_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII2c = CTL_UNII2c_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII3 = CTL_UNII3_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_5G_subband_UNII4 = CTL_UNII4_INDEX(ctl_5g_bm);
+	cmd->conformance_test_limit_6G_subband_UNII5 = UNUSED;
+	cmd->conformance_test_limit_6G_subband_UNII6 = UNUSED;
+	cmd->conformance_test_limit_6G_subband_UNII7 = UNUSED;
+	cmd->conformance_test_limit_6G_subband_UNII8 = UNUSED;
 
 	if (wmi_unified_cmd_send(wma->wmi_handle, buf, len,
 				WMI_PDEV_SET_REGDOMAIN_CMDID)) {
