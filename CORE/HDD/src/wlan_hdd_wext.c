@@ -727,7 +727,7 @@ VOS_STATUS wlan_hdd_validate_mon_channel(int channel)
 {
         uint8_t fValidChannel = FALSE, count = 0;
 
-        for (count = RF_CHAN_1; count <= RF_CHAN_165; count++)
+        for (count = RF_CHAN_1; count <= WLAN_END_CHANNEL_ENUM; count++)
         {
             if ( channel == rfChannels[count].channelNum )
             {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -553,7 +553,7 @@ eHalStatus csrUpdateChannelList(tpAniSirGlobal pMac)
         for (i = 0; i < MAX_SOCIAL_CHANNELS; i++)
         {
             /* Scan is not performed on DSRC channels*/
-            if (pScan->baseChannels.channelList[i] >= MIN_11P_CHANNEL)
+            if (pScan->baseChannels.channelList[i] >= MAX_SCAN_CHANNEL)
                 continue;
             if (vos_nv_getChannelEnabledState(social_channel[i])
                 == NV_CHANNEL_ENABLE)

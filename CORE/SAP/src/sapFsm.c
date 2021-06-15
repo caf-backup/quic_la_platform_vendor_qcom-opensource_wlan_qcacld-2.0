@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -5158,9 +5158,9 @@ static VOS_STATUS sapGetChannelList(ptSapContext sapContext,
 
             case eCSR_BAND_5G:
                bandStartChannel = RF_CHAN_36;
-               bandEndChannel = RF_CHAN_165;
+               bandEndChannel = WLAN_END_CHANNEL_ENUM;
                startChannelNum = 36;
-               endChannelNum = 165;
+               endChannelNum = WLAN_END_CHANNEL_NUM;
                break;
 
             default:
@@ -5327,7 +5327,7 @@ static VOS_STATUS sapGet5GHzChannelList(ptSapContext sapContext)
                  return VOS_STATUS_E_FAULT;
     }
 
-    for( i = RF_CHAN_36; i <= RF_CHAN_165; i++ )
+    for( i = RF_CHAN_36; i <= WLAN_END_CHANNEL_ENUM; i++ )
     {
         if( regChannels[i].enabled == NV_CHANNEL_ENABLE ||
             regChannels[i].enabled == NV_CHANNEL_DFS )
@@ -5653,7 +5653,7 @@ VOS_STATUS sapInitDfsChannelNolList(ptSapContext sapContext)
         bFound = TRUE;
     }
 
-    for ( i = RF_CHAN_36; i <= RF_CHAN_165; i++ )
+    for ( i = RF_CHAN_36; i <= WLAN_END_CHANNEL_ENUM; i++ )
     {
         if ( regChannels[i].enabled == NV_CHANNEL_DFS )
         {

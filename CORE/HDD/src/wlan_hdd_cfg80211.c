@@ -9803,7 +9803,7 @@ static void wlan_hdd_set_acs_ch_range(tsap_Config_t *sap_cfg, bool ht_enabled,
 	} else if (sap_cfg->acs_cfg.hw_mode == QCA_ACS_MODE_IEEE80211A) {
 		sap_cfg->acs_cfg.hw_mode = eCSR_DOT11_MODE_11a;
 		sap_cfg->acs_cfg.start_ch = rfChannels[RF_CHAN_36].channelNum;
-		sap_cfg->acs_cfg.end_ch = rfChannels[RF_CHAN_165].channelNum;
+		sap_cfg->acs_cfg.end_ch = rfChannels[WLAN_END_CHANNEL_ENUM].channelNum;
 		sap_cfg->target_band = eCSR_BAND_5G;
 	} else {
 		hddLog(LOG1, FL("hw_mode %d"), sap_cfg->acs_cfg.hw_mode);
@@ -9945,7 +9945,7 @@ static int wlan_hdd_cfg80211_relaunch_acs(hdd_adapter_t *adapter)
 		band_end_channel = RF_CHAN_14;
 	} else {
 		band_start_channel = RF_CHAN_36;
-		band_end_channel = RF_CHAN_165;
+		band_end_channel = WLAN_END_CHANNEL_ENUM;
 	}
 
 	for (i = band_start_channel; i <= band_end_channel; i++) {
@@ -13951,7 +13951,7 @@ static int hdd_validate_avoid_freq_chanlist(hdd_context_t *hdd_ctx,
 		if ((channel_list->avoidFreqRange[range_idx].startFreq <
 		     VOS_24_GHZ_CHANNEL_1) ||
 		    (channel_list->avoidFreqRange[range_idx].endFreq >
-		     VOS_5_GHZ_CHANNEL_165) ||
+		     VOS_5_GHZ_CHANNEL_END) ||
 		    (channel_list->avoidFreqRange[range_idx].startFreq >
 		     channel_list->avoidFreqRange[range_idx].endFreq))
 				continue;
@@ -17655,7 +17655,7 @@ VOS_STATUS wlan_hdd_validate_operation_channel(hdd_adapter_t *pAdapter,int chann
     if ( hdd_pConfig_ini->sapAllowAllChannel)
     {
          /* Validate the channel */
-        for (count = RF_CHAN_1 ; count <= RF_CHAN_165 ; count++)
+        for (count = RF_CHAN_1 ; count <= WLAN_END_CHANNEL_ENUM; count++)
         {
             if ( channel == rfChannels[count].channelNum )
             {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -722,7 +722,7 @@ void limSetDFSChannelList(tpAniSirGlobal pMac,tANI_U8 channelNum, tSirDFSChannel
 {
 
     tANI_BOOLEAN passiveToActive = TRUE;
-    if ((1 <= channelNum) && (165 >= channelNum))
+    if ((1 <= channelNum) && (WLAN_END_CHANNEL_NUM >= channelNum))
     {
        if (eANI_BOOLEAN_TRUE == limIsconnectedOnDFSChannel(channelNum))
        {

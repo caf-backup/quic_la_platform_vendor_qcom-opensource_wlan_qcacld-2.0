@@ -1212,11 +1212,11 @@ uint8_t vos_nv_skip_dsrc_dfs_2g(uint32_t rf_channel, int32_t skip_group)
 	switch (skip_group){
 	case NV_CHANNEL_SKIP_DSRC:
 		start_channel = RF_CHAN_1;
-		end_channel = RF_CHAN_165;
+		end_channel = WLAN_END_CHANNEL_ENUM;
 		break;
 	case NV_CHANNEL_SKIP_2G:
 		start_channel = RF_CHAN_36;
-		end_channel = RF_CHAN_165;
+		end_channel = WLAN_END_CHANNEL_ENUM;
 		break;
 	default:
 		start_channel = RF_CHAN_1;
