@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -113,6 +113,7 @@
 #include "wma_nan_datapath.h"
 #include "adf_trace.h"
 
+#include "ol_rx_reorder.h"
 /* ################### defines ################### */
 /*
  * TODO: Following constant should be shared by firwmare in
@@ -20235,6 +20236,12 @@ static void wma_set_stakey(tp_wma_handle wma_handle, tpSetStaKeyParams key_info)
 		}
 	}
 
+        WMA_LOGD("%s: QSV2020002, vid(%u), rx cleanup for peer(%pM) after key install",
+            __func__,
+            txrx_vdev->vdev_id,
+            peer->mac_addr.raw);
+        ol_rx_reorder_peer_cleanup(txrx_vdev, peer);
+
         /* In IBSS mode, set the BSS KEY for this peer
          ** BSS key is supposed to be cache into wma_handle
         */
@@ -20923,6 +20930,11 @@ static int wmi_unified_probe_rsp_tmpl_send(tp_wma_handle wma,
 
 	frm = probe_rsp_info->pProbeRespTemplate;
 	tmpl_len = probe_rsp_info->probeRespTemplateLen;
+	if (tmpl_len > BEACON_TX_BUFFER_SIZE) {
+		WMA_LOGE(FL("tmpl_len: %d > %d. Invalid tmpl len"),
+			 tmpl_len, BEACON_TX_BUFFER_SIZE);
+		return -EINVAL;
+	}
 	tmpl_len_aligned = roundup(tmpl_len, sizeof(A_UINT32));
 	/*
 	 * Make the TSF offset negative so probe response in the same
@@ -21017,7 +21029,19 @@ static int wmi_unified_bcn_tmpl_send(tp_wma_handle wma,
 		tmpl_len = *(u_int32_t *)&bcn_info->beacon[0];
 	else
 		tmpl_len = bcn_info->beaconLength;
+
+	if (tmpl_len > BEACON_TX_BUFFER_SIZE) {
+		WMA_LOGE(FL("tmpl_len: %d > %d. Invalid tmpl len"),
+			 tmpl_len, BEACON_TX_BUFFER_SIZE);
+		return -EINVAL;
+	}
+
 	if (p2p_ie_len) {
+		if (tmpl_len <= p2p_ie_len) {
+			WMA_LOGE(FL("tmpl_len %d <= p2p_ie_len %d, Invalid"),
+				 tmpl_len, p2p_ie_len);
+			return -EINVAL;
+		}
 		tmpl_len -= (u_int32_t) p2p_ie_len;
 	}
 
@@ -21036,6 +21060,12 @@ static int wmi_unified_bcn_tmpl_send(tp_wma_handle wma,
 	wmi_buf_len = sizeof(wmi_bcn_tmpl_cmd_fixed_param) +
 	          sizeof(wmi_bcn_prb_info) + WMI_TLV_HDR_SIZE +
 		  tmpl_len_aligned;
+
+	if (wmi_buf_len > BEACON_TX_BUFFER_SIZE) {
+		WMA_LOGE(FL("wmi_buf_len: %d > %d. Can't send wmi cmd"),
+			 wmi_buf_len, BEACON_TX_BUFFER_SIZE);
+		return -EINVAL;
+	}
 
 	wmi_buf = wmi_buf_alloc(wma->wmi_handle, wmi_buf_len);
 	if (!wmi_buf) {
@@ -31633,7 +31663,7 @@ static int wma_process_sap_auth_offload(tp_wma_handle wma_handle,
 	wmi_sap_ofl_enable_cmd_fixed_param *cmd = NULL;
 	wmi_buf_t buf;
 	u_int8_t *buf_ptr;
-	u_int16_t len, psk_len, psk_len_padded;
+	uint32_t len, psk_len, psk_len_padded;
 	int err;
 
 	if (!WMI_SERVICE_IS_ENABLED(wma_handle->wmi_service_bitmap,
@@ -31642,6 +31672,13 @@ static int wma_process_sap_auth_offload(tp_wma_handle wma_handle,
 		return -EIO;
 	}
 
+	if (sap_auth_offload_info->key_len < 8 ||
+	    sap_auth_offload_info->key_len > SIR_PSK_MAX_LEN) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+		       "%s: invalid key length(%d) of WPA security!", __func__,
+		       sap_auth_offload_info->key_len);
+		return -EINVAL;
+	}
 	psk_len = sap_auth_offload_info->key_len;
 	psk_len_padded = roundup(psk_len, sizeof(uint32_t));
 
