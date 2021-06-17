@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -3287,6 +3287,13 @@ REG_TABLE_ENTRY g_registry_table[] =
                         hdd_config_t, cpu_map_list,
                         VAR_FLAGS_OPTIONAL,
                         (void *)CFG_RPS_RX_QUEUE_CPU_MAP_LIST_DEFAULT ),
+
+   REG_VARIABLE( CFG_ENABLE_SAP_EAPOL_CHECKING, WLAN_PARAM_Integer,
+                 hdd_config_t, gEnableSapEapolChecking,
+                 VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+                 CFG_ENABLE_SAP_EAPOL_CHECKING_DEFAULT,
+                 CFG_ENABLE_SAP_EAPOL_CHECKING_MIN ,
+                 CFG_ENABLE_SAP_EAPOL_CHECKING_MAX),
 
    REG_VARIABLE( CFG_ENABLE_DFS_PHYERR_FILTEROFFLOAD_NAME, WLAN_PARAM_Integer,
                  hdd_config_t, fDfsPhyerrFilterOffload,

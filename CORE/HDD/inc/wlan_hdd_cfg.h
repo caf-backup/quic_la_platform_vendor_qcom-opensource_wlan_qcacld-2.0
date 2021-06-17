@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2652,6 +2652,17 @@ This feature requires the dependent cfg.ini "gRoamPrefer5GHz" set to 1 */
  * max string len = 24 + 1(for '\0'). Considering 30 to be on safe side.
  */
 #define CFG_RPS_RX_QUEUE_CPU_MAP_LIST_LEN 30
+/*
+ * Eapol sanity checking Enable/Disable for SAP.
+ * 0x0 - Enable eapol sanity checking in the RX path
+ *       before deliver to the OS in the SAP mode.
+ * 0x1 - Enable eapol sanity checking in the RX path
+ *       before deliver to the OS in the SAP mode.
+ */
+#define CFG_ENABLE_SAP_EAPOL_CHECKING             "gEnableSapEapolChecking"
+#define CFG_ENABLE_SAP_EAPOL_CHECKING_MIN         (0)
+#define CFG_ENABLE_SAP_EAPOL_CHECKING_MAX         (1)
+#define CFG_ENABLE_SAP_EAPOL_CHECKING_DEFAULT     (1)
 
 /* SAR Thermal limit values for 2g and 5g */
 
@@ -3929,6 +3940,7 @@ struct hdd_config
    v_U32_t                     gEnableDebugLog;
    v_U8_t                      rxhandle;
    uint8_t                     cpu_map_list[CFG_RPS_RX_QUEUE_CPU_MAP_LIST_LEN];
+   v_U32_t                     gEnableSapEapolChecking;
    v_BOOL_t                    fDfsPhyerrFilterOffload;
    v_U8_t                      gSapPreferredChanLocation;
    v_U8_t                      gDisableDfsJapanW53;
