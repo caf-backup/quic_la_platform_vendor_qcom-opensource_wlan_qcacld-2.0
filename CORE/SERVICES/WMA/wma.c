@@ -25972,6 +25972,7 @@ static VOS_STATUS wma_configure_ssdp(tp_wma_handle wma, uint8_t vdev_id)
 		return wma_configure_wow_ssdp(wma, vdev_id);
 }
 
+#ifdef CLD_DEFAULT_WOW_PATTERN
 /* Configures default WOW pattern for the given vdev_id which is in STA mode. */
 static VOS_STATUS wma_wow_sta(tp_wma_handle wma, u_int8_t vdev_id,
 			      u_int8_t *enable_ptrn_match, bool runtime_pm)
@@ -26058,6 +26059,42 @@ static VOS_STATUS wma_wow_sta(tp_wma_handle wma, u_int8_t vdev_id,
 	*enable_ptrn_match = 1 << vdev_id;
 	return ret;
 }
+#else
+/* Configures default WOW pattern for the given vdev_id which is in STA mode. */
+static VOS_STATUS wma_wow_sta(tp_wma_handle wma, u_int8_t vdev_id,
+			      u_int8_t *enable_ptrn_match, bool runtime_pm)
+{
+	u_int8_t mac_mask[ETH_ALEN], free_slot;
+	VOS_STATUS ret = VOS_STATUS_SUCCESS;
+
+	free_slot = wma->wow.total_free_ptrn_id - wma->wow.used_free_ptrn_id ;
+
+	if (free_slot < WMA_STA_WOW_DEFAULT_PTRN_MAX) {
+		WMA_LOGD("Free slots are not enough, avail:%d, need: %d",
+			 free_slot, WMA_STA_WOW_DEFAULT_PTRN_MAX);
+		WMA_LOGD("Ignoring default STA mode wow pattern for vdev : %d",
+			 vdev_id);
+		return ret;
+	}
+
+	WMA_LOGD("Configuring default STA mode wow pattern for vdev %d",
+		  vdev_id);
+
+	/* Setup unicast pkt pattern */
+	vos_mem_set(&mac_mask, ETH_ALEN, 0xFF);
+	ret = wma_send_wow_patterns_to_fw(wma, vdev_id,
+			wma->wow.free_ptrn_id[wma->wow.used_free_ptrn_id++],
+			wma->interfaces[vdev_id].addr, ETH_ALEN, 0,
+			mac_mask, ETH_ALEN);
+	if (ret != VOS_STATUS_SUCCESS) {
+		WMA_LOGE("Failed to add WOW unicast pattern");
+		return ret;
+	}
+
+	*enable_ptrn_match = 1 << vdev_id;
+	return ret;
+}
+#endif
 #endif
 
 /* Finds out list of unused slots in wow pattern cache. Those free slots number
