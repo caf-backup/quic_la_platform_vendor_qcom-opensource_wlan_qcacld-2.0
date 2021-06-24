@@ -75,6 +75,12 @@ static u_int32_t refclk_speed_to_hz[] = {
 };
 #endif
 
+#ifdef HIF_PCI
+#define MAX_SECTION_COUNT 5
+#else
+#define MAX_SECTION_COUNT 4
+#endif
+
 #ifdef HIF_SDIO
 
 #ifdef MULTI_IF_NAME
@@ -2424,6 +2430,7 @@ static int ol_ath_get_reg_table(uint32_t target_version,
 	switch (target_version) {
 	case AR6320_REV3_VERSION:
 	case AR6320_REV3_2_VERSION:
+	case QCA9377_REV1_1_VERSION:
 		reg_table->section = (tgt_reg_section *)&ar6320v3_reg_table[0];
 		reg_table->section_size = sizeof(ar6320v3_reg_table)/
 			sizeof(ar6320v3_reg_table[0]);
@@ -2531,10 +2538,6 @@ static void ol_dump_target_memory(HIF_DEVICE *hif_device, void *memoryBlock)
 	}
 }
 
-static uint32_t ol_get_max_section_count(struct ol_softc *scn)
-{
-	return 5;
-}
 
 static int ol_get_iram1_len_and_pos(struct ol_softc *scn, uint32_t *pos,
 				     uint32_t *len)
@@ -2588,10 +2591,6 @@ static int ol_get_iram_len_and_pos(struct ol_softc *scn, uint32_t *pos, uint32_t
 	return 0;
 }
 #else /* HIF_PCI */
-static uint32_t ol_get_max_section_count(struct ol_softc *scn)
-{
-	return 4;
-}
 
 static int ol_get_iram_len_and_pos(struct ol_softc *scn, uint32_t *pos, uint32_t
 				   *len, uint32_t section)
@@ -2604,6 +2603,49 @@ static int ol_get_iram_len_and_pos(struct ol_softc *scn, uint32_t *pos, uint32_t
 }
 #endif
 
+static int ol_get_reg_len(struct ol_softc *scn, u_int32_t buffer_len)
+{
+	int i, section_len, fill_len;
+	int dump_len, result = 0;
+	tgt_reg_table reg_table;
+	tgt_reg_section *curr_sec, *next_sec;
+
+	section_len = ol_ath_get_reg_table(scn->target_version, &reg_table);
+
+	if (!reg_table.section || !reg_table.section_size || !section_len) {
+		printk(KERN_ERR "%s: failed to get reg table\n", __func__);
+		result = -EIO;
+		goto out;
+	}
+
+	curr_sec = reg_table.section;
+	for (i = 0; i < reg_table.section_size; i++) {
+
+		dump_len = curr_sec->end_addr - curr_sec->start_addr;
+
+		result += dump_len;
+
+		if (result < section_len) {
+			next_sec = (tgt_reg_section *)((u_int8_t *)curr_sec
+							+ sizeof(*curr_sec));
+			fill_len = next_sec->start_addr - curr_sec->end_addr;
+			if ((buffer_len - result) < fill_len) {
+				printk("Not enough memory to fill registers:"
+						" %d: 0x%08x-0x%08x\n", i,
+						curr_sec->end_addr,
+						next_sec->start_addr);
+				goto out;
+			}
+
+			if (fill_len)
+				result += fill_len;
+		}
+		curr_sec++;
+	}
+
+out:
+	return result;
+}
 static int ol_read_reg_section(struct ol_softc *scn, char *ptr, uint32_t len)
 {
 	return ol_diag_read_reg_loc(scn, ptr, len);
@@ -2625,6 +2667,98 @@ static int ol_dump_fail_debug_info(struct ol_softc *scn, void *ptr)
 }
 #endif
 
+#define GET_INODE_FROM_FILEP(filp) ((filp)->f_path.dentry->d_inode)
+
+int _readwrite_file(const char *filename, char *rbuf,
+	const char *wbuf, size_t length, int mode)
+{
+	int ret = 0;
+	struct file *filp = (struct file *)-ENOENT;
+	struct inode    *inode;
+	mm_segment_t oldfs;
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+
+	do {
+		filp = filp_open(filename, mode, S_IRUSR);
+
+		if (IS_ERR(filp) || !filp->f_op) {
+			ret = -ENOENT;
+			break;
+		}
+
+		inode = GET_INODE_FROM_FILEP(filp);
+		if (!inode) {
+			printk(KERN_ERR
+				"_readwrite_file: Error 2\n");
+			ret = -ENOENT;
+			break;
+		}
+
+		if (length == 0) {
+			/* Read the length of the file only */
+			ret = i_size_read(inode->i_mapping->host);
+			break;
+		}
+
+		if (wbuf) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0))
+			ret = kernel_write(
+#else
+			ret = vfs_write(
+#endif
+				filp, wbuf, length, &filp->f_pos);
+			if (ret < 0) {
+				printk(KERN_ERR
+					"_readwrite_file: Error 3\n");
+				break;
+			}
+			write_inode_now(inode, 1);
+		} else {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0))
+			ret = kernel_read(
+#else
+			ret = vfs_read(
+#endif
+				filp, rbuf, length, &filp->f_pos);
+			if (ret < 0) {
+				printk(KERN_ERR
+					"_readwrite_file: Error 4\n");
+				break;
+			}
+		}
+	} while (0);
+
+	if (!IS_ERR(filp))
+		filp_close(filp, NULL);
+
+	set_fs(oldfs);
+	return ret;
+}
+
+static void crash_dump_write(const char* filename, char* buf, unsigned int len)
+{
+	int ret;
+	ret = _readwrite_file(filename, NULL, buf, len,
+	                      (O_WRONLY | O_APPEND));
+	if (ret < 0) {
+		printk("%s:%d: fail to write\n", __func__, __LINE__);
+	}
+}
+
+#define CRASH_DUMP_PATH "/var/"
+
+static void crash_dump_file_init(const char* filename)
+{
+	int ret;
+
+	ret = _readwrite_file(filename, NULL,
+	                NULL, 0, (O_WRONLY | O_CREAT | O_TRUNC));
+	if (ret < 0) {
+		printk("%s:%d: fail to write\n", __func__, __LINE__);
+	}
+
+}
 /**---------------------------------------------------------------------------
  *   \brief  ol_target_coredump
  *
@@ -2639,16 +2773,23 @@ static int ol_dump_fail_debug_info(struct ol_softc *scn, void *ptr)
 int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 {
 	struct ol_softc *scn = (struct ol_softc *)inst;
-	char *bufferLoc = memoryBlock;
-	int result = 0;
+	uint8_t *bufferLoc = memoryBlock;
+	int result[MAX_SECTION_COUNT];
 	int ret = 0;
 	uint32_t amountRead = 0;
 	uint32_t sectionCount = 0;
 	uint32_t pos = 0;
 	uint32_t readLen = 0;
-	uint32_t max_count = ol_get_max_section_count(scn);
+	char fw_dump_filename[40];
 
-	while ((sectionCount < max_count) && (amountRead < blockLength)) {
+#if defined(HIF_PCI)
+	char *fw_ram_seg_name[] = {"DRAM ", "AXI ", "REG ", "IRAM1 ", "IRAM2 "};
+#elif defined(HIF_SDIO)
+	char *fw_ram_seg_name[] = {"DRAM", "AXI", "REG", "IRAM"};
+#endif
+
+	while ((sectionCount < MAX_SECTION_COUNT) &&
+	       (amountRead < blockLength)) {
 		switch (sectionCount) {
 		case 0:
 			pos = DRAM_LOCATION;
@@ -2662,7 +2803,7 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 			break;
 		case 2:
 			pos = REGISTER_LOCATION;
-			readLen = 0;
+			readLen = ol_get_reg_len(scn, blockLength-amountRead);
 			pr_err("%s: Dumping Register section...\n", __func__);
 			break;
 		case 3:
@@ -2672,36 +2813,60 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 			if (ret) {
 				pr_err("%s: Fail to Dump IRAM Section ret:%d\n",
 				       __func__, ret);
-				return ret;
+				goto end;
 			}
 			break;
 		default:
 			pr_err("%s: INVALID SECTION_:%d\n", __func__,
 			       sectionCount);
-			return 0;
+			ret = 0;
+			goto end;
 		}
-
+		memset(fw_dump_filename, 0, sizeof(fw_dump_filename));
+		scnprintf(fw_dump_filename, sizeof(fw_dump_filename), "%scld_%s.bin",
+			  CRASH_DUMP_PATH, fw_ram_seg_name[sectionCount]);
+		if(sectionCount != 2)
+			crash_dump_file_init(fw_dump_filename);
 		if (blockLength - amountRead < readLen) {
 			pr_err("%s: No memory to dump section:%d buffer!\n",
 			       __func__, sectionCount);
-			return -ENOMEM;
+			ret = -ENOMEM;
+			goto end;
 		}
 
-		if (pos == REGISTER_LOCATION)
-			result = ol_read_reg_section(scn, bufferLoc,
-						     blockLength-amountRead);
-		else
-			result = ol_diag_read(scn, bufferLoc, pos, readLen);
+		if (pos == REGISTER_LOCATION) {
+			/*
+			 * Reg dump can't use BMI related API, and it also
+			 * destroyed BMI context. Reg dump should be dumped at
+			 * last, otherwise BMIInit should be called again
+			 * before IRAM dump.
+			 */
+			result[sectionCount] = ol_read_reg_section(scn,
+								bufferLoc,
+								blockLength -
+								amountRead);
+		} else {
+			result[sectionCount] = ol_diag_read(scn,
+								bufferLoc,
+								pos, readLen);
+		}
 
-		if (result == -EIO)
-			return ol_dump_fail_debug_info(scn, memoryBlock);
+		if (result[sectionCount] == -EIO) {
+			ret = ol_dump_fail_debug_info(scn, memoryBlock);
+			goto end;
+		}
 
 		pr_info("%s: Section:%d Bytes Read:%0x\n", __func__,
-			sectionCount, result);
-		amountRead += result;
-		bufferLoc += result;
+			sectionCount, result[sectionCount]);
+
+		if(sectionCount != 2) {
+			crash_dump_write(fw_dump_filename, bufferLoc, result[sectionCount]);
+		}
+		amountRead += result[sectionCount];
+		bufferLoc += result[sectionCount];
 		sectionCount++;
 	}
+end:
 
 	return ret;
 }
