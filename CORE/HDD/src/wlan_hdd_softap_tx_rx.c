@@ -1153,7 +1153,7 @@ VOS_STATUS hdd_softap_rx_packet_cbk(v_VOID_t *vosContext,
 #endif /* QCA_PKT_PROTO_TRACE */
 
       if (pHddCtx->cfg_ini->gEnableSapEapolChecking) {
-          if (adf_nbuf_is_eapol_pkt(skb)) {
+          if (adf_nbuf_is_eapol_pkt(skb) == A_STATUS_OK) {
               /* CR 2868053 */
               VOS_TRACE(VOS_MODULE_ID_HDD_DATA, VOS_TRACE_LEVEL_INFO,
                   "%s: QSV2020005, dev, mode=%d, session=%u, %s, addr (%pM)",

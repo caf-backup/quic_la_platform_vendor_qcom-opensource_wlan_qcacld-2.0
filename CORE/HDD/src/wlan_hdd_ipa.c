@@ -2496,7 +2496,7 @@ static void hdd_ipa_send_skb_to_network(adf_nbuf_t skb, hdd_adapter_t *adapter)
 	if (pHddCtx->cfg_ini->gEnableSapEapolChecking &&
 		(adapter->device_mode == WLAN_HDD_SOFTAP ||
 		adapter->device_mode == WLAN_HDD_P2P_GO) &&
-		adf_nbuf_is_eapol_pkt(skb)) {
+		(adf_nbuf_is_eapol_pkt(skb) == A_STATUS_OK)) {
 
 		/* CR 2868053 */
 		HDD_IPA_LOG(VOS_TRACE_LEVEL_INFO,
