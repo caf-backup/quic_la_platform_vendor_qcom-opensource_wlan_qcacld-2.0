@@ -2853,14 +2853,6 @@ int ol_download_firmware(struct ol_softc *scn)
 	}
 
 	address = BMI_SEGMENTED_WRITE_ADDR;
-	if (scn->enablesinglebinary == FALSE) {
-		if (ol_transfer_bin_file(scn, ATH_SETUP_FILE,
-					BMI_SEGMENTED_WRITE_ADDR, TRUE) == EOK) {
-			/* Execute the SETUP code only if entry found and downloaded */
-			param = 0;
-			BMIExecute(scn->hif_hdl, address, &param, scn);
-		}
-	}
 
 	if (ol_download_usb_warm_reset_firmeware(scn) != EOK)
 		return -1;
