@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -601,13 +602,14 @@ ol_tx_get_txtstamps(u_int32_t *msg_word, int num_msdus)
 }
 
 static inline void
-ol_tx_timestamp(ol_txrx_pdev_handle pdev, adf_nbuf_t netbuf, u_int64_t ts)
+ol_tx_timestamp(ol_txrx_pdev_handle pdev, enum htt_tx_status status,
+		adf_nbuf_t netbuf, u_int64_t ts)
 {
 	if (!netbuf)
 		return;
 
 	if (pdev->ol_tx_timestamp_cb)
-		pdev->ol_tx_timestamp_cb(netbuf, ts);
+		pdev->ol_tx_timestamp_cb((int32_t)status, netbuf, ts);
 }
 #else
 static inline struct htt_tx_compl_ind_append_txtstamp *
@@ -617,7 +619,8 @@ ol_tx_get_txtstamps(u_int32_t *msg_word, int num_msdus)
 }
 
 static inline void
-ol_tx_timestamp(ol_txrx_pdev_handle pdev, adf_nbuf_t netbuf, u_int64_t ts)
+ol_tx_timestamp(ol_txrx_pdev_handle pdev, enum htt_tx_status status,
+		adf_nbuf_t netbuf, u_int64_t ts)
 {
 }
 #endif /* WLAN_FEATURE_TSF_PLUS */
@@ -704,7 +707,10 @@ ol_tx_completion_handler(
     }
 
     OL_TX_DELAY_COMPUTE(pdev, status, desc_ids, num_msdus);
-    if (status == htt_tx_status_ok) {
+
+    if (status == htt_tx_status_ok ||
+	status == htt_tx_status_discard ||
+	status == htt_tx_status_no_ack) {
         txtstamp_list = ol_tx_get_txtstamps(msg_word, num_msdus);
         txpower_list = ol_tx_get_txpowers(msg_word, num_msdus);
     }
@@ -724,7 +730,7 @@ ol_tx_completion_handler(
         netbuf = tx_desc->netbuf;
 
         if (txtstamp_list)
-            ol_tx_timestamp(pdev, netbuf,
+            ol_tx_timestamp(pdev, status, netbuf,
                     (u_int64_t)txtstamp_list->timestamp[i]);
 
         if (txpower_list)
