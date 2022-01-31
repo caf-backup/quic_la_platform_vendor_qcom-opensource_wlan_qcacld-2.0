@@ -717,6 +717,7 @@ limUpdateConfig(tpAniSirGlobal pMac,tpPESession psessionEntry)
         limLog( pMac, LOGP, FL( "cfg get assoc sta limit failed" ));
     }
     pMac->lim.gLimAssocStaLimit = (tANI_U16)val;
+    limLog(pMac, LOG1, FL("limWsmEnabled %d "), psessionEntry->limWsmEnabled);
 
     PELOG1(limLog(pMac, LOG1, FL("Updated Lim shadow state based on CFG"));)
 }
